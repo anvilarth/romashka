@@ -24,12 +24,12 @@ from data_generators import batches_generator, transaction_features
 from pytorch_training import train_epoch, eval_model
 
 from data_utils import read_parquet_dataset_from_local
-from models import TransactionsRnn, TransactionsModel
+from models import NextTransactionModel
 
 from dataset_preprocessing_utils import transform_transactions_to_sequences, create_padded_buckets
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--model', type=str, default='gru')
+parser.add_argument('--model', type=str, default='gpt')
 parser.add_argument('--num_layers', type=int, default=6)
 parser.add_argument('--mixup', action='store_true')
 parser.add_argument('--optimizer', type=str, default='adam')
@@ -46,7 +46,8 @@ parser.add_argument('--num_epochs', type=int, default=10)
 parser.add_argument('--head_type', type=str, default='linear')
 parser.add_argument('--encoder_type', type=str, default='bert')
 parser.add_argument('--checkpoint_path', type=str, default='')
-parser.add_argument('--group', type=str, default='models')
+parser.add_argument('--group', type=str, default='next-transaction')
+parser.add_argument('--task', type=str, default='next')
 
 args = parser.parse_args()
 rnd_prt = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(12))
@@ -76,27 +77,11 @@ with open('./assets/embedding_projections.pkl', 'rb') as f:
 
 num_epochs = args.num_epochs
 train_batch_size = 128
-val_batch_szie = 128
+val_batch_size = 128
 
-if args.model == 'gru':
-    print("USING GRU")
-    model = TransactionsRnn(transaction_features, embedding_projections, mixup=args.mixup).to(device)
-
-elif args.model == 'transformer':
-    print("USING TRANSFORMER")
-
-
-
-    model = TransactionsModel(transaction_features, 
-                             embedding_projections, 
-                             num_layers=args.num_layers,
-                             head_type=args.head_type,
-                             encoder_type=args.encoder_type,  
-                             mixup=args.mixup,
-                             cutmix=args.cutmix,
-                             emb_mult=args.emb_mult,
-                             alpha=args.alpha,
-                             rel_pos_embs=args.rel_pos_embs).to(device)
+if args.model == 'gpt':
+    print("USING GPT-2")
+    model = NextTransactionModel(transaction_features, embedding_projections).to(device)
 
 else:
     raise NotImplementedError
@@ -130,12 +115,12 @@ else:
     
 for epoch in range(num_epochs):
     print(f'Starting epoch {epoch+1}')
-    train_epoch(model, optimizer, dataset_train, batch_size=train_batch_size, 
+    train_epoch(model, optimizer, dataset_train, task=args.task, batch_size=train_batch_size, 
                 shuffle=True, print_loss_every_n_batches=args.loss_freq, device=device, scheduler=scheduler)
     
-    val_roc_auc = eval_model(model, dataset_val, batch_size=val_batch_szie, device=device)
+    # val_roc_auc = eval_model(model, dataset_val, batch_size=val_batch_size, device=device)
     
-    train_roc_auc = eval_model(model, dataset_train, batch_size=val_batch_szie, device=device)
-    wandb.log({'train_roc_auc': train_roc_auc, 'val_roc_auc': val_roc_auc})
+    # train_roc_auc = eval_model(model, dataset_train, batch_size=val_batch_size, device=device)
+    # wandb.log({'train_roc_auc': train_roc_auc, 'val_roc_auc': val_roc_auc})
     torch.save(model.state_dict(), checkpoint_dir + f'/epoch_{epoch}.ckpt')
-    print(f'Epoch {epoch+1} completed. Train roc-auc: {train_roc_auc}, Val roc-auc: {val_roc_auc}')
+    print(f'Epoch {epoch+1} completed')

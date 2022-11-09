@@ -4,11 +4,13 @@ import torch.nn as nn
 
 import torch.nn.functional as F
 from time import time
+from transformers import GPT2Model, GPT2Config, BertConfig, BertModel
+
 from embedding import EmbeddingLayer
 from augmentations import add_noise, mixup_data
 
 from encoder import BERT, Informer, InformerConfigs
-from head import ClassificationHead, RNNClassificationHead
+from head import ClassificationHead, RNNClassificationHead, NSPHead
 
 
 class TransactionsModel(nn.Module):
@@ -32,7 +34,6 @@ class TransactionsModel(nn.Module):
         inp_size = self.embedding.get_embedding_size()
 
         self.head_type = head_type
-
         self.cls_token = nn.Parameter(torch.randn(1, 1, inp_size) / inp_size)
 
         if encoder_type == 'bert':
@@ -52,6 +53,8 @@ class TransactionsModel(nn.Module):
             self.head = ClassificationHead(inp_size, top_classifier_units)
         elif head_type == 'rnn':
             self.head = RNNClassificationHead(inp_size, top_classifier_units)
+        elif head_type == 'id':
+            self.head = nn.Identity()
         else:
             raise NotImplementedError
 
@@ -68,7 +71,7 @@ class TransactionsModel(nn.Module):
         mask = mask.unsqueeze(1).unsqueeze(2)
         
         if self.cutmix and self.training:
-            transactions_cat_features = add_noise(transactions_cat_features)
+            transactions_cat_features = add_noise(transactions_cat_features, mask1)
         
         cls_token = self.cls_token.repeat(batch_size, 1, 1)
         embedding = self.embedding(transactions_cat_features, product_feature)
@@ -76,7 +79,7 @@ class TransactionsModel(nn.Module):
 
         
         if self.mixup and self.training:
-            embedding = mixup_data(embedding, self.alpha)
+            embedding = mixup_data(embedding, self.alpha, mask=mask.squeeze(2))
             
         x = self.encoder(embedding, mask)
         if self.head_type == 'linear':
@@ -133,6 +136,69 @@ class TransactionsRnn(nn.Module):
     def _create_embedding_projection(cls, cardinality, embed_size, add_missing=True, padding_idx=0, emb_mult=1):
         add_missing = 1 if add_missing else 0
         return nn.Embedding(num_embeddings=cardinality+add_missing, embedding_dim=embed_size*emb_mult, padding_idx=padding_idx)
+
+
+class NextTransactionModel(nn.Module):
+    def __init__(self, 
+                 transactions_cat_features, 
+                 embedding_projections, 
+                 product_col_name='product',
+                 num_layers=4,
+                 emb_mult=1,
+                ):
+
+        super().__init__()
+        self.embedding = EmbeddingLayer(transactions_cat_features, embedding_projections, product_col_name, emb_mult)
+        inp_size = self.embedding.get_embedding_size()
+
+        configuration = GPT2Config(vocab_size=1, n_positions=750, n_embd=inp_size, n_layer=num_layers, n_head=2)
+        self.model = GPT2Model(configuration)
+
+        self.head = NSPHead(inp_size, embedding_projections)
+
+    def forward(self, transactions_cat_features, product_feature):
+        batch_size = product_feature.shape[0]
+        mask1 = transactions_cat_features[-6] != 0
+            
+        mask = mask1.unsqueeze(1).unsqueeze(2)
+        embedding = self.embedding(transactions_cat_features, product_feature)
+        
+        out = self.model(inputs_embeds=embedding, attention_mask=mask)
+        logits = self.head(out.last_hidden_state)
+
+        return logits
+
+
+class MaskedModel(nn.Module):
+    def __init__(self, 
+                 transactions_cat_features, 
+                 embedding_projections, 
+                 product_col_name='product',
+                 num_layers=4,
+                 emb_mult=1,
+                ):
+
+        super().__init__()
+        self.embedding = EmbeddingLayer(transactions_cat_features, embedding_projections, product_col_name, emb_mult)
+        inp_size = self.embedding.get_embedding_size()
+
+        configuration = BertConfig(vocab_size=1, n_positions=750, n_embd=inp_size, n_layer=num_layers, n_head=2)
+        self.model = BertModel(configuration)
+
+        self.head = NSPHead(inp_size, embedding_projections)
+
+    def forward(self, transactions_cat_features, product_feature):
+        batch_size = product_feature.shape[0]
+        mask1 = transactions_cat_features[-6] != 0
+            
+        mask = mask1.unsqueeze(1).unsqueeze(2)
+        embedding = self.embedding(transactions_cat_features, product_feature)
+        
+        out = self.model(inputs_embeds=embedding, attention_mask=mask)
+        logits = self.head(out.last_hidden_state)
+
+        return logits
+
 
 
 

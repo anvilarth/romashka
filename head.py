@@ -27,3 +27,22 @@ class RNNClassificationHead(nn.Module):
         last_hidden = torch.reshape(last_hidden.permute(1, 2, 0), shape=(batch_size, d * 2))
 
         return self.linear(last_hidden)
+
+class NSPHead(nn.Module):
+    def __init__(self, embedding_dim, embedding_projections):
+        super().__init__()
+
+        heads = []
+        for elem in embedding_projections:
+            head = nn.Linear(embedding_dim, embedding_projections[elem][0] + 1)
+            heads.append(head)
+
+        self.heads = nn.ModuleList(heads)
+
+    def forward(self, x):
+        res = []
+        for m in self.heads:
+            tmp = m(x)
+            res.append(tmp)
+
+        return res 

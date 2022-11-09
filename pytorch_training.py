@@ -4,15 +4,27 @@ import pandas as pd
 import torch.nn as nn
 from tqdm.notebook import tqdm
 from sklearn.metrics import roc_auc_score
+from augmentations import mask_tokens
 
 from data_generators import batches_generator
+from losses import NextTransactionLoss
 
 
-def train_epoch(model, optimizer, dataset_train, batch_size=64, shuffle=True,
+def train_epoch(model, optimizer, dataset_train, task='default',  batch_size=64, shuffle=True,
                 print_loss_every_n_batches=500, device=None, scheduler=None):
     train_generator = batches_generator(dataset_train, batch_size=batch_size, shuffle=shuffle,
                                         device=device, is_train=True, output_format='torch')
-    loss_function = nn.BCEWithLogitsLoss()
+    if task=='default':
+        loss_function = nn.BCEWithLogitsLoss()
+    
+    elif task == 'next':
+        loss_function = NextTransactionLoss()
+
+    elif task  ==  'mask':
+        loss_function = NextTransactionLoss()
+
+    else:
+        raise NotImplementedError
 
     num_batches = 1
     running_loss = 0.0
@@ -20,10 +32,24 @@ def train_epoch(model, optimizer, dataset_train, batch_size=64, shuffle=True,
     model.train()
 
     for batch in tqdm(train_generator, desc='Training'):
-
-        output = torch.flatten(model(batch['transactions_features'], batch['product']))
-        batch_loss = loss_function(output, batch['label'].float())
-
+        
+        if task == 'default':
+            output = torch.flatten(model(batch['transactions_features'], batch['product']))
+            batch_loss = loss_function(output, batch['label'].float())
+    
+        elif task == 'next':
+            output = model(batch['transactions_features'], batch['product'])
+            batch_loss = loss_function(output, batch['transactions_features'])
+        
+        elif task == 'mask':
+            mask1 = batch['transactions_features'][-6] != 0
+            corrupted_features, replace_mask = mask_tokens(batch['transactions_features'],  mask1)
+            output = model(batch['transactions_features'], batch['product'])
+            batch_loss = loss_function(output, batch['transactions_features'])
+        
+        else:
+            raise NotImplementedError
+        
         wandb.log({'train_loss': batch_loss.item()})
         
         batch_loss.backward()
@@ -43,7 +69,7 @@ def train_epoch(model, optimizer, dataset_train, batch_size=64, shuffle=True,
     print(f'Training loss after epoch: {running_loss / num_batches}', end='\r')
     
 
-def eval_model(model, dataset_val, batch_size=32, device=None) -> float:
+def eval_model(model, dataset_val, task='default', batch_size=32, device=None) -> float:
     """
     функция для оценки качества модели на отложенной выборке, возвращает roc-auc на валидационной
     выборке
