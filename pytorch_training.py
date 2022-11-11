@@ -38,7 +38,9 @@ def train_epoch(model, optimizer, dataset_train, task='default',  batch_size=64,
             batch_loss = loss_function(output, batch['label'].float())
     
         elif task == 'next':
+            mask1 = batch['transactions_features'][-6] != 0
             output = model(batch['transactions_features'], batch['product'])
+            
             batch_loss = loss_function(output, batch['transactions_features'])
         
         elif task == 'mask':
@@ -84,13 +86,33 @@ def eval_model(model, dataset_val, task='default', batch_size=32, device=None) -
     val_generator = batches_generator(dataset_val, batch_size=batch_size, shuffle=False,
                                       device=device, is_train=True, output_format='torch')
     model.eval()
+    if task == 'default':
+        pass
+    else:
+        acc = 0.0
+        num_batches = 0
 
-    for batch in tqdm(val_generator, desc='Evaluating model'):
-        targets.extend(batch['label'].detach().cpu().numpy().flatten())
-        output = model(batch['transactions_features'], batch['product'])
-        preds.extend(output.detach().cpu().numpy().flatten())
+    with torch.no_grad():
+        for batch in tqdm(val_generator, desc='Evaluating model'):
+            num_batches += 1
+            if task == 'default':
+                targets.extend(batch['label'].cpu().numpy().flatten())
+                output = model(batch['transactions_features'], batch['product'])
+                preds.extend(output.cpu().numpy().flatten())
 
-    return roc_auc_score(targets, preds)
+            elif task == 'next':
+                targets = torch.stack(batch['transactions_features'])
+                output = model(batch['transactions_features'], batch['product'])
+                pred = list(map(lambda x: x.argmax(-1), output))
+                t_pred = torch.stack(pred)
+                mask = (targets[-6, :, 1:] != 0)
+                not_masked_acc = (t_pred == targets[..., 1:])
+                acc += (not_masked_acc * mask).sum(axis=(1,2)) / mask.sum()
+                
+    if task == 'default':
+        return roc_auc_score(preds, targets)
+    else:  
+        return acc / num_batches
 
 
 def inference(model, dataset_test, batch_size=32, device=None) -> pd.DataFrame:

@@ -9,5 +9,5 @@ class NextTransactionLoss(nn.Module):
     def forward(self, logits, labels):
         res = []
         for (pred, true) in zip(logits, labels):
-            res.append(self.criterion(pred.permute(0, 2, 1), true))
+            res.append(self.criterion(pred.permute(0, 2, 1), true[:, 1:]))
         return sum(res)

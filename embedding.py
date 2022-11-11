@@ -36,3 +36,16 @@ class EmbeddingLayer(nn.Module):
     def _create_embedding_projection(cls, cardinality, embed_size, add_missing=True, padding_idx=0, emb_mult=1):
         add_missing = 1 if add_missing else 0
         return nn.Embedding(num_embeddings=cardinality+add_missing, embedding_dim=embed_size*emb_mult, padding_idx=padding_idx)
+
+
+
+class PiecewiseLinearEmbedding(nn.Module):
+    def __init__(self, num_feature, vector_dim):
+
+        super().__init__()
+        self.linear = nn.Linear(num_feature+1, vector_dim)
+        self.transform_matrix = torch.tril(torch.ones(num_feature+1, num_feature+1))
+
+    def forward(self, x):
+        embeddings = self.transform_matrix[x]
+        return self.linear(embeddings)

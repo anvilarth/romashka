@@ -36,6 +36,8 @@ class NSPHead(nn.Module):
         for elem in embedding_projections:
             head = nn.Linear(embedding_dim, embedding_projections[elem][0] + 1)
             heads.append(head)
+        
+        del heads[-1]
 
         self.heads = nn.ModuleList(heads)
 
@@ -43,6 +45,6 @@ class NSPHead(nn.Module):
         res = []
         for m in self.heads:
             tmp = m(x)
-            res.append(tmp)
+            res.append(tmp[:, :-1])
 
         return res 

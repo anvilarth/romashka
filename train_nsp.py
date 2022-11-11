@@ -118,9 +118,13 @@ for epoch in range(num_epochs):
     train_epoch(model, optimizer, dataset_train, task=args.task, batch_size=train_batch_size, 
                 shuffle=True, print_loss_every_n_batches=args.loss_freq, device=device, scheduler=scheduler)
     
-    # val_roc_auc = eval_model(model, dataset_val, batch_size=val_batch_size, device=device)
+
     
-    # train_roc_auc = eval_model(model, dataset_train, batch_size=val_batch_size, device=device)
-    # wandb.log({'train_roc_auc': train_roc_auc, 'val_roc_auc': val_roc_auc})
+    val_acc = eval_model(model, dataset_val, task=args.task, batch_size=val_batch_size, device=device)
+    train_acc = eval_model(model, dataset_train, task=args.task, batch_size=val_batch_size, device=device)
+    
+    for i, elem in enumerate(list(embedding_projections.keys())[:-1]):
+        wandb.log({f'train_acc_{elem}': train_acc[i], f'val_acc_{elem}': val_acc[i]})
+    
     torch.save(model.state_dict(), checkpoint_dir + f'/epoch_{epoch}.ckpt')
     print(f'Epoch {epoch+1} completed')

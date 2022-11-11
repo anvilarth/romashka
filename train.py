@@ -25,6 +25,7 @@ from pytorch_training import train_epoch, eval_model
 
 from data_utils import read_parquet_dataset_from_local
 from models import TransactionsRnn, TransactionsModel
+from few_shot_model import TokenGPT
 
 from dataset_preprocessing_utils import transform_transactions_to_sequences, create_padded_buckets
 
@@ -97,6 +98,13 @@ elif args.model == 'transformer':
                              emb_mult=args.emb_mult,
                              alpha=args.alpha,
                              rel_pos_embs=args.rel_pos_embs).to(device)
+
+elif args.model == 'tokengpt':
+    print("USING TOKENGPT")
+    
+    model = TokenGPT(transaction_features, 
+                     embedding_projections, 
+                     num_layers=args.num_layers).to(device)
 
 else:
     raise NotImplementedError
