@@ -26,6 +26,8 @@ from pytorch_training import train_epoch, eval_model
 from data_utils import read_parquet_dataset_from_local
 from models import TransactionsRnn, TransactionsModel
 from few_shot_model import TokenGPT
+from clickstream import ClickstreamModel
+from tools import set_seeds
 
 from dataset_preprocessing_utils import transform_transactions_to_sequences, create_padded_buckets
 
@@ -48,6 +50,11 @@ parser.add_argument('--head_type', type=str, default='linear')
 parser.add_argument('--encoder_type', type=str, default='bert')
 parser.add_argument('--checkpoint_path', type=str, default='')
 parser.add_argument('--group', type=str, default='models')
+parser.add_argument('--numerical', action='store_true')
+parser.add_argument('--seed', type=int, default=0)
+parser.add_argument('--fake_exp', action='store_true')
+parser.add_argument('--train_limitation', type=int, default=10)
+parser.add_argument('--super_fake_exp', action='store_true')
 
 args = parser.parse_args()
 rnd_prt = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(12))
@@ -57,23 +64,42 @@ run_name = f'{args.model}-{args.num_layers}-emb_mult={args.emb_mult}-mixup={args
 wandb.init(project="romashka", entity="serofade", group=args.group, name=run_name)
 wandb.config.update(args)
 
+set_seeds(args.seed)
+
 checkpoint_dir = wandb.run.dir + '/checkpoints'
 
 os.mkdir(checkpoint_dir)
 
 path_to_dataset = '../val_buckets'
+
+if args.numerical:
+    path_to_dataset = '../val_new_buckets'
+
 dir_with_datasets = os.listdir(path_to_dataset)
 dataset_val = sorted([os.path.join(path_to_dataset, x) for x in dir_with_datasets])
 
+
 path_to_dataset = '../train_buckets'
+
+if args.numerical:
+    path_to_dataset = '../train_new_buckets'
+
 dir_with_datasets = os.listdir(path_to_dataset)
 dataset_train = sorted([os.path.join(path_to_dataset, x) for x in dir_with_datasets])
+
+dataset_train = dataset_train[:args.train_limitation]
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 with open('./assets/embedding_projections.pkl', 'rb') as f:
     embedding_projections = pickle.load(f)
+
+buckets = None 
+
+if args.numerical:
+    with open('./assets/dense_features_buckets.pkl', 'rb') as f:
+        buckets = pickle.load(f)
 
 num_epochs = args.num_epochs
 train_batch_size = 128
@@ -85,9 +111,6 @@ if args.model == 'gru':
 
 elif args.model == 'transformer':
     print("USING TRANSFORMER")
-
-
-
     model = TransactionsModel(transaction_features, 
                              embedding_projections, 
                              num_layers=args.num_layers,
@@ -104,7 +127,22 @@ elif args.model == 'tokengpt':
     
     model = TokenGPT(transaction_features, 
                      embedding_projections, 
-                     num_layers=args.num_layers).to(device)
+                     num_layers=args.num_layers,
+                     num_buckets=buckets).to(device)
+
+    if args.fake_exp:
+        print("FAKE")
+        ckpt1 = torch.load('/scratch/andrey/romashka/wandb/run-20221115_004108-3jacicln/files/checkpoints/epoch_19.ckpt')
+
+        model.embedding.load_state_dict(ckpt1, strict=False)
+        model.model.load_state_dict(ckpt1, strict=False)
+        
+        if not args.super_fake_exp:
+            for param in model.embedding.parameters():
+                param.requires_grad = False
+
+            for param in model.model.parameters():
+                param.requires_grad = False
 
 else:
     raise NotImplementedError

@@ -1,3 +1,5 @@
 pyarrow
 transformers
 rtdl
+pytorch-lifestream
+lightgbm

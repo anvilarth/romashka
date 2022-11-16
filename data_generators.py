@@ -8,8 +8,10 @@ transaction_features = ['currency', 'operation_kind', 'card_type', 'operation_ty
                         'day_of_week', 'hour', 'weekofyear', 'amnt', 'days_before', 'hour_diff']
 
 
+numerical_features = ['amnt', 'days_before', 'hour_diff']
+
 def batches_generator(list_of_paths, batch_size=32, shuffle=False, is_infinite=False,
-                      verbose=False, device=None, output_format='torch', is_train=True):
+                      verbose=False, device=None, output_format='torch', is_train=True, process_numerical=False):
     """
     функция для создания батчей на вход для нейронной сети для моделей на keras и pytorch.
     так же может использоваться как функция на стадии инференса
@@ -75,8 +77,10 @@ def batches_generator(list_of_paths, batch_size=32, shuffle=False, is_infinite=F
                         else:
                              yield batch_sequences, batch_app_ids
                     else:
-                        batch_sequences = [torch.LongTensor(batch_sequences[:, i]).to(device)
-                                           for i in range(len(transaction_features))]
+                        batch_sequences = [torch.FloatTensor(batch_sequences[:, i]).to(device)  \
+                                           if (transaction_features[i] in numerical_features) and process_numerical \
+                                           else torch.LongTensor(batch_sequences[:, i]).to(device) \
+                                           for i in range(len(transaction_features)) ]
                         if is_train:
                             yield dict(transactions_features=batch_sequences,
                                        product=torch.LongTensor(batch_products).to(device),

@@ -62,7 +62,8 @@ class TransactionsModel(nn.Module):
         self.mixup = mixup
         self.alpha = alpha
     
-    def forward(self, transactions_cat_features, product_feature):
+    def forward(self, batch):
+        transactions_cat_features, product_feature = batch['transactions_features'], batch['product']
         batch_size = product_feature.shape[0]
         mask1 = transactions_cat_features[-6] != 0
             
@@ -74,7 +75,7 @@ class TransactionsModel(nn.Module):
             transactions_cat_features = add_noise(transactions_cat_features, mask1)
         
         cls_token = self.cls_token.repeat(batch_size, 1, 1)
-        embedding = self.embedding(transactions_cat_features, product_feature)
+        embedding = self.embedding(batch)
         embedding = torch.cat([cls_token, embedding], dim=1)
 
         
@@ -109,7 +110,8 @@ class TransactionsRnn(nn.Module):
         self._head = nn.Linear(in_features=top_classifier_units, out_features=1)
         self.mixup = mixup
     
-    def forward(self, transactions_cat_features, product_feature):
+    def forward(self, batch):
+        transactions_cat_features, product_feature = batch['transactions_features'], batch['product']
         batch_size = product_feature.shape[0]
         
         if self.mixup:
@@ -145,28 +147,42 @@ class NextTransactionModel(nn.Module):
                  product_col_name='product',
                  num_layers=4,
                  emb_mult=1,
+                 num_buckets=None,
+                 model_type='rnn',
                 ):
 
         super().__init__()
-        self.embedding = EmbeddingLayer(transactions_cat_features, embedding_projections, product_col_name, emb_mult)
+        self.embedding = EmbeddingLayer(transactions_cat_features, embedding_projections, product_col_name, emb_mult, num_buckets=num_buckets)
         inp_size = self.embedding.get_embedding_size()
 
-        configuration = GPT2Config(vocab_size=1, n_positions=750, n_embd=inp_size, n_layer=num_layers, n_head=2)
-        self.model = GPT2Model(configuration)
+        self.model_type = model_type
+        if model_type == 'gpt':
+            configuration = GPT2Config(vocab_size=1, n_positions=750, n_embd=inp_size, n_layer=num_layers, n_head=2)
+            self.model = GPT2Model(configuration)
+        else:
+            self.model = nn.GRU(inp_size, inp_size)
 
         self.head = NSPHead(inp_size, embedding_projections)
 
-    def forward(self, transactions_cat_features, product_feature):
+    def forward(self, batch):
+        transactions_cat_features, product_feature = batch['transactions_features'], batch['product']
         batch_size = product_feature.shape[0]
         mask1 = transactions_cat_features[-6] != 0
             
         mask = mask1.unsqueeze(1).unsqueeze(2)
-        embedding = self.embedding(transactions_cat_features, product_feature)
-        
-        out = self.model(inputs_embeds=embedding, attention_mask=mask)
-        logits = self.head(out.last_hidden_state)
+        embedding = self.embedding(batch)
+        if self.model_type == 'gpt':
+            out = self.model(inputs_embeds=embedding, attention_mask=mask).last_hidden_state
+        else:
+            out, _ = self.model(embedding)
+
+        logits = self.head(out)
 
         return logits
+    
+    def modify_numerical_head(self):
+        for i in range(3):
+            self.head.heads[-3 + i] = nn.Linear(self.head.heads[-3 + i].in_features, 1, device=self.head.heads[-3 + i].weight.device)
 
 
 class MaskedModel(nn.Module):
@@ -182,7 +198,7 @@ class MaskedModel(nn.Module):
         self.embedding = EmbeddingLayer(transactions_cat_features, embedding_projections, product_col_name, emb_mult)
         inp_size = self.embedding.get_embedding_size()
 
-        configuration = BertConfig(vocab_size=1, n_positions=750, n_embd=inp_size, n_layer=num_layers, n_head=2)
+        configuration = BertConfig(vocab_size=1, n_positions=760, n_embd=inp_size, n_layer=num_layers, n_head=2)
         self.model = BertModel(configuration)
 
         self.head = NSPHead(inp_size, embedding_projections)

@@ -20,11 +20,13 @@ from tqdm import tqdm
 # torch.autograd.set_detect_anomaly(True)
 sys.path.append('./FEDformer')
 
-from data_generators import batches_generator, transaction_features
+from data_generators import batches_generator, transaction_features, numerical_features
 from pytorch_training import train_epoch, eval_model
 
 from data_utils import read_parquet_dataset_from_local
 from models import NextTransactionModel
+from clickstream import ClickstreamModel
+from tools import set_seeds
 
 from dataset_preprocessing_utils import transform_transactions_to_sequences, create_padded_buckets
 
@@ -48,6 +50,9 @@ parser.add_argument('--encoder_type', type=str, default='bert')
 parser.add_argument('--checkpoint_path', type=str, default='')
 parser.add_argument('--group', type=str, default='next-transaction')
 parser.add_argument('--task', type=str, default='next')
+parser.add_argument('--numerical', action='store_true')
+parser.add_argument('--model_type', type=str, default='gpt')
+parser.add_argument('--seed', type=int, default=0)
 
 args = parser.parse_args()
 rnd_prt = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(12))
@@ -57,15 +62,26 @@ run_name = f'{args.model}-{args.num_layers}-emb_mult={args.emb_mult}-mixup={args
 wandb.init(project="romashka", entity="serofade", group=args.group, name=run_name)
 wandb.config.update(args)
 
+set_seeds(args.seed)
+
 checkpoint_dir = wandb.run.dir + '/checkpoints'
 
 os.mkdir(checkpoint_dir)
 
 path_to_dataset = '../val_buckets'
+
+if args.numerical:
+    path_to_dataset = '../val_new_buckets'
+
 dir_with_datasets = os.listdir(path_to_dataset)
 dataset_val = sorted([os.path.join(path_to_dataset, x) for x in dir_with_datasets])
 
+
 path_to_dataset = '../train_buckets'
+
+if args.numerical:
+    path_to_dataset = '../train_new_buckets'
+
 dir_with_datasets = os.listdir(path_to_dataset)
 dataset_train = sorted([os.path.join(path_to_dataset, x) for x in dir_with_datasets])
 
@@ -75,16 +91,31 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 with open('./assets/embedding_projections.pkl', 'rb') as f:
     embedding_projections = pickle.load(f)
 
+buckets = None 
+
+if args.numerical:
+    with open('./assets/dense_features_buckets.pkl', 'rb') as f:
+        buckets = pickle.load(f)
+
 num_epochs = args.num_epochs
 train_batch_size = 128
 val_batch_size = 128
 
-if args.model == 'gpt':
-    print("USING GPT-2")
-    model = NextTransactionModel(transaction_features, embedding_projections).to(device)
+if args.model_type == 'gpt' and args.task == 'click':
+    model = ClickstreamModel(model_type='gpt').to(device)   
 
+elif args.model == 'rnn':
+    print('USING CLICKSTREAM RNN')
+    model = ClickstreamModel(model_type='rnn').to(device)
+
+elif args.model == 'gpt':
+    print("USING ", args.model_type)
+    model = NextTransactionModel(transaction_features, embedding_projections, model_type=args.model_type, num_buckets=buckets).to(device)
 else:
     raise NotImplementedError
+
+if args.numerical:
+    model.modify_numerical_head()
 
 if args.checkpoint_path != '':
     ckpt = torch.load(args.checkpoint_path)
@@ -116,15 +147,24 @@ else:
 for epoch in range(num_epochs):
     print(f'Starting epoch {epoch+1}')
     train_epoch(model, optimizer, dataset_train, task=args.task, batch_size=train_batch_size, 
-                shuffle=True, print_loss_every_n_batches=args.loss_freq, device=device, scheduler=scheduler)
-    
+                shuffle=True, print_loss_every_n_batches=args.loss_freq, device=device, scheduler=scheduler, process_numerical=args.numerical)
 
-    
-    val_acc = eval_model(model, dataset_val, task=args.task, batch_size=val_batch_size, device=device)
-    train_acc = eval_model(model, dataset_train, task=args.task, batch_size=val_batch_size, device=device)
-    
-    for i, elem in enumerate(list(embedding_projections.keys())[:-1]):
-        wandb.log({f'train_acc_{elem}': train_acc[i], f'val_acc_{elem}': val_acc[i]})
+    val_acc, val_num = eval_model(model, dataset_val, task=args.task, batch_size=val_batch_size, device=device, process_numerical=args.numerical)
+    train_acc, train_num = eval_model(model, dataset_train, task=args.task, batch_size=val_batch_size, device=device, process_numerical=args.numerical)
+
+    if args.task == 'click':
+        for i in range(len(val_num)):
+            wandb.log({f'train_acc_{i}': train_num[i], f'val_acc_{i}': val_num[i]})
+    elif args.task == 'next':
+        if args.numerical:
+            for i in range(val_num.shape[0]):
+                wandb.log({f'val_num_{numerical_features[i]}': val_num[i]})
+            
+        for j in range(val_acc.shape[0]):
+            wandb.log({f'val_acc_{transaction_features[j]}': val_acc[j]})
+            
+    # for i, elem in enumerate(list(embedding_projections.keys())[:-1]):
+    #     wandb.log({f'train_acc_{elem}': train_acc[i], f'val_acc_{elem}': val_acc[i]})
     
     torch.save(model.state_dict(), checkpoint_dir + f'/epoch_{epoch}.ckpt')
     print(f'Epoch {epoch+1} completed')
