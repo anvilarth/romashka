@@ -3,3 +3,7 @@ transformers
 rtdl
 pytorch-lifestream
 lightgbm
+wandb
+seaborn
+torch
+einops
