@@ -27,19 +27,33 @@ from tools import LambdaLayer
 
 static_embedding_maps = {
     'decision-transformer': 128,
-    'wav2vec2': 1024,
-    'data2vec-audio': 768,
-    'data2vec-text': 768,
-    'hubert': 768,
-    'bert': 1024,
-    't5': 1024,
-    'gpt2': 768,
+    'wav2vec2/large': 1024,
+    'wav2vec2/base': 768,
+    'data2vec-audio/base': 768,
+    'data2vec-audio/large': 1024,
+    'data2vec-text/base': 768,
+    'data2vec-text/large': 1024,
+    'hubert/base': 768,
+    'hubert/large': 1024,
+    'hubert/xlarge': 1280,
+    'bert/base': 768,
+    'bert/large': 1024,
+    't5/small': 512,
+    't5/base': 768,
+    't5/large': 1024,
+    'gpt2/base': 768,
+    'gpt2/medium': 1024,
+    'gpt2/large': 1280,
+    'gpt2/xl': 1600,
 }
 seq_embedding_maps = {
-    'vit-base': 768,
-    'video-mae': 768,
-    'data2vec-vision': 768,
-    'graphcodebert': 768,
+    'vit/base': 768,
+    'vit/large': 1024,
+    'videomae/base': 768,
+    'videomae/large': 1024,
+    'data2vec-vision/base': 768,
+    'data2vec-vision/large': 1024,
+    'graphcodebert': 768
 }
 
 class WrapVisionModel(nn.Module):
@@ -87,19 +101,20 @@ class TransactionsModel(nn.Module):
                                         time_embedding,
                                         dropout=dropout)
         inp_size = self.embedding.get_embedding_size()
-
+        
+        
         
         if hidden_size is not None:
             self.mapping_embedding = LinearMapping(inp_size, hidden_size)
             
-        elif encoder_type in static_embedding_maps and pretrained: 
+        elif encoder_type in static_embedding_maps: 
             hidden_size = static_embedding_maps[encoder_type]
             self.mapping_embedding = LinearMapping(inp_size, hidden_size)
         
-        elif encoder_type in seq_embedding_maps and pretrained:
+        elif encoder_type in seq_embedding_maps:
             hidden_size = seq_embedding_maps[encoder_type]
             num_latents=16
-            if encoder_type == 'data2vec-vision':
+            if encoder_type == 'data2vec-vision/large' or encoder_type == 'data2vec-vision/base':
                 num_latents = 196
                 
             elif encoder_type == 'graphcodebert':
@@ -110,7 +125,9 @@ class TransactionsModel(nn.Module):
         else:
             hidden_size = inp_size
             self.mapping_embedding = nn.Identity()
-            
+        
+        encoder_type, encoder_size = encoder_type.split('/')
+        
         self.add_token = add_token
         self.head_type = head_type
         self.encoder_type = encoder_type
@@ -145,9 +162,11 @@ class TransactionsModel(nn.Module):
                 self.encoder.wpe = LambdaLayer(lambda x: 0)
                 
             elif adapters:
-                self.encoder = BertModelAdapter.from_pretrained('bert-large-uncased', max_position_embeddings=1024, ignore_mismatched_sizes=True)
+                name = f'bert-{encoder_size}-uncased'
+                self.encoder = BertModelAdapter.from_pretrained(name, max_position_embeddings=1024, ignore_mismatched_sizes=True)
+                
             else:
-                self.encoder = BertModel.from_pretrained("bert-large-uncased", max_position_embeddings=1024, ignore_mismatched_sizes=True)
+                self.encoder = BertModel.from_pretrained(f"bert-{encoder_size}-uncased", max_position_embeddings=1024, ignore_mismatched_sizes=True)
             
             
         elif encoder_type == 't5':
@@ -160,7 +179,7 @@ class TransactionsModel(nn.Module):
                 self.encoder = T5Model(configuration)
                 self.encoder.wpe = LambdaLayer(lambda x: 0)
             else:
-                self.encoder = T5Model.from_pretrained("t5-large")
+                self.encoder = T5Model.from_pretrained(f"t5-{encoder_size}")
         
         elif encoder_type == 'gpt2':
             if pretrained == False:
@@ -171,45 +190,56 @@ class TransactionsModel(nn.Module):
                 self.encoder = GPT2Model(configuration)
                 self.encoder.wpe = LambdaLayer(lambda x: 0)
             elif adapters:
-                self.encoder = GPT2ModelAdapter.from_pretrained('gpt2')
+                name = 'gpt2'
+                if encoder_size != 'base':
+                    name += f'-{encoder_size}'
+                    
+                self.encoder = GPT2ModelAdapter.from_pretrained(name)
                 
             else:
+                name = 'gpt2'
+                if encoder_size != 'base':
+                    name += f'-{encoder_size}'
+                    
                 print("USING PRETRAINED GPT")
-                self.encoder = GPT2Model.from_pretrained("gpt2")
+                self.encoder = GPT2Model.from_pretrained(name)
         
         elif encoder_type == 'decision-transformer':
             self.encoder = DecisionTransformerModel.from_pretrained("edbeeching/decision-transformer-gym-hopper-expert").encoder
             self.encoder.wpe = LambdaLayer(lambda x: 0)
             
         elif encoder_type == 'wav2vec2':
-            model = Wav2Vec2Model.from_pretrained("facebook/wav2vec2-large-960h-lv60-self")
+            model = Wav2Vec2Model.from_pretrained(f"facebook/wav2vec2-{encoder_size}-960h")
             self.encoder = model.encoder
             self.encoder.pos_conv_embed = nn.Identity()
             
         elif encoder_type == 'data2vec-audio':
-            model = Data2VecAudioModel.from_pretrained("facebook/data2vec-audio-base")
+            model = Data2VecAudioModel.from_pretrained(f"facebook/data2vec-audio-{encoder_size}-960h")
             self.encoder = model.encoder
             self.encoder.pos_conv_embed = nn.Identity()
             
         elif encoder_type == 'data2vec-text':
-            self.encoder = Data2VecTextModel.from_pretrained("facebook/data2vec-text-base")
+            self.encoder = Data2VecTextModel.from_pretrained(f"facebook/data2vec-text-{encoder_size}")
         
         elif encoder_type == 'hubert':
-            model = HubertForSequenceClassification.from_pretrained("superb/hubert-base-superb-er").hubert
+            name = f'facebook/hubert-{encoder_size}-ls960' 
+            name += '-ft' if encoder_size != 'base' else ''
+            
+            model = HubertForSequenceClassification.from_pretrained("name").hubert
             self.encoder = model.encoder
             self.encoder.pos_conv_embed = nn.Identity()
         
         elif encoder_type == 'video-mae':
-            self.encoder = VideoMAEModel.from_pretrained("MCG-NJU/videomae-base").encoder
+            self.encoder = VideoMAEModel.from_pretrained(f"MCG-NJU/videomae-{encoder_size}").encoder
             
         elif encoder_type == 'vit-base':
-            self.encoder = ViTModel.from_pretrained('google/vit-base-patch16-224').encoder
+            self.encoder = ViTModel.from_pretrained(f'google/vit-{encoder_size}-patch16-224').encoder
             
         elif encoder_type == 'perceiver-vision':
             self.encoder = PerceiverModel.from_pretrained("deepmind/vision-perceiver-fourier")
         
         elif encoder_type == 'data2vec-vision':
-            self.encoder = Data2VecVisionModel.from_pretrained("facebook/data2vec-vision-base").encoder
+            self.encoder = Data2VecVisionModel.from_pretrained(f"facebook/data2vec-vision-{encoder_size}").encoder
         
         elif encoder_type == 'graphcodebert':
             self.encoder = AutoModel.from_pretrained("microsoft/graphcodebert-base").encoder
@@ -217,6 +247,10 @@ class TransactionsModel(nn.Module):
         else:
             raise NotImplementedError("Incorrect model name")
 
+            
+        if not pretrained:
+            self.encoder.init_weights()
+            
         if head_type == 'linear':
             self.head = LinearHead(hidden_size)
         elif head_type == 'rnn':
@@ -254,12 +288,6 @@ class TransactionsModel(nn.Module):
 
                 cls_token_mask = torch.ones(batch_size, 1, dtype=bool, device=mask.device)
                 mask = torch.cat([mask, cls_token_mask], dim=1)
-
-#         if self.cutmix and self.training:
-#             transactions_cat_features = add_noise(transactions_cat_features, mask1)
-
-        # if self.mixup and self.training:
-        #     embedding = mixup_data(embedding, self.alpha, mask=mask.squeeze(2))
         
         if self.encoder_type in ['gpt2', 'decision-transformer', 'bert']:
             x = self.encoder(inputs_embeds=embedding, attention_mask=mask).last_hidden_state
