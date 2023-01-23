@@ -27,8 +27,8 @@ from torch.utils.data import DataLoader
 
 from data_utils import read_parquet_dataset_from_local
 from contrastive_model import PretrainModel
-from tools import set_seeds
-from losses import NextTransactionLoss
+from tools import set_seeds, generate_subsequences
+from losses import NextTransactionLoss, TripletLoss
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--model', type=str, default='transformer')
@@ -58,12 +58,20 @@ parser.add_argument('--datapath', type=str, default='/home/jovyan/data/alfa/')
 parser.add_argument('--data', type=str, default='original')
 parser.add_argument('--task', type=str, default='next')
 parser.add_argument('--batch_size', type=int, default=128)
+parser.add_argument('--K', type=int, default=10)
+parser.add_argument('--m', type=float, default=0.1)
+parser.add_argument('--M', type=float, default=0.9)
+parser.add_argument('--margin', type=float, default=1.0)
+parser.add_argument('--run_name', type=str, default='')
 
 args = parser.parse_args()
 rnd_prt = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(12))
 
-run_name = f'{args.model}-{args.num_layers}-emb_mult={args.emb_mult}-mixup={args.mixup}-{args.optimizer}-lr={args.lr}-{rnd_prt}-rel_pos_embs={args.rel_pos_embs}'
-
+if args.run_name == '':
+    run_name = f'{args.model}-{args.num_layers}-emb_mult={args.emb_mult}-mixup={args.mixup}-{args.optimizer}-lr={args.lr}-{rnd_prt}-rel_pos_embs={args.rel_pos_embs}'
+else:
+    run_name = args.run_name
+    
 wandb.init(project="romashka", entity="serofade", group=args.group, name=run_name)
 wandb.config.update(args)
 
@@ -107,6 +115,8 @@ model = PretrainModel(cat_embedding_projections,
                           cat_features_names,
                           num_embedding_projections,
                           num_features_names,  
+                          meta_embedding_projections,
+                          meta_features_names,
                           num_layers=args.num_layers,
                           head_type=args.head_type,
                           encoder_type=args.encoder_type,  
@@ -125,22 +135,38 @@ else:
     raise NotImplementedError
 
 criterion1 = nn.CrossEntropyLoss()
-loss_function = NextTransactionLoss()
+# loss_function = NextTransactionLoss()
+loss_function = TripletLoss(device='cuda', margin=args.margin)
 
 for epoch in range(num_epochs):
     train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, shuffle=True,
                                     device=device, is_train=True, output_format='torch')
     
     for i, batch in enumerate(train_dataloader):
-        mask = batch['mask']
-        original = model.embedding(batch)
+        new_batches = generate_subsequences(batch, K=args.K, m=args.m, M=args.M)
+
+        embs = []
+        for btch in new_batches:
+            embedding = model.get_embs(btch)[0][:, 0]
+            embs.append(embedding)
+            
+        res = torch.cat(embs, dim=0)
         
-        batch_size, seq_len = mask.shape[0], mask.shape[1]
-        auto_regr_mask = torch.tril(torch.ones(size=(seq_len, seq_len))).unsqueeze(0).unsqueeze(1).repeat(batch_size, 1, 1, 1).cuda()
         
-        original_features = model.encoder(original, mask=auto_regr_mask * mask.unsqueeze(1).unsqueeze(2))
-        logit = model.head(original_features)
-        loss = loss_function(logit, batch)
+        labels = torch.arange(0, embedding.shape[0], device='cuda').repeat(args.K + 1)
+        
+        loss = loss_function(res, labels)
+        
+        
+#         mask = batch['mask']
+#         original = model.embedding(batch)
+        
+#         batch_size, seq_len = mask.shape[0], mask.shape[1]
+#         auto_regr_mask = torch.tril(torch.ones(size=(seq_len, seq_len))).unsqueeze(0).unsqueeze(1).repeat(batch_size, 1, 1, 1).cuda()
+        
+#         original_features = model.encoder(original, mask=auto_regr_mask * mask.unsqueeze(1).unsqueeze(2))
+#         logit = model.head(original_features)
+#         loss = loss_function(logit, batch)
         
 #         elif i % 2 == 1:
 #             original_features = model.encoder(original, mask= mask.unsqueeze(1).unsqueeze(2))
@@ -169,20 +195,22 @@ for epoch in range(num_epochs):
         loss.backward()
         optimizer.step()
         
-        if i % 100 == 1:
-            print(f'Training loss after {i} batches: {loss.item()}', end='\r')
         
-        wandb.log({'train_loss_nsp': loss.item()})
+        if i % 1000 == 0 and i > 50:
+            torch.save(model.state_dict(), checkpoint_dir + f'/epoch_{epoch}-iter_{i}.ckpt')
+            # print(f'Training loss after {i} batches: {loss.item()}', end='\r')
+        
+        wandb.log({'train_loss': loss.item()})
 #         elif i % 2 == 1:
 #             wandb.log({'train_loss_contrastive': loss.item()})
     
-    val_dataloader = batches_generator(dataset_val, batch_size=train_batch_size, device=device, is_train=True, output_format='torch')
-    val_acc, val_num = eval_model(model, val_dataloader, task=args.task, device=device)
+#     val_dataloader = batches_generator(dataset_val, batch_size=train_batch_size, device=device, is_train=True, output_format='torch')
+#     val_acc, val_num = eval_model(model, val_dataloader, task=args.task, device=device)
     
-    for i, elem in enumerate(cat_features_names):
-        wandb.log({f'val_{elem}': val_acc[i]})
+#     for i, elem in enumerate(cat_features_names):
+#         wandb.log({f'val_{elem}': val_acc[i]})
         
-    for i, elem in enumerate(num_features_names):
-        wandb.log({f'val_{elem}': val_num[i]})
+#     for i, elem in enumerate(num_features_names):
+#         wandb.log({f'val_{elem}': val_num[i]})
     
     print(f"Epoch {epoch} ended")

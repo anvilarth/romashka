@@ -41,6 +41,7 @@ class PretrainModel(nn.Module):
                  mixup=False,
                  emb_mult=1,
                  rel_pos_embs=False,
+                 add_token='before',
                  alpha=1.0):
 
         super().__init__()
@@ -67,7 +68,44 @@ class PretrainModel(nn.Module):
         self.cutmix = cutmix
         self.mixup = mixup
         self.alpha = alpha
+        self.add_token = add_token
+    
+    def get_embs(self, batch=None, embeds=None):
+        mask = batch['mask']
+        batch_size = mask.shape[0]
         
+        if embeds is None:
+            embedding = self.embedding(batch)
+        else:
+            embedding = embeds
+        
+        if self.head_type != 'next':
+            if self.add_token == 'before':
+                cls_token = self.cls_token.repeat(batch_size, 1, 1)
+                embedding = torch.cat([embedding, cls_token], dim=1)
+
+                cls_token_mask = torch.ones(batch_size, 1, dtype=bool, device=mask.device)
+                mask = torch.cat([mask, cls_token_mask], dim=1)
+
+        if self.encoder_type == 'gpt':
+            x = self.encoder(inputs_embeds=embedding, attention_mask=mask).last_hidden_state
+        elif 'rnn' in self.encoder_type:
+            x, _ = self.encoder(embedding)
+        elif self.encoder_type == 'bert':
+            mask = mask.unsqueeze(1).unsqueeze(2)
+            x = self.encoder(embedding, mask)
+        else:
+            x = self.encoder(embedding, mask)
+            
+        if self.add_token == 'after':
+            cls_token = self.cls_token.repeat(batch_size, 1, 1)
+            x = torch.cat([x, cls_token], dim=1)
+            
+            cls_token_mask = torch.ones(batch_size, 1, dtype=bool, device=mask.device)
+            mask = torch.cat([mask, cls_token_mask], dim=1)
+            
+        return x, mask
+    
     def forward(self, batch):
         mask = batch['mask']
         batch_size = mask.shape[0]
@@ -76,5 +114,5 @@ class PretrainModel(nn.Module):
         mask = mask.unsqueeze(1).unsqueeze(2)
         x = self.encoder(embedding, mask)
                 
-        logit = self.head(x, mask)
-        return logit
+        # logit = self.head(x, mask)
+        return x

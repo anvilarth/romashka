@@ -2,20 +2,55 @@ import torch
 import sys
 import torch.nn as nn
 
+import timm
 import torch.nn.functional as F
 from time import time
-from transformers import GPT2Model, GPT2Config, BertConfig, BertModel
+from transformers import GPT2Model, GPT2Config, BertConfig, BertModel, T5Config, T5Model
+from transformers import DecisionTransformerModel, Wav2Vec2Model, Data2VecAudioModel, Data2VecTextModel
+from transformers import HubertForSequenceClassification, AutoModel, ViTModel, VideoMAEModel
+from transformers import PerceiverModel, Data2VecVisionModel
 
-from embedding import EmbeddingLayer
+from embedding import EmbeddingLayer, PerceiverMapping, LinearMapping
 from augmentations import mixup_data
 
 from encoder import BERT, Informer, InformerConfigs
 from head import LinearHead, RNNClassificationHead, NSPHead, MLPHead, TransformerHead, IdentityHead
 from tools import LambdaLayer
 
-sys.path.append('./perceiver-pytorch')
+# sys.path.append('/home/jovyan/romashka/perceiver-pytorch')
 
-from perceiver_pytorch import Perceiver
+# from perceiver_pytorch import Perceiver
+
+# sys.path.append('/home/jovyan/romashka/adapter_transformers')
+
+# from adapter_transformers import GPT2Model as GPT2ModelAdapter, BertModel as BertModelAdapter
+
+static_embedding_maps = {
+    'decision-transformer': 128,
+    'wav2vec2': 1024,
+    'data2vec-audio': 768,
+    'data2vec-text': 768,
+    'hubert': 768,
+    'bert': 1024,
+    't5': 1024,
+    'gpt2': 768,
+}
+seq_embedding_maps = {
+    'vit-base': 768,
+    'video-mae': 768,
+    'data2vec-vision': 768,
+    'graphcodebert': 768,
+}
+
+class WrapVisionModel(nn.Module):
+    def __init__(self, process,  encoder):
+        super().__init__()
+        self.process = process
+        self.encoder = encoder
+    
+    def forward(self, x, attention_mask=None):
+        x = self.process(x, mask=attention_mask)
+        return self.encoder(x)
 
 
 class TransactionsModel(nn.Module):
@@ -36,6 +71,10 @@ class TransactionsModel(nn.Module):
                  mixup=False,
                  emb_mult=1,
                  rel_pos_embs=False,
+                 embedding_dim_size=None,
+                 pretrained=False,
+                 adapters=False,
+                 hidden_size=None,
                  alpha=1.0):
 
         super().__init__()
@@ -47,81 +86,164 @@ class TransactionsModel(nn.Module):
                                         meta_features,
                                         time_embedding,
                                         dropout=dropout)
-        
         inp_size = self.embedding.get_embedding_size()
+
         
+        if hidden_size is not None:
+            self.mapping_embedding = LinearMapping(inp_size, hidden_size)
+            
+        elif encoder_type in static_embedding_maps and pretrained: 
+            hidden_size = static_embedding_maps[encoder_type]
+            self.mapping_embedding = LinearMapping(inp_size, hidden_size)
+        
+        elif encoder_type in seq_embedding_maps and pretrained:
+            hidden_size = seq_embedding_maps[encoder_type]
+            num_latents=16
+            if encoder_type == 'data2vec-vision':
+                num_latents = 196
+                
+            elif encoder_type == 'graphcodebert':
+                num_latents = 10
+                
+            self.mapping_embedding = PerceiverMapping(inp_size, hidden_size, num_latents)
+        
+        else:
+            hidden_size = inp_size
+            self.mapping_embedding = nn.Identity()
+            
         self.add_token = add_token
         self.head_type = head_type
         self.encoder_type = encoder_type
-        self.cls_token = nn.Parameter(torch.randn(1, 1, inp_size) / inp_size)
+        self.cls_token = nn.Parameter(torch.randn(1, 1, hidden_size))
 
-        if encoder_type == 'bert':
-            self.encoder = BERT(inp_size, heads=2*emb_mult, num_layers=num_layers, dropout=dropout, layer_norm_eps=1e-7, rel_pos_embs=rel_pos_embs)
+        if encoder_type == 'mybert':
+            self.encoder = BERT(hidden_size, heads=2*emb_mult, num_layers=num_layers, dropout=dropout, layer_norm_eps=1e-7, rel_pos_embs=rel_pos_embs)
         
         elif encoder_type == 'informer':
-            configs = InformerConfigs(d_model=inp_size * emb_mult,
+            configs = InformerConfigs(d_model=hidden_size * emb_mult,
                         dropout=dropout,
                         n_heads=2*emb_mult,
                         num_layers=num_layers)
             self.encoder = Informer(configs)
         elif encoder_type == 'rnn':
-            self.encoder = nn.GRU(inp_size, inp_size, batch_first=True)
+            self.encoder = nn.GRU(hidden_size, hidden_size, batch_first=True)
         elif encoder_type == 'rnn2':
-            self.encoder = nn.GRU(inp_size, inp_size, num_layers=2, batch_first=True)
-            
-        elif encoder_type == 'gpt':
-            configuration = GPT2Config(vocab_size=1, n_positions=2000, 
-                                       n_embd=inp_size, n_layer=num_layers, 
-                                       n_head=2, resid_pdrop=dropout,
-                                       embd_pdrop=dropout, attn_pdrop=dropout)
-            self.encoder = GPT2Model(configuration)
-            # removing positional encoding
-            self.encoder.wpe = LambdaLayer(lambda x: 0)
+            self.encoder = nn.GRU(hidden_size, hidden_size, num_layers=2, batch_first=True)
         
-        elif encoder_type == 'perceiver':
-            self.encoder = Perceiver(input_channels=inp_size,
-                                     depth = 6,                   
-                                     num_latents = 16,           # number of latents, or induced set points, or centroids. different papers giving it different names
-                                     latent_dim = 100,            # latent dimension
-                                     cross_heads = 1,             # number of heads for cross attention. paper said 1
-                                     latent_heads = 4,            # number of heads for latent self attention, 8
-                                     cross_dim_head = 32,         # number of dimensions per cross attention head
-                                     latent_dim_head = 32,        # number of dimensions per latent self attention head
-                                     num_classes = 1,          # output number of classes
-                                     attn_dropout = dropout,
-                                     ff_dropout = dropout,
-                                     weight_tie_layers = False,   # whether to weight tie layers (optional, as indicated in the diagram)
-                                     self_per_cross_attn = 2      # number of self attention blocks per cross attention
-                                )
+        elif encoder_type == 'bert':
+            if pretrained == False:
+                config = BertConfig(vocab_size = 1,
+                             hidden_size = 182,
+                             num_hidden_layers = 12,
+                             num_attention_heads = 2,
+                             intermediate_size = 182*2,
+                             hidden_dropout_prob = 0.1,
+                             attention_probs_dropout_prob = 0.1,
+                             max_position_embeddings = 2000,
+                )
+                self.encoder = BertModel(config)
+                self.encoder.wpe = LambdaLayer(lambda x: 0)
+                
+            elif adapters:
+                self.encoder = BertModelAdapter.from_pretrained('bert-large-uncased', max_position_embeddings=1024, ignore_mismatched_sizes=True)
+            else:
+                self.encoder = BertModel.from_pretrained("bert-large-uncased", max_position_embeddings=1024, ignore_mismatched_sizes=True)
+            
+            
+        elif encoder_type == 't5':
+            if pretrained == False:
+                configuration = T5Config(vocab_size=1, n_positions=2000, d_model=hidden_size, 
+                                         n_layer=6, d_ff=hidden_size*2, 
+                                         num_heads=2, dropout_rate=dropout
+                                        )
+
+                self.encoder = T5Model(configuration)
+                self.encoder.wpe = LambdaLayer(lambda x: 0)
+            else:
+                self.encoder = T5Model.from_pretrained("t5-large")
+        
+        elif encoder_type == 'gpt2':
+            if pretrained == False:
+                configuration = GPT2Config(vocab_size=1, n_positions=2000, 
+                                           n_embd=hidden_size, n_layer=num_layers, 
+                                           n_head=2, resid_pdrop=dropout,
+                                           embd_pdrop=dropout, attn_pdrop=dropout)
+                self.encoder = GPT2Model(configuration)
+                self.encoder.wpe = LambdaLayer(lambda x: 0)
+            elif adapters:
+                self.encoder = GPT2ModelAdapter.from_pretrained('gpt2')
+                
+            else:
+                print("USING PRETRAINED GPT")
+                self.encoder = GPT2Model.from_pretrained("gpt2")
+        
+        elif encoder_type == 'decision-transformer':
+            self.encoder = DecisionTransformerModel.from_pretrained("edbeeching/decision-transformer-gym-hopper-expert").encoder
+            self.encoder.wpe = LambdaLayer(lambda x: 0)
+            
+        elif encoder_type == 'wav2vec2':
+            model = Wav2Vec2Model.from_pretrained("facebook/wav2vec2-large-960h-lv60-self")
+            self.encoder = model.encoder
+            self.encoder.pos_conv_embed = nn.Identity()
+            
+        elif encoder_type == 'data2vec-audio':
+            model = Data2VecAudioModel.from_pretrained("facebook/data2vec-audio-base")
+            self.encoder = model.encoder
+            self.encoder.pos_conv_embed = nn.Identity()
+            
+        elif encoder_type == 'data2vec-text':
+            self.encoder = Data2VecTextModel.from_pretrained("facebook/data2vec-text-base")
+        
+        elif encoder_type == 'hubert':
+            model = HubertForSequenceClassification.from_pretrained("superb/hubert-base-superb-er").hubert
+            self.encoder = model.encoder
+            self.encoder.pos_conv_embed = nn.Identity()
+        
+        elif encoder_type == 'video-mae':
+            self.encoder = VideoMAEModel.from_pretrained("MCG-NJU/videomae-base").encoder
+            
+        elif encoder_type == 'vit-base':
+            self.encoder = ViTModel.from_pretrained('google/vit-base-patch16-224').encoder
+            
+        elif encoder_type == 'perceiver-vision':
+            self.encoder = PerceiverModel.from_pretrained("deepmind/vision-perceiver-fourier")
+        
+        elif encoder_type == 'data2vec-vision':
+            self.encoder = Data2VecVisionModel.from_pretrained("facebook/data2vec-vision-base").encoder
+        
+        elif encoder_type == 'graphcodebert':
+            self.encoder = AutoModel.from_pretrained("microsoft/graphcodebert-base").encoder
         
         else:
-            raise NotImplementedError
+            raise NotImplementedError("Incorrect model name")
 
         if head_type == 'linear':
-            self.head = LinearHead(inp_size)
+            self.head = LinearHead(hidden_size)
         elif head_type == 'rnn':
-            self.head = RNNClassificationHead(inp_size)
+            self.head = RNNClassificationHead(hidden_size)
         elif head_type == 'mlp':
-            self.head = MLPHead(inp_size)
+            self.head = MLPHead(hidden_size)
         elif head_type == 'transformer':
-            self.head = TransformerHead(inp_size)
+            self.head = TransformerHead(hidden_size)
         elif head_type == 'id':
             self.head = IdentityHead()
         elif head_type == 'next':
-            self.head = NSPHead(inp_size, cat_embedding_projections, num_embedding_projections)
+            self.head = NSPHead(hidden_size, cat_embedding_projections, num_embedding_projections)
         else:
             raise NotImplementedError
 
         self.cutmix = cutmix
         self.mixup = mixup
         self.alpha = alpha
+        self.encoder_type = encoder_type
     
-    def forward(self, batch=None, embeds=None):
+    def get_embs(self, batch=None, embeds=None):
         mask = batch['mask']
         batch_size = mask.shape[0]
         
         if embeds is None:
             embedding = self.embedding(batch)
+            embedding = self.mapping_embedding(embedding, attention_mask=mask)
         else:
             embedding = embeds
         
@@ -139,13 +261,26 @@ class TransactionsModel(nn.Module):
         # if self.mixup and self.training:
         #     embedding = mixup_data(embedding, self.alpha, mask=mask.squeeze(2))
         
-        if self.encoder_type == 'gpt':
+        if self.encoder_type in ['gpt2', 'decision-transformer', 'bert']:
             x = self.encoder(inputs_embeds=embedding, attention_mask=mask).last_hidden_state
+        elif self.encoder_type == 't5':
+            x = self.encoder(inputs_embeds=embedding, decoder_inputs_embeds=embedding, attention_mask=mask).last_hidden_state
+        
         elif 'rnn' in self.encoder_type:
             x, _ = self.encoder(embedding)
-        elif self.encoder_type == 'bert':
+        elif self.encoder_type == 'mybert':
             mask = mask.unsqueeze(1).unsqueeze(2)
             x = self.encoder(embedding, mask)
+            
+        elif self.encoder_type == 'data2vec-text':
+            tmp_mask = self.encoder.get_extended_attention_mask(mask, mask.shape)
+            x = self.encoder.encoder(embedding, attention_mask=tmp_mask).last_hidden_state
+        
+        elif self.encoder_type in ['wav2vec2', 'data2vec-audio', 'hubert']:
+            x = self.encoder(embedding, attention_mask=mask).last_hidden_state
+            
+        elif self.encoder_type in ['vit-base', 'video-mae', 'data2vec-vision', 'graphcodebert']:
+            x = self.encoder(embedding).last_hidden_state
         else:
             x = self.encoder(embedding, mask)
             
@@ -155,6 +290,11 @@ class TransactionsModel(nn.Module):
             
             cls_token_mask = torch.ones(batch_size, 1, dtype=bool, device=mask.device)
             mask = torch.cat([mask, cls_token_mask], dim=1)
+            
+        return x, mask
+    
+    def forward(self, batch=None, embeds=None):
+        x, mask = self.get_embs(batch, embeds)
                 
         logit = self.head(x, mask)
         

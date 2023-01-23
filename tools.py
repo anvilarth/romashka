@@ -52,3 +52,43 @@ def read_parquet_dataset_from_local(path_to_dataset: str, start_from: int = 0,
         chunk = pd.read_parquet(chunk_path,columns=columns)
         res.append(chunk)
     return pd.concat(res).reset_index(drop=True)
+
+
+def generate_subsequences(batch, K, m = 0.1, M=0.9):
+    new_batches = [batch]
+    seq_len = batch['mask'].shape[1]
+    
+    length = torch.rand(size=(K,)) * (M - m) + m
+    int_length = (length * seq_len).type(torch.int)
+
+    indices = seq_len - int_length
+    start_indices = (indices * torch.rand_like(length)).type(torch.int)
+
+    for (start, end) in zip(start_indices, start_indices + int_length): 
+        new_batch = {}
+        for elem in batch:
+            new_feature_list = []
+            if elem == 'label':
+                new_batch[elem] = batch[elem]
+
+            elif type(batch[elem]) == torch.Tensor:
+                new_batch[elem] = batch[elem][:, start:end]
+
+            elif elem == 'meta_features':
+                for feature in batch[elem]:
+                    new_feature_list.append(feature)
+                new_batch[elem] = new_feature_list
+
+            elif elem == 'app_id':
+                pass
+
+            else:
+                for feature in batch[elem]:
+
+                    new_feature = feature[:, start: end]
+                    new_feature_list.append(new_feature)
+
+                new_batch[elem] = new_feature_list
+        new_batches.append(new_batch)
+        
+    return new_batches

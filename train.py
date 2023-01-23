@@ -26,8 +26,24 @@ from torch.utils.data import DataLoader
 
 from data_utils import read_parquet_dataset_from_local
 from models import TransactionsModel
-from tools import set_seeds
+from tools import set_seeds, count_parameters
 from data import  TransactionDataset, TransactionClickStreamDataset, TransactionClickStreamDatasetClickstream, TransactionClickStreamDatasetTransactions
+
+
+def loading_ptls_model(ckpt_dict):
+    new_dict = {}
+
+    encoder_prefix = '_seq_encoder.seq_encoder.encoder.'
+    embedding_prefix = '_seq_encoder.trx_encoder.'
+
+    for key in ckpt_dict:
+        if encoder_prefix in key:
+            new_dict[key[len(encoder_prefix):]] = ckpt[key]
+
+        if embedding_prefix in key:
+            new_dict['embedding.' + key[len(embedding_prefix):]] = ckpt[key]
+    
+    return new_dict
 
 
 parser = argparse.ArgumentParser()
@@ -60,11 +76,19 @@ parser.add_argument('--task', type=str, default='next')
 parser.add_argument('--batch_size', type=int, default=128)
 parser.add_argument('--focus_feature', type=str, default=None)
 parser.add_argument('--add_token', type=str, default='before')
+parser.add_argument('--embedding_dim_size', type=int, default=None)
+parser.add_argument('--pretrained', action='store_true', default=False)
+parser.add_argument('--run_name', type=str, default='')
+parser.add_argument('--model_source', type=str, default='scratch')
+parser.add_argument('--adapters', action='store_true')
 
 args = parser.parse_args()
 rnd_prt = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(12))
 
-run_name = f'{args.model}-{args.num_layers}-emb_mult={args.emb_mult}-mixup={args.mixup}-{args.optimizer}-lr={args.lr}-{rnd_prt}-rel_pos_embs={args.rel_pos_embs}'
+if args.run_name == '':
+    run_name = f'{args.model}-{args.num_layers}-emb_mult={args.emb_mult}-mixup={args.mixup}-{args.optimizer}-lr={args.lr}-{rnd_prt}-rel_pos_embs={args.rel_pos_embs}'
+else:
+    run_name = args.run_name
 
 wandb.init(project="romashka", entity="serofade", group=args.group, name=run_name)
 wandb.config.update(args)
@@ -186,29 +210,50 @@ if args.model == 'transformer':
                               emb_mult=args.emb_mult,
                               alpha=args.alpha,
                               rel_pos_embs=args.rel_pos_embs,
-                              add_token=args.add_token
-                             ).to(device)
-
-    if args.finetune is not None:
+                              add_token=args.add_token,
+                              embedding_dim_size=args.embedding_dim_size,
+                              pretrained=args.pretrained,
+                              adapters=args.adapters,
+                             )
+    
+    wandb.config.update({'parameters': count_parameters(model)})
+    
+    if args.checkpoint_path != '':
         # ckpt = torch.load('/home/jovyan/romashka/wandb/run-20221205_220219-1nfqlfsm/files/checkpoints/epoch_15.ckpt')
         ckpt = torch.load(args.checkpoint_path)
+        
+        if args.model_source == 'ptls':
+            ckpt = loading_ptls_model(ckpt)
+        
+        
         model.load_state_dict(ckpt, strict=False)
         
+    if args.finetune is not None:
         for param in model.parameters():
             param.requires_grad = False
+            
+        if args.adapters:
+            model.encoder.add_adapter("bottleneck_adapter")
+            model.encoder.train_adapter("bottleneck_adapter")
         
         model.cls_token.requires_grad_(True)
         model.head.requires_grad_(True)
         
         if args.finetune == 'all':
             model.requires_grad_(True)
+            
         elif args.finetune ==  'embedding':
             model.embedding.requires_grad_(True)
+            model.mapping_embedding.requires_grad_(True)
+            
         elif args.finetune == 'encoder':
             model.encoder.requires_grad_(True)
+            
         elif args.finetune == 'none':
             pass
-        
+               
+    wandb.config.update({'train_parameters': count_parameters(model)})
+    model.to(device)
 
 else:
     raise NotImplementedError
@@ -220,6 +265,8 @@ else:
 #     model.load_state_dict(ckpt, strict=False)
 #     model.head = new_head
 
+print("CREATING OPTIMIZER")
+
 if args.optimizer == 'adam':
     optimizer = torch.optim.Adam(lr=args.lr, params=model.parameters())
 elif args.optimizer == 'adamw':
@@ -227,11 +274,18 @@ elif args.optimizer == 'adamw':
 else:
     raise NotImplementedError
 
+print("OPTIMIZER DONE")
+    
 if 'vtb' not in args.data:
-    num_training_steps = num_epochs * 7200
-    warmup_steps = int(1e3)
+    # train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, shuffle=True,
+    #                                 device='cpu', is_train=True, output_format='torch')
+    
+    epoch_len = 7200 * 128 / args.batch_size 
+    num_training_steps = num_epochs * epoch_len
+    warmup_steps = int(1e3 * 128 / args.batch_size)
 else:
-    num_training_steps = num_epochs * 138
+    epoch_len= 138
+    num_training_steps = num_epochs * epoch_len
     warmup_steps = int(1e2)
     
 if args.scheduler:
