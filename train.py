@@ -239,6 +239,12 @@ if args.model == 'transformer':
         model.cls_token.requires_grad_(True)
         model.head.requires_grad_(True)
         
+        
+        # for p in m.modules():
+        #     if type(p) == nn.LayerNorm:
+        #         p.requires_grad_(True)
+
+        
         if args.finetune == 'all':
             model.requires_grad_(True)
             

@@ -8,7 +8,7 @@ from time import time
 from transformers import GPT2Model, GPT2Config, BertConfig, BertModel, T5Config, T5Model
 from transformers import DecisionTransformerModel, Wav2Vec2Model, Data2VecAudioModel, Data2VecTextModel
 from transformers import HubertForSequenceClassification, AutoModel, ViTModel, VideoMAEModel
-from transformers import PerceiverModel, Data2VecVisionModel
+from transformers import PerceiverModel, Data2VecVisionModel, AutoConfig
 
 from embedding import EmbeddingLayer, PerceiverMapping, LinearMapping
 from augmentations import mixup_data
@@ -24,6 +24,34 @@ from tools import LambdaLayer
 # sys.path.append('/home/jovyan/romashka/adapter_transformers')
 
 # from adapter_transformers import GPT2Model as GPT2ModelAdapter, BertModel as BertModelAdapter
+
+config_names = { 'decision-transformer': 'edbeeching/decision-transformer-gym-hopper-expert',
+    'wav2vec2/large': "facebook/wav2vec2-large-960h",
+    'wav2vec2/base': "facebook/wav2vec2-base-960h",
+    'data2vec-audio/base': 'facebook/data2vec-audio-base-960h',
+    'data2vec-audio/large': 'facebook/data2vec-audio-large-960h',
+    'data2vec-text/base': 'facebook/data2vec-text-base',
+    'data2vec-text/large': 'facebook/data2vec-text-large',
+    'hubert/base': 'facebook/hubert-base-ls960',
+    'hubert/large': 'facebook/hubert-large-ls960-ft',
+    'hubert/xlarge': 'facebook/hubert-xlarge-ls960-ft',
+    'bert/base': 'bert-base-uncased',
+    'bert/large': 'bert-large-uncased',
+    't5/small': 't5-small',
+    't5/base': 't5-base',
+    't5/large': 't5-large',
+    'gpt2/base': 'gpt2',
+    'gpt2/medium': 'gpt2-medium',
+    'gpt2/large': 'gpt2-large',
+    'gpt2/xl': 'gpt2-xl',
+    'vit/base': 'google/vit-base-patch16-224',
+    'vit/large': 'google/vit-large-patch16-224',
+    'videomae/base': "MCG-NJU/videomae-base",
+    'videomae/large': "MCG-NJU/videomae-large",
+    'data2vec-vision/base': 'facebook/data2vec-vision-base',
+    'data2vec-vision/large': 'facebook/data2vec-vision-large',
+    'graphcodebert': 'microsoft/graphcodebert-base'
+}
 
 static_embedding_maps = {
     'decision-transformer': 128,
@@ -125,13 +153,22 @@ class TransactionsModel(nn.Module):
         else:
             hidden_size = inp_size
             self.mapping_embedding = nn.Identity()
+            
         
+        config_name = config_names[encoder_type]
         encoder_type, encoder_size = encoder_type.split('/')
         
         self.add_token = add_token
         self.head_type = head_type
         self.encoder_type = encoder_type
         self.cls_token = nn.Parameter(torch.randn(1, 1, hidden_size))
+        
+        if pretrained:
+            model = AutoModel.from_pretrained(config_name)
+        else:
+            config = AutoConfig.from_pretrained(config_name)
+            model  = AutoModel.from_config(config)
+            
 
         if encoder_type == 'mybert':
             self.encoder = BERT(hidden_size, heads=2*emb_mult, num_layers=num_layers, dropout=dropout, layer_norm_eps=1e-7, rel_pos_embs=rel_pos_embs)
@@ -147,109 +184,70 @@ class TransactionsModel(nn.Module):
         elif encoder_type == 'rnn2':
             self.encoder = nn.GRU(hidden_size, hidden_size, num_layers=2, batch_first=True)
         
-        elif encoder_type == 'bert':
-            if pretrained == False:
-                config = BertConfig(vocab_size = 1,
-                             hidden_size = 182,
-                             num_hidden_layers = 12,
-                             num_attention_heads = 2,
-                             intermediate_size = 182*2,
-                             hidden_dropout_prob = 0.1,
-                             attention_probs_dropout_prob = 0.1,
-                             max_position_embeddings = 2000,
-                )
-                self.encoder = BertModel(config)
-                self.encoder.wpe = LambdaLayer(lambda x: 0)
+        # elif encoder_type == 'bert':
+        #     name = f'bert-{encoder_size}-uncased'
+        #     if pretrained == False:
+        #         config = AutoConfig.from_pretrained(name,  max_position_embeddings=1024, ignore_mismatched_size=True)
+        #         self.encoder = BertModel(config)
                 
-            elif adapters:
-                name = f'bert-{encoder_size}-uncased'
-                self.encoder = BertModelAdapter.from_pretrained(name, max_position_embeddings=1024, ignore_mismatched_sizes=True)
+            # if pretrained == False:
+            #     config = BertConfig(vocab_size = 1,
+            #                  hidden_size = 182,
+            #                  num_hidden_layers = 12,
+            #                  num_attention_heads = 2,
+            #                  intermediate_size = 182*2,
+            #                  hidden_dropout_prob = 0.1,
+            #                  attention_probs_dropout_prob = 0.1,
+            #                  max_position_embeddings = 2000,
+            #     )
+            #     self.encoder = BertModel(config)
+            #     self.encoder.wpe = LambdaLayer(lambda x: 0)
                 
-            else:
-                self.encoder = BertModel.from_pretrained(f"bert-{encoder_size}-uncased", max_position_embeddings=1024, ignore_mismatched_sizes=True)
+#             elif adapters:
+#                 self.encoder = BertModelAdapter.from_pretrained(name, max_position_embeddings=1024, ignore_mismatched_sizes=True)
+                
+#             else:
+#                 self.encoder = BertModel.from_pretrained(name, max_position_embeddings=1024, ignore_mismatched_sizes=True)
             
             
         elif encoder_type == 't5':
-            if pretrained == False:
-                configuration = T5Config(vocab_size=1, n_positions=2000, d_model=hidden_size, 
-                                         n_layer=6, d_ff=hidden_size*2, 
-                                         num_heads=2, dropout_rate=dropout
-                                        )
-
-                self.encoder = T5Model(configuration)
-                self.encoder.wpe = LambdaLayer(lambda x: 0)
-            else:
-                self.encoder = T5Model.from_pretrained(f"t5-{encoder_size}")
-        
+            self.encoder = model
+            self.encoder.wpe = LambdaLayer(lambda x: 0)
+           
         elif encoder_type == 'gpt2':
-            if pretrained == False:
-                configuration = GPT2Config(vocab_size=1, n_positions=2000, 
-                                           n_embd=hidden_size, n_layer=num_layers, 
-                                           n_head=2, resid_pdrop=dropout,
-                                           embd_pdrop=dropout, attn_pdrop=dropout)
-                self.encoder = GPT2Model(configuration)
-                self.encoder.wpe = LambdaLayer(lambda x: 0)
-            elif adapters:
-                name = 'gpt2'
-                if encoder_size != 'base':
-                    name += f'-{encoder_size}'
-                    
-                self.encoder = GPT2ModelAdapter.from_pretrained(name)
+            self.encoder = model
+            self.encoder.wpe = LambdaLayer(lambda x: 0)
                 
-            else:
-                name = 'gpt2'
-                if encoder_size != 'base':
-                    name += f'-{encoder_size}'
-                    
-                print("USING PRETRAINED GPT")
-                self.encoder = GPT2Model.from_pretrained(name)
-        
         elif encoder_type == 'decision-transformer':
-            self.encoder = DecisionTransformerModel.from_pretrained("edbeeching/decision-transformer-gym-hopper-expert").encoder
+            self.encoder = model.encoder
             self.encoder.wpe = LambdaLayer(lambda x: 0)
             
         elif encoder_type == 'wav2vec2':
-            model = Wav2Vec2Model.from_pretrained(f"facebook/wav2vec2-{encoder_size}-960h")
             self.encoder = model.encoder
             self.encoder.pos_conv_embed = nn.Identity()
             
         elif encoder_type == 'data2vec-audio':
-            model = Data2VecAudioModel.from_pretrained(f"facebook/data2vec-audio-{encoder_size}-960h")
             self.encoder = model.encoder
             self.encoder.pos_conv_embed = nn.Identity()
             
         elif encoder_type == 'data2vec-text':
-            self.encoder = Data2VecTextModel.from_pretrained(f"facebook/data2vec-text-{encoder_size}")
-        
+            self.encoder = model
+            self.encoder.wpe = LambdaLayer(lambda x: 0)
+
         elif encoder_type == 'hubert':
-            name = f'facebook/hubert-{encoder_size}-ls960' 
-            name += '-ft' if encoder_size != 'base' else ''
-            
-            model = HubertForSequenceClassification.from_pretrained("name").hubert
-            self.encoder = model.encoder
+            self.encoder = model.hubert.encoder
             self.encoder.pos_conv_embed = nn.Identity()
         
-        elif encoder_type == 'video-mae':
-            self.encoder = VideoMAEModel.from_pretrained(f"MCG-NJU/videomae-{encoder_size}").encoder
-            
-        elif encoder_type == 'vit-base':
-            self.encoder = ViTModel.from_pretrained(f'google/vit-{encoder_size}-patch16-224').encoder
-            
+        elif encoder_type in ['video-mae', 'vit-base',  'data2vec-vision',  'graphcodebert']:
+            self.encoder = model.encoder
+                
         elif encoder_type == 'perceiver-vision':
             self.encoder = PerceiverModel.from_pretrained("deepmind/vision-perceiver-fourier")
-        
-        elif encoder_type == 'data2vec-vision':
-            self.encoder = Data2VecVisionModel.from_pretrained(f"facebook/data2vec-vision-{encoder_size}").encoder
-        
-        elif encoder_type == 'graphcodebert':
-            self.encoder = AutoModel.from_pretrained("microsoft/graphcodebert-base").encoder
         
         else:
             raise NotImplementedError("Incorrect model name")
 
             
-        if not pretrained:
-            self.encoder.init_weights()
             
         if head_type == 'linear':
             self.head = LinearHead(hidden_size)
