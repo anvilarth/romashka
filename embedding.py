@@ -4,7 +4,7 @@ import sys
 
 from copy import deepcopy
 
-sys.path.append('/home/jovyan/romashka/perceiver-pytorch')
+sys.path.append('./perceiver-pytorch')
 
 from perceiver_pytorch import Perceiver
 

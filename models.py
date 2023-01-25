@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from time import time
 from transformers import GPT2Model, GPT2Config, BertConfig, BertModel, T5Config, T5Model
 from transformers import DecisionTransformerModel, Wav2Vec2Model, Data2VecAudioModel, Data2VecTextModel
-from transformers import HubertForSequenceClassification, AutoModel, ViTModel, VideoMAEModel
+from transformers import HubertForSequenceClassification, AutoModel, ViTModel
 from transformers import PerceiverModel, Data2VecVisionModel, AutoConfig
 
 from embedding import EmbeddingLayer, PerceiverMapping, LinearMapping
@@ -167,6 +167,8 @@ class TransactionsModel(nn.Module):
             model = AutoModel.from_pretrained(config_name)
         else:
             config = AutoConfig.from_pretrained(config_name)
+            if config_name == 'bert-base-uncased' or config_name == 'bert-large-uncased':
+                config.update_from_string('max_position_embeddings=1024')
             model  = AutoModel.from_config(config)
             
 
@@ -184,31 +186,9 @@ class TransactionsModel(nn.Module):
         elif encoder_type == 'rnn2':
             self.encoder = nn.GRU(hidden_size, hidden_size, num_layers=2, batch_first=True)
         
-        # elif encoder_type == 'bert':
-        #     name = f'bert-{encoder_size}-uncased'
-        #     if pretrained == False:
-        #         config = AutoConfig.from_pretrained(name,  max_position_embeddings=1024, ignore_mismatched_size=True)
-        #         self.encoder = BertModel(config)
-                
-            # if pretrained == False:
-            #     config = BertConfig(vocab_size = 1,
-            #                  hidden_size = 182,
-            #                  num_hidden_layers = 12,
-            #                  num_attention_heads = 2,
-            #                  intermediate_size = 182*2,
-            #                  hidden_dropout_prob = 0.1,
-            #                  attention_probs_dropout_prob = 0.1,
-            #                  max_position_embeddings = 2000,
-            #     )
-            #     self.encoder = BertModel(config)
-            #     self.encoder.wpe = LambdaLayer(lambda x: 0)
-                
-#             elif adapters:
-#                 self.encoder = BertModelAdapter.from_pretrained(name, max_position_embeddings=1024, ignore_mismatched_sizes=True)
-                
-#             else:
-#                 self.encoder = BertModel.from_pretrained(name, max_position_embeddings=1024, ignore_mismatched_sizes=True)
-            
+        elif encoder_type == 'bert':
+            self.encoder = model
+            self.encoder.wpe = LambdaLayer(lambda x: 0)    
             
         elif encoder_type == 't5':
             self.encoder = model
