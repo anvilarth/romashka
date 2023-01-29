@@ -27,8 +27,10 @@ from torch.utils.data import DataLoader
 from data_utils import read_parquet_dataset_from_local
 from models import TransactionsModel
 from tools import set_seeds, count_parameters
-from data import  TransactionDataset, TransactionClickStreamDataset, TransactionClickStreamDatasetClickstream, TransactionClickStreamDatasetTransactions
+from data import  TransactionClickStreamDataset, TransactionClickStreamDatasetClickstream, TransactionClickStreamDatasetTransactions
 
+
+os.environ['WANDB_API_KEY'] = 'e1847d5866973dab40f29db28eefb77987d4b66a'
 
 def loading_ptls_model(ckpt_dict):
     new_dict = {}
@@ -70,7 +72,7 @@ parser.add_argument('--seed', type=int, default=0)
 parser.add_argument('--finetune', type=str, default=None)
 parser.add_argument('--train_limitation', type=int, default=10)
 parser.add_argument('--freeze_model', action='store_true')
-parser.add_argument('--datapath', type=str, default='/home/jovyan/data/alfa/')
+parser.add_argument('--datapath', type=str, default='/home/jovyan/afilatov/data/alfa/')
 parser.add_argument('--data', type=str, default='alfa')
 parser.add_argument('--task', type=str, default='next')
 parser.add_argument('--batch_size', type=int, default=128)
@@ -152,8 +154,8 @@ elif args.data == 'synth':
 
 elif args.data == 'vtb':
     print("USING VTB DATA")
-    dataset_train = TransactionClickStreamDataset('/home/jovyan/data/vtb/train_small.pkl')
-    dataset_val = TransactionClickStreamDataset('/home/jovyan/data/vtb/val_small.pkl')
+    dataset_train = TransactionClickStreamDataset('/home/jovyan/afilatov/data/vtb/train_small.pkl')
+    dataset_val = TransactionClickStreamDataset('/home/jovyan/afilatov/data/vtb/val_small.pkl')
     
     cat_embedding_projections = dataset_train.cat_embedding_projections
     cat_features_names = dataset_train.features2use
@@ -165,8 +167,8 @@ elif args.data == 'vtb':
     meta_features_names = None
 
 elif args.data == 'vtb_trans':
-    dataset_train = TransactionClickStreamDatasetTransactions('/home/jovyan/data/vtb/train_small.pkl')
-    dataset_val = TransactionClickStreamDatasetTransactions('/home/jovyan/data/vtb/val_small.pkl')
+    dataset_train = TransactionClickStreamDatasetTransactions('/home/jovyan/afilatov/data/vtb/train_small.pkl')
+    dataset_val = TransactionClickStreamDatasetTransactions('/home/jovyan/afilatov/data/vtb/val_small.pkl')
     
     cat_embedding_projections = dataset_train.cat_embedding_projections
     cat_features_names = dataset_train.features2use
@@ -178,8 +180,8 @@ elif args.data == 'vtb_trans':
     meta_features_names = None
 
 elif args.data == 'vtb_click':
-    dataset_train = TransactionClickStreamDatasetClickstream('/home/jovyan/data/vtb/train_small.pkl')
-    dataset_val = TransactionClickStreamDatasetClickstream('/home/jovyan/data/vtb/val_small.pkl')
+    dataset_train = TransactionClickStreamDatasetClickstream('/home/jovyan/afilatov/data/vtb/train_small.pkl')
+    dataset_val = TransactionClickStreamDatasetClickstream('/home/jovyan/afilatov/data/vtb/val_small.pkl')
     
     cat_embedding_projections = dataset_train.cat_embedding_projections
     cat_features_names = dataset_train.features2use
