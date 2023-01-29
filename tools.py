@@ -24,8 +24,17 @@ class LambdaLayer(nn.Module):
         
         self.function = function
     
-    def forward(self, x):
+    def forward(self, x, *args, **kwargs):
         return self.function(x)
+    
+    
+def calculate_embedding_size(model):
+    size = 0
+    for module in model.modules():
+        if type(module) == nn.LayerNorm:
+            size = module.weight.shape[0]
+            
+    return size
     
 def read_parquet_dataset_from_local(path_to_dataset: str, start_from: int = 0,
                                      num_parts_to_read: int = 2, columns=None, verbose=False) -> pd.DataFrame:
