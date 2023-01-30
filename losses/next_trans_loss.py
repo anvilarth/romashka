@@ -3,6 +3,20 @@ import torch.nn as nn
 
 from losses.masked_loss import MaskedMSELoss
 
+
+class NextNumericalFeatureLoss(nn.Module):
+    def __init__(self, number):
+        self.num_criterion = MaskedMSELoss()
+        self.number = number
+        
+    def forward(self, output, batch, mask=None):
+        mask = batch['mask'][:, 1:]
+        num_pred = output['num_features'][number]
+        num_trues = batch['num_features'][number]
+        
+        return self.num_criterion(num_pred.squeeze(), num_trues[:, 1:].squeeze(), mask)
+    
+    
 class NextTransactionLoss(nn.Module):
     def __init__(self):
         super().__init__()

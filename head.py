@@ -1,8 +1,6 @@
 import torch
 import torch.nn as nn
 
-from encoder import BERT
-
 class LinearHead(nn.Module):
     def __init__(self, input_size):
         super().__init__()

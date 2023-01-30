@@ -29,6 +29,8 @@ from models import TransactionsModel
 from tools import set_seeds, count_parameters
 from data import  TransactionClickStreamDataset, TransactionClickStreamDatasetClickstream, TransactionClickStreamDatasetTransactions
 
+from adapter_transformers import UniPELTConfig
+
 
 os.environ['WANDB_API_KEY'] = 'e1847d5866973dab40f29db28eefb77987d4b66a'
 
@@ -72,7 +74,7 @@ parser.add_argument('--seed', type=int, default=0)
 parser.add_argument('--finetune', type=str, default=None)
 parser.add_argument('--train_limitation', type=int, default=10)
 parser.add_argument('--freeze_model', action='store_true')
-parser.add_argument('--datapath', type=str, default='/home/jovyan/afilatov/data/alfa/')
+parser.add_argument('--datapath', type=str, default='/home/jovyan/data/alfa/')
 parser.add_argument('--data', type=str, default='alfa')
 parser.add_argument('--task', type=str, default='next')
 parser.add_argument('--batch_size', type=int, default=128)
@@ -235,17 +237,18 @@ if args.model == 'transformer':
             param.requires_grad = False
             
         if args.adapters:
-            model.encoder.add_adapter("bottleneck_adapter")
-            model.encoder.train_adapter("bottleneck_adapter")
+            print("USING ADAPTERS")
+            config = UniPELTConfig()
+            model.encoder.add_adapter("alfa_battle", config=config)
+            model.encoder.train_adapter("alfa_battle")
+            
+            for p in model.modules():
+                if type(p) == nn.LayerNorm:
+                    p.requires_grad_(True)
+
         
         model.cls_token.requires_grad_(True)
         model.head.requires_grad_(True)
-        
-        
-        # for p in m.modules():
-        #     if type(p) == nn.LayerNorm:
-        #         p.requires_grad_(True)
-
         
         if args.finetune == 'all':
             model.requires_grad_(True)
