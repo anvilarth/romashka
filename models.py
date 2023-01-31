@@ -14,10 +14,9 @@ import copy
 from embedding import EmbeddingLayer, PerceiverMapping, LinearMapping, IdentityMapping
 from augmentations import mixup_data
 
+from encoder import BERT, Informer, InformerConfigs
 from head import LinearHead, RNNClassificationHead, NSPHead, MLPHead, TransformerHead, IdentityHead
 from tools import LambdaLayer, calculate_embedding_size
-
-from adapter_transformers import AutoAdapterModel
 
 # sys.path.append('/home/jovyan/romashka/perceiver-pytorch')
 
@@ -136,19 +135,12 @@ class TransactionsModel(nn.Module):
         self.encoder_type = encoder_type
         
         if pretrained:
-            if adapters:
-                model = AutoAdapterModel.from_pretrained(config_name)
-            else:
-                model = AutoModel.from_pretrained(config_name)
+            model = AutoModel.from_pretrained(config_name)
         else:
             config = AutoConfig.from_pretrained(config_name)
             if config_name == 'bert-base-uncased' or config_name == 'bert-large-uncased':
                 config.update_from_string('max_position_embeddings=1024')
-                
-            if adapters:
-                model = AutoAdapterModel.from_config(config)
-            else:
-                model  = AutoModel.from_config(config)
+            model  = AutoModel.from_config(config)
 
         if encoder_type == 'mybert':
             self.encoder = BERT(hidden_size, heads=2*emb_mult, num_layers=num_layers, dropout=dropout, layer_norm_eps=1e-7, rel_pos_embs=rel_pos_embs)
@@ -196,7 +188,7 @@ class TransactionsModel(nn.Module):
             self.encoder = model.hubert.encoder
             self.encoder.pos_conv_embed = nn.Identity()
         
-        elif encoder_type in ['videomae', 'vit-base',  'data2vec-vision',  'graphcodebert', 'vit-mae']:
+        elif encoder_type in ['video-mae', 'vit-base',  'data2vec-vision',  'graphcodebert', 'vit-mae']:
             self.encoder = model.encoder
                 
         elif encoder_type == 'perceiver-vision':
@@ -291,7 +283,7 @@ class TransactionsModel(nn.Module):
         elif self.encoder_type in ['wav2vec2', 'data2vec-audio', 'hubert']:
             x = self.encoder(embedding, attention_mask=mask).last_hidden_state
             
-        elif self.encoder_type in ['vit-base', 'videomae', 'data2vec-vision', 'graphcodebert', 'vit-mae']:
+        elif self.encoder_type in ['vit-base', 'video-mae', 'data2vec-vision', 'graphcodebert', 'vit-mae']:
             x = self.encoder(embedding).last_hidden_state
         else:
             x = self.encoder(embedding, mask)
@@ -459,3 +451,4 @@ class LastPrediction(nn.Module):
 #         logits = self.head(out.last_hidden_state)
 
 #         return logits
+                                                                                                                                                                                                                                                                                                                                         

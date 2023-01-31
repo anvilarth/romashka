@@ -17,7 +17,7 @@ cat_features_indices = [transaction_features.index(x) for x in cat_features_name
 
 
 def batches_generator(list_of_paths, batch_size=32, shuffle=False, is_infinite=False,
-                      verbose=False, device=None, output_format='torch', is_train=True, min_seq_len=None):
+                      verbose=False, device=None, output_format='torch', is_train=True, min_seq_len=None, reduce_size=1.):
     """
     функция для создания батчей на вход для нейронной сети для моделей на keras и pytorch.
     так же может использоваться как функция на стадии инференса
@@ -45,6 +45,18 @@ def batches_generator(list_of_paths, batch_size=32, shuffle=False, is_infinite=F
 
             with open(path, 'rb') as f:
                 data = pickle.load(f)
+            
+            ind_list = []
+            for elem in data['targets']:
+                size = elem.shape[0]
+                inds = np.arange(int(size*reduce_size))
+                ind_list.append(inds)
+
+            for key in data:
+                for ind in range(len(ind_list)):
+                    data[key][ind] = data[key][ind][ind_list[ind]]
+            
+                
             padded_sequences, targets, products = data['padded_sequences'], data['targets'], data[
                 'products']
             app_ids = data['app_id']

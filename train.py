@@ -58,7 +58,7 @@ parser.add_argument('--optimizer', type=str, default='adam')
 parser.add_argument('--lr', type=float, default=1e-4)
 parser.add_argument('--rel_pos_embs', action='store_true')
 parser.add_argument('--emb_mult', type=int, default=1)
-parser.add_argument('--loss_freq', type=int, default=100)
+parser.add_argument('--loss_freq', type=int, default=500)
 parser.add_argument('--scheduler', action='store_true')
 parser.add_argument('--dropout', type=float, default=0.1)
 parser.add_argument('--weight_decay', type=float, default=1e-2)
@@ -72,7 +72,7 @@ parser.add_argument('--group', type=str, default='models')
 parser.add_argument('--numerical', action='store_true')
 parser.add_argument('--seed', type=int, default=0)
 parser.add_argument('--finetune', type=str, default=None)
-parser.add_argument('--train_limitation', type=int, default=10)
+parser.add_argument('--reduce_size', type=float, default=1.)
 parser.add_argument('--freeze_model', action='store_true')
 parser.add_argument('--datapath', type=str, default='/home/jovyan/data/alfa/')
 parser.add_argument('--data', type=str, default='alfa')
@@ -87,6 +87,8 @@ parser.add_argument('--model_source', type=str, default='scratch')
 parser.add_argument('--adapters', action='store_true')
 
 args = parser.parse_args()
+logging_freq = int((128 / args.batch_size) * args.loss_freq * args.reduce_size)
+
 rnd_prt = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(12))
 
 if args.run_name == '':
@@ -103,7 +105,7 @@ checkpoint_dir = wandb.run.dir + '/checkpoints'
 
 os.mkdir(checkpoint_dir)
 
-num_epochs = args.num_epochs
+num_epochs = int(args.num_epochs / args.reduce_size)
 train_batch_size = args.batch_size
 val_batch_size = args.batch_size
 
@@ -127,8 +129,6 @@ if args.data == 'alfa':
 
     dir_with_datasets = os.listdir(path_to_dataset)
     dataset_train = sorted([os.path.join(path_to_dataset, x) for x in dir_with_datasets])
-
-    dataset_train = dataset_train[:args.train_limitation]
     
     cat_weights=torch.ones(len(cat_features_names))
     num_weights=torch.ones(len(num_features_names))
@@ -291,9 +291,9 @@ if 'vtb' not in args.data:
     # train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, shuffle=True,
     #                                 device='cpu', is_train=True, output_format='torch')
     
-    epoch_len = 7200 * 128 / args.batch_size 
+    epoch_len = 7200 * 128 / args.batch_size * args.reduce_size
     num_training_steps = num_epochs * epoch_len
-    warmup_steps = int(1e3 * 128 / args.batch_size)
+    warmup_steps = int(1e3 * 128 / args.batch_size * args.reduce_size)
 else:
     epoch_len= 138
     num_training_steps = num_epochs * epoch_len
@@ -309,11 +309,11 @@ for epoch in range(num_epochs):
     print(f'Starting epoch {epoch+1}')
     if args.data == 'alfa':
         train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, shuffle=True,
-                                            device=device, is_train=True, output_format='torch')
+                                            device=device, is_train=True, output_format='torch', reduce_size=args.reduce_size)
     else:
         train_dataloader = DataLoader(dataset_train, batch_size=train_batch_size, collate_fn=dataset_train.collate_fn, shuffle=True)
 
-    train_epoch(model, optimizer, train_dataloader, task=args.task, print_loss_every_n_batches=args.loss_freq, device=device, 
+    train_epoch(model, optimizer, train_dataloader, task=args.task, print_loss_every_n_batches=logging_freq, device=device, 
                 scheduler=scheduler, cat_weights=cat_weights, num_weights=num_weights)
     
     if args.data == 'alfa':
@@ -328,7 +328,7 @@ for epoch in range(num_epochs):
         val_acc, val_num = eval_model(model, val_dataloader, task=args.task, data=args.data, device=device)
     
     if args.data == 'alfa':
-        train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, device=device, is_train=True, output_format='torch')
+        train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, device=device, is_train=True, output_format='torch', reduce_size=args.reduce_size)
     
     else:
         train_dataloader = DataLoader(dataset_train, batch_size=train_batch_size, collate_fn=dataset_train.collate_fn, shuffle=False)

@@ -7,20 +7,18 @@ from sklearn.metrics import roc_auc_score
 from augmentations import mask_tokens
 
 from data_generators import batches_generator
-from losses import NextTransactionLoss, MaskedMSELoss, NextNumericalFeatureLoss
+from losses import NextTransactionLoss, MaskedMSELoss
 from torch.utils.data import DataLoader
 
 
 def train_epoch(model, optimizer, dataloader, task='default',
                 print_loss_every_n_batches=500, device=None, scheduler=None,
-                cat_weights=None, num_weights=None, number=None):
+                cat_weights=None, num_weights=None):
     
     if task == 'default':
         loss_function = nn.BCEWithLogitsLoss()
     elif task == 'next':
         loss_function = NextTransactionLoss()
-    elif task == 'next_num_feature':
-        loss_function = NextNumericalFeatureLoss(number)
     else:
         raise NotImplementedError
         
@@ -39,10 +37,6 @@ def train_epoch(model, optimizer, dataloader, task='default',
         elif task == 'next':
             output = model(batch)
             batch_loss = loss_function(output, batch, num_weights=num_weights, cat_weights=cat_weights)
-            
-        elif task == 'next_num_feature':
-            output = model(batch)
-            batch_loss = loss_function(output, batch)
         
         batch_loss.backward()
         optimizer.step()
