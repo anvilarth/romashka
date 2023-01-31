@@ -30,7 +30,8 @@ from tools import set_seeds, count_parameters
 from data import  TransactionClickStreamDataset, TransactionClickStreamDatasetClickstream, TransactionClickStreamDatasetTransactions
 
 
-os.environ['WANDB_API_KEY'] = 'e1847d5866973dab40f29db28eefb77987d4b66a'
+#os.environ['WANDB_API_KEY'] = 'e1847d5866973dab40f29db28eefb77987d4b66a' # andrei
+os.environ['WANDB_API_KEY'] = 'ee24c5854ca7591cbe2d99f6a6e6095ed92981c1' # slava
 
 def loading_ptls_model(ckpt_dict):
     new_dict = {}
@@ -92,7 +93,8 @@ if args.run_name == '':
 else:
     run_name = args.run_name
 
-wandb.init(project="romashka", entity="serofade", group=args.group, name=run_name)
+#wandb.init(project="romashka", entity="serofade", group=args.group, name=run_name)
+wandb.init(project="romashka", entity="vasilev-va", group=args.group, name=run_name)
 wandb.config.update(args)
 
 set_seeds(args.seed)
