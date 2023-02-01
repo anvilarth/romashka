@@ -14,7 +14,6 @@ import copy
 from embedding import EmbeddingLayer, PerceiverMapping, LinearMapping, IdentityMapping
 from augmentations import mixup_data
 
-from encoder import BERT, Informer, InformerConfigs
 from head import LinearHead, RNNClassificationHead, NSPHead, MLPHead, TransformerHead, IdentityHead
 from tools import LambdaLayer, calculate_embedding_size
 
@@ -105,7 +104,7 @@ class TransactionsModel(nn.Module):
                  encoder_type='bert',
                  add_token='before',
                  num_layers=6, 
-                 dropout=0.1,
+                 embedding_dropout=0.0,
                  cutmix=False,
                  mixup=False,
                  emb_mult=1,
@@ -124,7 +123,7 @@ class TransactionsModel(nn.Module):
                                         meta_embedding_projections,
                                         meta_features,
                                         time_embedding,
-                                        dropout=dropout)
+                                        dropout=embedding_dropout)
         inp_size = self.embedding.get_embedding_size()
             
         config_name = config_names[encoder_type]
@@ -451,4 +450,3 @@ class LastPrediction(nn.Module):
 #         logits = self.head(out.last_hidden_state)
 
 #         return logits
-                                                                                                                                                                                                                                                                                                                                         

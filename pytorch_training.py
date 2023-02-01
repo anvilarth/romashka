@@ -39,6 +39,9 @@ def train_epoch(model, optimizer, dataloader, task='default',
             batch_loss = loss_function(output, batch, num_weights=num_weights, cat_weights=cat_weights)
         
         batch_loss.backward()
+        
+        torch.nn.utils.clip_grad_norm_(parameters=model.parameters(), max_norm=5, norm_type=2.0)
+        
         optimizer.step()
         if scheduler is not None:
             scheduler.step()

@@ -60,7 +60,7 @@ parser.add_argument('--rel_pos_embs', action='store_true')
 parser.add_argument('--emb_mult', type=int, default=1)
 parser.add_argument('--loss_freq', type=int, default=500)
 parser.add_argument('--scheduler', action='store_true')
-parser.add_argument('--dropout', type=float, default=0.1)
+parser.add_argument('--embedding_dropout', type=float, default=0.0)
 parser.add_argument('--weight_decay', type=float, default=1e-2)
 parser.add_argument('--cutmix', action='store_true')
 parser.add_argument('--alpha', type=float, default=1.0)
@@ -105,7 +105,7 @@ checkpoint_dir = wandb.run.dir + '/checkpoints'
 
 os.mkdir(checkpoint_dir)
 
-num_epochs = int(args.num_epochs / args.reduce_size)
+num_epochs = int(args.num_epochs * (np.log(1 / args.reduce_size) + 1))
 train_batch_size = args.batch_size
 val_batch_size = args.batch_size
 
@@ -208,7 +208,7 @@ if args.model == 'transformer':
                               num_layers=args.num_layers,
                               head_type=args.head_type,
                               encoder_type=args.encoder_type,
-                              dropout=args.dropout,
+                              embedding_dropout=args.embedding_dropout,
                               mixup=args.mixup,
                               cutmix=args.cutmix,
                               emb_mult=args.emb_mult,
@@ -237,15 +237,27 @@ if args.model == 'transformer':
             param.requires_grad = False
             
         if args.adapters:
-            print("USING ADAPTERS")
+            print("USING ADAPTERS")            
             config = UniPELTConfig()
             model.encoder.add_adapter("alfa_battle", config=config)
             model.encoder.train_adapter("alfa_battle")
             
+            adapter_parameters = []
+            standard_parameters = []
+
+            for param in m.parameters():
+                if param.requires_grad:
+                    adapter_parameters.append(param)
+                else:
+                    standard_parameters.append(param)
+
+            
             for p in model.modules():
                 if type(p) == nn.LayerNorm:
                     p.requires_grad_(True)
-
+            
+            
+                    
         
         model.cls_token.requires_grad_(True)
         model.head.requires_grad_(True)
@@ -280,8 +292,29 @@ print("CREATING OPTIMIZER")
 
 if args.optimizer == 'adam':
     optimizer = torch.optim.Adam(lr=args.lr, params=model.parameters())
+    
+    if args.adapters:
+        optimizer = torch.optim.Adam(
+            [
+                {"params": adapter_parameters, "lr": 1e-4},
+                {"params": standard_parameters, "lr": args.lr},
+            ],
+            lr=args.lr,
+        )
+    
+    
 elif args.optimizer == 'adamw':
     optimizer = torch.optim.AdamW(lr=args.lr, params=model.parameters(), weight_decay=args.weight_decay)
+    
+    if args.adapters:
+        optimizer = torch.optim.AdamW(
+            [
+                {"params": adapter_parameters, "lr": 1e-4},
+                {"params": standard_parameters, "lr": args.lr},
+            ],
+            lr=args.lr, weight_decay=args.weight_decay
+        )
+    
 else:
     raise NotImplementedError
 
@@ -347,8 +380,11 @@ for epoch in range(num_epochs):
         
         for i, elem in enumerate(num_features_names):
             wandb.log({f'train_{elem}': train_num[i], f'val_{elem}': val_num[i]})
-    
-    torch.save(model.state_dict(), checkpoint_dir + f'/epoch_{epoch}.ckpt')
+            
+    if epoch % 5 == 0:
+        torch.save(model.state_dict(), checkpoint_dir + f'/epoch_{epoch}.ckpt')
     
     if args.task == 'default':
         print(f'Epoch {epoch+1} completed. Train roc-auc: {train_roc_auc}, Val roc-auc: {val_roc_auc}')
+
+torch.save(model.state_dict(), checkpoint_dir + f'/final_model.ckpt')
