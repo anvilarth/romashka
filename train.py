@@ -249,7 +249,7 @@ if args.model == 'transformer':
                 if type(p) == nn.LayerNorm:
                     p.requires_grad_(True)
             
-            for param in m.parameters():
+            for param in model.parameters():
                 if param.requires_grad:
                     adapter_parameters.append(param)
                 else:
