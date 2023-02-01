@@ -136,7 +136,7 @@ class CatEmbedding(nn.Module):
         self.output_size = sum([embedding_projections[feature][1] for feature in use_features])
         
     def forward(self, cat_features):
-        cat_embeddings = [embedding(cat_features[i]) for i, embedding in enumerate(self.cat_embedding)]
+        cat_embeddings = [embedding(cat_features[i].long()) for i, embedding in enumerate(self.cat_embedding)]
         return torch.cat(cat_embeddings, dim=-1)
     
     def get_embedding_size(self):
