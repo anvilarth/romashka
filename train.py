@@ -29,7 +29,7 @@ from models import TransactionsModel
 from tools import set_seeds, count_parameters
 from data import  TransactionClickStreamDataset, TransactionClickStreamDatasetClickstream, TransactionClickStreamDatasetTransactions
 
-from adapter_transformers import UniPELTConfig
+from adapter_transformers import UniPELTConfig, AdapterConfig
 
 
 os.environ['WANDB_API_KEY'] = 'e1847d5866973dab40f29db28eefb77987d4b66a'
@@ -238,24 +238,22 @@ if args.model == 'transformer':
             
         if args.adapters:
             print("USING ADAPTERS")            
-            config = UniPELTConfig()
+            config = AdapterConfig(mh_adapter=True, output_adapter=True, reduction_factor=16, non_linearity='gelu')
             model.encoder.add_adapter("alfa_battle", config=config)
             model.encoder.train_adapter("alfa_battle")
             
             adapter_parameters = []
             standard_parameters = []
-
-            for param in m.parameters():
-                if param.requires_grad:
-                    adapter_parameters.append(param)
-                else:
-                    standard_parameters.append(param)
-
             
             for p in model.modules():
                 if type(p) == nn.LayerNorm:
                     p.requires_grad_(True)
             
+            for param in m.parameters():
+                if param.requires_grad:
+                    adapter_parameters.append(param)
+                else:
+                    standard_parameters.append(param)
             
                     
         
