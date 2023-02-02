@@ -322,7 +322,13 @@ if 'vtb' not in args.data:
     # train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, shuffle=True,
     #                                 device='cpu', is_train=True, output_format='torch')
     
-    epoch_len = 7200 * 128 / args.batch_size * args.reduce_size
+    fake_train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, shuffle=True,
+                                            device='cpu', is_train=True, output_format='torch',  reduce_size=args.reduce_size)
+    
+    epoch_len = 0
+    for _ in fake_train_dataloader:
+        epoch_len += 1
+    
     num_training_steps = num_epochs * epoch_len
     warmup_steps = int(1e3 * 128 / args.batch_size * args.reduce_size)
 else:
