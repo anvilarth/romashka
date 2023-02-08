@@ -41,6 +41,7 @@ parser.add_argument('--batch_size', type=int, default=16)
 parser.add_argument('--num_epochs', type=int, default=30)
 parser.add_argument('--encoder', type=str, default='rnn')
 parser.add_argument('--hidden_size', type=int, default=256)
+parser.add_argument('--path_to_dataset', type=str, default='/home/jovyan/afilatov/data/alfa/train_buckets')
 parser.add_argument('--checkpoint_dir', type=str, default='/home/jovyan/checkpoints')
 
 args = parser.parse_args()
@@ -196,11 +197,10 @@ class PtlsEmbeddingLayer(EmbeddingLayer):
 
 run_name = f'coles-{args.encoder}-splits={args.num_splits}-seqlen={args.seq_len}-bs={args.batch_size}'
     
-wandb_logger = WandbLogger(name=run_name, project="romashka", entity="serofade", group=args.group)
+#wandb_logger = WandbLogger(name=run_name, project="romashka", entity="serofade", group=args.group)
+wandb_logger = WandbLogger(name=run_name, project="romashka", entity="vasilev-va", group=args.group)
 
-        
-path_to_dataset = '/home/jovyan/data/alfa/train_buckets'
-
+path_to_dataset = args.path_to_dataset
 
 dir_with_datasets = os.listdir(path_to_dataset)
 dataset_train = sorted([os.path.join(path_to_dataset, x) for x in dir_with_datasets])
