@@ -14,7 +14,7 @@ import copy
 from embedding import EmbeddingLayer, PerceiverMapping, LinearMapping, IdentityMapping
 from augmentations import mixup_data
 
-from head import LinearHead, RNNClassificationHead, NSPHead, MLPHead, TransformerHead, IdentityHead, NextActionsHead
+from head import LinearHead, RNNClassificationHead, NSPHead, MLPHead, TransformerHead, IdentityHead, NextActionsHead, ClassificationHead
 from tools import LambdaLayer, calculate_embedding_size
 from adapter_transformers import AutoAdapterModel
 
@@ -247,6 +247,8 @@ class TransactionsModel(nn.Module):
             self.head = NSPHead(hidden_size, cat_embedding_projections, num_embedding_projections)
         elif head_type == 'next_time':
             self.head = NextActionsHead(hidden_size)
+        elif head_type == 'product':
+            self.head = ClassificationHead(hidden_size, 5)
         else:
             raise NotImplementedError
 

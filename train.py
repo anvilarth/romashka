@@ -86,6 +86,8 @@ parser.add_argument('--run_name', type=str, default='')
 parser.add_argument('--model_source', type=str, default='scratch')
 parser.add_argument('--adapters', action='store_true')
 parser.add_argument('--max_seq_len', type=int, default=None)
+parser.add_argument('--num_number', type=int, default=None)
+parser.add_argument('--cat_number', type=int, default=None)
 
 args = parser.parse_args()
 logging_freq = int((128 / args.batch_size) * args.loss_freq * args.reduce_size)
@@ -197,6 +199,10 @@ elif args.data == 'vtb_click':
     
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 buckets = None 
+
+if args.task == 'product':
+    meta_embedding_projections = None
+    meta_features_names = None
 
 if args.model == 'transformer':
     print("USING TRANSFORMER")
@@ -348,47 +354,26 @@ for epoch in range(num_epochs):
     print(f'Starting epoch {epoch+1}')
     if args.data == 'alfa':
         train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, shuffle=True,
-                                            device=device, is_train=True, output_format='torch', reduce_size=args.reduce_size,
-                                            max_seq_len=args.max_seq_len)
+                                            device=device, is_train=True, output_format='torch', reduce_size=args.reduce_size)
     else:
         train_dataloader = DataLoader(dataset_train, batch_size=train_batch_size, collate_fn=dataset_train.collate_fn, shuffle=True)
 
     train_epoch(model, optimizer, train_dataloader, task=args.task, print_loss_every_n_batches=logging_freq, device=device, 
-                scheduler=scheduler, cat_weights=cat_weights, num_weights=num_weights)
+                scheduler=scheduler, cat_weights=cat_weights, num_weights=num_weights, num_number=args.num_number, cat_number=args.cat_number)
     
     if args.data == 'alfa':
-        val_dataloader = batches_generator(dataset_val, batch_size=train_batch_size, device=device, is_train=True, output_format='torch', max_seq_len=args.max_seq_len)
+        val_dataloader = batches_generator(dataset_val, batch_size=train_batch_size, device=device, is_train=True, output_format='torch')
+        train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, device=device, is_train=True, output_format='torch', reduce_size=args.reduce_size)
+    
     else:
         val_dataloader = DataLoader(dataset_val, batch_size=train_batch_size, collate_fn=dataset_val.collate_fn, shuffle=False)
-    
-    if args.task == 'default':
-        val_roc_auc, _ = eval_model(model, val_dataloader, task=args.task, data=args.data, device=device)
-    
-    else:
-        val_acc, val_num = eval_model(model, val_dataloader, task=args.task, data=args.data, device=device)
-    
-    if args.data == 'alfa':
-        train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, device=device, is_train=True, output_format='torch', reduce_size=args.reduce_size,
-                                            max_seq_len=args.max_seq_len)
-    
-    else:
         train_dataloader = DataLoader(dataset_train, batch_size=train_batch_size, collate_fn=dataset_train.collate_fn, shuffle=False)
     
-    if args.task == 'default':
-        train_roc_auc, _ = eval_model(model, train_dataloader, task=args.task, data=args.data, device=device)
-    else:
-        train_acc, train_num = eval_model(model, train_dataloader, task=args.task, data=args.data, device=device)
+
+    eval_model(model, val_dataloader, task=args.task, data=args.data, device=device, train=False, num_number=args.num_number, cat_number=args.cat_number)    
+    eval_model(model, train_dataloader, task=args.task, data=args.data, device=device, train=True, num_number=args.num_number, cat_number=args.cat_number)
     
-    
-    if args.task == 'default':
-        wandb.log({'train_roc_auc': train_roc_auc, 'val_roc_auc': val_roc_auc})
-    else:
-        for i, elem in enumerate(cat_features_names):
-            wandb.log({f'train_{elem}': train_acc[i], f'val_{elem}': val_acc[i]})
-        
-        for i, elem in enumerate(num_features_names):
-            wandb.log({f'train_{elem}': train_num[i], f'val_{elem}': val_num[i]})
-            
+     
     if epoch % 5 == 0:
         torch.save(model.state_dict(), checkpoint_dir + f'/epoch_{epoch}.ckpt')
     

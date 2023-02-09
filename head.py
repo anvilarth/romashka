@@ -81,6 +81,15 @@ class NextActionsHead(nn.Module):
         
         return [amnt_out, num_out, need_out]
         
+        
+class ClassificationHead(nn.Module):
+    def __init__(self, embedding_dim, n_classes):
+        super().__init__()
+        self.head = nn.Linear(embedding_dim, n_classes)
+        
+    def forward(self, x, mask=None):
+        x = x[:, -1]
+        return self.head(x)
     
 class NSPHead(nn.Module):
     def __init__(self, 

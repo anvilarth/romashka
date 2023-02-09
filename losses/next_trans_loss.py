@@ -6,15 +6,29 @@ from losses.masked_loss import MaskedMSELoss
 
 class NextNumericalFeatureLoss(nn.Module):
     def __init__(self, number):
+        super().__init__()
         self.num_criterion = MaskedMSELoss()
         self.number = number
         
-    def forward(self, output, batch, mask=None):
+    def forward(self, output, batch, mask=None, cat_weights=None, num_weights=None):
         mask = batch['mask'][:, 1:]
-        num_pred = output['num_features'][number]
-        num_trues = batch['num_features'][number]
+        num_pred = output['num_features'][self.number]
+        num_trues = batch['num_features'][self.number]
         
         return self.num_criterion(num_pred.squeeze(), num_trues[:, 1:].squeeze(), mask)
+    
+class NextCatFeatureLoss(nn.Module):
+    def __init__(self, number):
+        super().__init__()
+        self.cat_criterion = nn.CrossEntropyLoss(ignore_index=0)
+        self.number = number
+        
+    def forward(self, output, batch, mask=None, cat_weights=None, num_weights=None):
+        mask = batch['mask'][:, 1:]
+        cat_pred = output['cat_features'][self.number]
+        cat_trues = batch['cat_features'][self.number]
+    
+        return self.cat_criterion(cat_pred.permute(0, 2, 1), cat_trues[:, 1:])
 
 class NextTimeLoss(nn.Module):
     def __init__(self):

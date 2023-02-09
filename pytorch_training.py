@@ -3,11 +3,11 @@ import wandb
 import pandas as pd
 import torch.nn as nn
 from tqdm.notebook import tqdm
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_auc_score, accuracy_score
 from augmentations import mask_tokens
 
 from data_generators import batches_generator
-from losses import NextTransactionLoss, MaskedMSELoss, NextTimeLoss
+from losses import NextTransactionLoss, MaskedMSELoss, NextTimeLoss, NextNumericalFeatureLoss
 from torch.utils.data import DataLoader
 
 from tools import make_time_batch
@@ -15,7 +15,7 @@ from tools import make_time_batch
 
 def train_epoch(model, optimizer, dataloader, task='default',
                 print_loss_every_n_batches=500, device=None, scheduler=None,
-                cat_weights=None, num_weights=None):
+                cat_weights=None, num_weights=None, num_number=None, cat_number=None):
     
     if task == 'default':
         loss_function = nn.BCEWithLogitsLoss()
@@ -25,6 +25,11 @@ def train_epoch(model, optimizer, dataloader, task='default',
         loss_function = NextTimeLoss()
     elif task == 'product':
         loss_function = nn.CrossEntropyLoss()
+    elif task == 'next_num_feature':
+        loss_function = NextNumericalFeatureLoss(num_number)
+    
+    elif task == 'next_cat_feature':
+        loss_function = NextCatFeatureLoss(cat_number)
     else:
         raise NotImplementedError
         
@@ -40,7 +45,7 @@ def train_epoch(model, optimizer, dataloader, task='default',
             output = torch.flatten(model(batch))
             batch_loss = loss_function(output, batch['label'].float())
             
-        elif task == 'next':
+        elif task == 'next' or task == 'next_num_feature' or task == 'next_cat_feature':
             output = model(batch)
             batch_loss = loss_function(output, batch, num_weights=num_weights, cat_weights=cat_weights)
         
@@ -50,7 +55,9 @@ def train_epoch(model, optimizer, dataloader, task='default',
             batch_loss = loss_function(output, trues, mask=batch['mask']) 
         
         elif task == 'product':
-
+            output = model(batch)
+            trues = batch['meta_features'][0]
+            batch_loss = loss_function(output, trues)
             
         batch_loss.backward()
         
@@ -73,7 +80,7 @@ def train_epoch(model, optimizer, dataloader, task='default',
     print(f'Training loss after epoch: {running_loss / num_batches}', end='\r')
     
 
-def eval_model(model, dataloader, task='default', data='vtb', batch_size=32, device=None, process_numerical=False) -> float:
+def eval_model(model, dataloader, task='default', data='vtb', batch_size=32, device=None, process_numerical=False, train=False, num_number=None, cat_number=None) -> float:
     """
     функция для оценки качества модели на отложенной выборке, возвращает roc-auc на валидационной
     выборке
@@ -84,58 +91,74 @@ def eval_model(model, dataloader, task='default', data='vtb', batch_size=32, dev
     :return: val roc-auc score
     """
     model.eval()
-
-    num_batches = 0
+    
+    start = 'train_' if train else 'val_'
+    num_objects = 0
 
     if task == 'default':
-        batch_number = 0
+        log_dict = {start + 'roc_auc': 0.0}
+        preds = []
+        targets = []
+        
+    if task == 'product':
+        log_dict = {start + 'acc': 0.0}
         preds = []
         targets = []
         
     elif task == 'next':
+        log_dict = {start + elem: 0.0 for elem in num_features_names + cat_features_names}
         acc = 0.0
-        pred_err = 0.0
-        batch_number = 0
+        pred_err = 0.00
 
     with torch.no_grad():
         for batch in tqdm(dataloader, desc='Evaluating model'):
-            batch_number += 1
-            if task == 'default':
-                num_batches += 1
+            num_objects += batch['mask'].shape[0]
+            if task == 'default' or task == 'product':
                 targets.extend(batch['label'].cpu().numpy().flatten())
                 output = model(batch)
+                if task == 'product':
+                    output = output.argmax(-1) 
+                    
                 preds.extend(output.cpu().numpy().flatten())
 
             elif task == 'next':
                 targets = torch.stack(batch['cat_features'])
                 output = model(batch)
-                cat_pred = list(map(lambda x: x.argmax(-1), output['cat_features']))
-                t_pred = torch.stack(cat_pred)
-                mask = batch['mask'][:, 1:]
-
-                not_masked_acc = (t_pred == targets[..., 1:])
                 
-                if data == 'vtb':
-                    mask = torch.ones_like(not_masked_acc)
-                    mask_cat = targets[0] != 0
-                    mask_trans = targets[-1] != 0
+                masked_acc = (not_masked_acc * mask).sum(axis=2)
+                num_transactions = mask.sum(1)
+                cat_tmp = (masked_acc / num_transactions).sum(1)
 
-                    mask[0] = mask_cat[:, 1:]
-                    mask[-1] = mask_trans[:, 1:]
-                    mask[-2] = mask_trans[:, 1:]
+                for i, name in enumerate(cat_features_names):
+                    log_dict[start + name] = cat_tmp[i]
 
-                    acc += (not_masked_acc * mask).sum(axis=(1, 2))
-                    num_batches += mask.sum(axis=(1,2))
-
-                elif data == 'alfa':
-                    acc += (not_masked_acc * mask).sum(axis=(1, 2))
-                    num_batches += mask.sum()
-                    
+#                 not_masked_acc = (t_pred == targets[..., 1:])
                 
-                pred = torch.tensor([(abs(output['num_features'][i].squeeze() - batch['num_features'][i][:, 1:]) / abs(output['num_features'][i].squeeze())).mean(1).mean(0) \
-                        for i in range(len(batch['num_features']))])
+#                 if data == 'vtb':
+#                     mask = torch.ones_like(not_masked_acc)
+#                     mask_cat = targets[0] != 0
+#                     mask_trans = targets[-1] != 0
 
-                pred_err += pred  
+#                     mask[0] = mask_cat[:, 1:]
+#                     mask[-1] = mask_trans[:, 1:]
+#                     mask[-2] = mask_trans[:, 1:]
+
+#                     acc += (not_masked_acc * mask).sum(axis=(1, 2))
+#                     num_batches += mask.sum(axis=(1,2))
+
+#                 elif data == 'alfa':
+#                     acc += (not_masked_acc * mask).sum(axis=(1, 2))
+#                     num_batches += mask.sum()
+              
+    num_tmp = [(abs(output['num_features'][i].squeeze() - batch['num_features'][i][:, 1:]) * mask).mean(axis=1).sum().item() for i in range(len(num_features_names))]
+
+                for i, name in enumerate(num_features_names):
+                    log_dict[start + name] = num_tmp[i]
+                
+#                 pred = torch.tensor([(abs(output['num_features'][i].squeeze() - batch['num_features'][i][:, 1:]) / abs(output['num_features'][i].squeeze())).mean(1).mean(0) \
+#                         for i in range(len(batch['num_features']))])
+
+#                 pred_err += pred  
                     
 #             elif task == 'click':
 #                 batch = list(map(lambda x: x.to(device), batch))
@@ -146,7 +169,18 @@ def eval_model(model, dataloader, task='default', data='vtb', batch_size=32, dev
 #                 num_metric = (output * mask[:, 1:]).sum() / mask.sum()
 
     if task == 'default':
-        return roc_auc_score(targets, preds), None
-    else:  
-        # output2 = num_metric 
-        return acc / num_batches, pred_err / batch_number
+        log_dict[start + 'roc_auc'] = roc_auc_score(targets, preds)
+        
+    else:
+        for key in log_dict:
+            log_dict[key] /= num_objects
+        
+        if task == 'next_cat_feature':
+            feature_name = start + cat_features_names[cat_number]
+            log_dict = {feature_name: log_dict[feature_name]}
+        
+        elif task == 'next_num_feature':
+            feature_name = start + num_features_names[num_number]
+            log_dict = {feature_name: log_dict[feature_name]}
+                        
+    wandb.log(log_dict)
