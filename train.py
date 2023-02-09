@@ -85,6 +85,7 @@ parser.add_argument('--pretrained', action='store_true', default=False)
 parser.add_argument('--run_name', type=str, default='')
 parser.add_argument('--model_source', type=str, default='scratch')
 parser.add_argument('--adapters', action='store_true')
+parser.add_argument('--max_seq_len', type=int, default=None)
 
 args = parser.parse_args()
 logging_freq = int((128 / args.batch_size) * args.loss_freq * args.reduce_size)
@@ -323,7 +324,8 @@ if 'vtb' not in args.data:
     #                                 device='cpu', is_train=True, output_format='torch')
     
     fake_train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, shuffle=True,
-                                            device='cpu', is_train=True, output_format='torch',  reduce_size=args.reduce_size)
+                                            device='cpu', is_train=True, output_format='torch',  reduce_size=args.reduce_size,
+                                             max_seq_len=args.max_seq_len)
     
     epoch_len = 0
     for _ in fake_train_dataloader:
@@ -346,7 +348,8 @@ for epoch in range(num_epochs):
     print(f'Starting epoch {epoch+1}')
     if args.data == 'alfa':
         train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, shuffle=True,
-                                            device=device, is_train=True, output_format='torch', reduce_size=args.reduce_size)
+                                            device=device, is_train=True, output_format='torch', reduce_size=args.reduce_size,
+                                            max_seq_len=args.max_seq_len)
     else:
         train_dataloader = DataLoader(dataset_train, batch_size=train_batch_size, collate_fn=dataset_train.collate_fn, shuffle=True)
 
@@ -354,7 +357,7 @@ for epoch in range(num_epochs):
                 scheduler=scheduler, cat_weights=cat_weights, num_weights=num_weights)
     
     if args.data == 'alfa':
-        val_dataloader = batches_generator(dataset_val, batch_size=train_batch_size, device=device, is_train=True, output_format='torch')
+        val_dataloader = batches_generator(dataset_val, batch_size=train_batch_size, device=device, is_train=True, output_format='torch', max_seq_len=args.max_seq_len)
     else:
         val_dataloader = DataLoader(dataset_val, batch_size=train_batch_size, collate_fn=dataset_val.collate_fn, shuffle=False)
     
@@ -365,7 +368,8 @@ for epoch in range(num_epochs):
         val_acc, val_num = eval_model(model, val_dataloader, task=args.task, data=args.data, device=device)
     
     if args.data == 'alfa':
-        train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, device=device, is_train=True, output_format='torch', reduce_size=args.reduce_size)
+        train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, device=device, is_train=True, output_format='torch', reduce_size=args.reduce_size,
+                                            max_seq_len=args.max_seq_len)
     
     else:
         train_dataloader = DataLoader(dataset_train, batch_size=train_batch_size, collate_fn=dataset_train.collate_fn, shuffle=False)

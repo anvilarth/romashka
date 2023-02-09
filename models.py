@@ -14,7 +14,7 @@ import copy
 from embedding import EmbeddingLayer, PerceiverMapping, LinearMapping, IdentityMapping
 from augmentations import mixup_data
 
-from head import LinearHead, RNNClassificationHead, NSPHead, MLPHead, TransformerHead, IdentityHead
+from head import LinearHead, RNNClassificationHead, NSPHead, MLPHead, TransformerHead, IdentityHead, NextActionsHead
 from tools import LambdaLayer, calculate_embedding_size
 from adapter_transformers import AutoAdapterModel
 
@@ -102,7 +102,7 @@ class TransactionsModel(nn.Module):
                  meta_features=None,
                  time_embedding=None,
                  head_type='linear',
-                 encoder_type='bert',
+                 encoder_type='gpt2/base',
                  add_token='before',
                  num_layers=6, 
                  embedding_dropout=0.0,
@@ -245,6 +245,8 @@ class TransactionsModel(nn.Module):
             self.head = IdentityHead()
         elif head_type == 'next':
             self.head = NSPHead(hidden_size, cat_embedding_projections, num_embedding_projections)
+        elif head_type == 'next_time':
+            self.head = NextActionsHead(hidden_size)
         else:
             raise NotImplementedError
 
@@ -263,7 +265,7 @@ class TransactionsModel(nn.Module):
         else:
             embedding = embeds
         
-        if self.head_type != 'next':
+        if self.head_type != 'next' or self.head_type != 'next_time':
             if self.add_token == 'before':
                 cls_token = self.cls_token.repeat(batch_size, 1, 1)
                 embedding = torch.cat([embedding, cls_token], dim=1)

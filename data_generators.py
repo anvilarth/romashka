@@ -17,7 +17,7 @@ cat_features_indices = [transaction_features.index(x) for x in cat_features_name
 
 
 def batches_generator(list_of_paths, batch_size=32, shuffle=False, is_infinite=False,
-                      verbose=False, device=None, output_format='torch', is_train=True, min_seq_len=None, reduce_size=1.):
+                      verbose=False, device=None, output_format='torch', is_train=True, min_seq_len=None, max_seq_len=None, reduce_size=1.):
     """
     функция для создания батчей на вход для нейронной сети для моделей на keras и pytorch.
     так же может использоваться как функция на стадии инференса
@@ -89,6 +89,9 @@ def batches_generator(list_of_paths, batch_size=32, shuffle=False, is_infinite=F
                     
                     if min_seq_len is not None:
                         if mask.shape[1] < min_seq_len:
+                            continue
+                    if max_seq_len is not None:
+                        if mask.shape[1] > max_seq_len:
                             continue
                     
                     if is_train:

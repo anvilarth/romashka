@@ -1,7 +1,7 @@
-pyarrow
 transformers
 rtdl
 pytorch-lifestream
+pyarrow
 lightgbm
 wandb
 seaborn

@@ -7,8 +7,10 @@ from sklearn.metrics import roc_auc_score
 from augmentations import mask_tokens
 
 from data_generators import batches_generator
-from losses import NextTransactionLoss, MaskedMSELoss
+from losses import NextTransactionLoss, MaskedMSELoss, NextTimeLoss
 from torch.utils.data import DataLoader
+
+from tools import make_time_batch
 
 
 def train_epoch(model, optimizer, dataloader, task='default',
@@ -19,6 +21,10 @@ def train_epoch(model, optimizer, dataloader, task='default',
         loss_function = nn.BCEWithLogitsLoss()
     elif task == 'next':
         loss_function = NextTransactionLoss()
+    elif task == 'next_time':
+        loss_function = NextTimeLoss()
+    elif task == 'product':
+        loss_function = nn.CrossEntropyLoss()
     else:
         raise NotImplementedError
         
@@ -38,6 +44,14 @@ def train_epoch(model, optimizer, dataloader, task='default',
             output = model(batch)
             batch_loss = loss_function(output, batch, num_weights=num_weights, cat_weights=cat_weights)
         
+        elif task == 'next_time':
+            output = model(batch)
+            trues = make_time_batch(batch)
+            batch_loss = loss_function(output, trues, mask=batch['mask']) 
+        
+        elif task == 'product':
+
+            
         batch_loss.backward()
         
         torch.nn.utils.clip_grad_norm_(parameters=model.parameters(), max_norm=5, norm_type=2.0)
