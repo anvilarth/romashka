@@ -33,7 +33,9 @@ from ptls.frames.coles.split_strategy import SampleSlices, SampleUniformBySplitC
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
-from pytorch_lightning.callbacks import ModelCheckpoint
+from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
+
+pl.seed_everything(12, workers=True)
 
 def str2bool(v):
     if isinstance(v, bool):
@@ -56,18 +58,18 @@ parser.add_argument('--seq_len', type=int, default=200)
 parser.add_argument('--cnt_min', type=int, default=100)
 parser.add_argument('--cnt_max', type=int, default=200)
 
-parser.add_argument('--encoder', type=str, default='rnn')
+parser.add_argument('--encoder', type=str, default='rnn', choices=['rnn', 'bert', 'gpt', 't5'])
 parser.add_argument('--hidden_size', type=int, default=256)
 
 parser.add_argument('--batch_size', type=int, default=64)
 parser.add_argument('--lr', type=float, default=0.001)
 parser.add_argument('--step_size', type=int, default=5)
-parser.add_argument('--gamma', type=float, default=0.9)
+parser.add_argument('--gamma', type=float, default=0.5)
 parser.add_argument('--num_epochs', type=int, default=30)
 parser.add_argument('--total_steps', type=int, default=int(1e6))
 parser.add_argument('--num_gpus', type=int, default=1)
-parser.add_argument('--path_to_dataset', type=str, default='/home/jovyan/afilatov/data/alfa/train_buckets')
-parser.add_argument('--checkpoint_dir', type=str, default='/home/jovyan/v_vasilev/checkpoints')
+parser.add_argument('--path_to_dataset', type=str, default='/home/jovyan/afilatov/data/alfa/')
+parser.add_argument('--checkpoint_dir', type=str, default='/home/jovyan/v_vasilev/checkpoints/ptls_pretrain/')
 
 args = parser.parse_args()
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -82,13 +84,21 @@ with open('./assets/meta_embedding_projections.pkl', 'rb') as f:
     meta_embedding_projections = pickle.load(f)
 
 
-run_name = f'ptls-{args.group}-{args.encoder}-splits={args.num_splits}-seqlen={args.seq_len}-bs={args.batch_size}'
+run_name = f'ptls-{args.group}-{args.encoder}-splitter={str(args.splitter)}-splits={args.num_splits}-seqlen={args.seq_len}-bs={args.batch_size}-lr={args.lr}'
 wandb_logger = WandbLogger(name=run_name, project="romashka", entity=args.entity, group=args.group)
 
-path_to_dataset = args.path_to_dataset
-dir_with_datasets = os.listdir(path_to_dataset)
-dataset_train = sorted([os.path.join(path_to_dataset, x) for x in dir_with_datasets])
-dataset = IterDataset(dataset_train, args.batch_size, device, args.seq_len)
+
+path_to_train_dataset = args.path_to_dataset + 'train_buckets'
+path_to_val_dataset = args.path_to_dataset + 'val_buckets'
+
+dir_with_train_datasets = os.listdir(path_to_train_dataset)
+dir_with_val_datasets = os.listdir(path_to_val_dataset)
+
+dataset_train = sorted([os.path.join(path_to_train_dataset, x) for x in dir_with_train_datasets])[0:1]
+dataset_val = sorted([os.path.join(path_to_val_dataset, x) for x in dir_with_val_datasets])[0:1]
+
+train_dataset = IterDataset(dataset_train, args.batch_size, device, args.seq_len)
+val_dataset = IterDataset(dataset_val, args.batch_size, device, args.seq_len)
 
 
 if args.splitter == 'uniform':
@@ -109,8 +119,16 @@ else:
     splitter = None
     
 
-dataloader = torch.utils.data.DataLoader(
-    dataset,
+train_dataloader = torch.utils.data.DataLoader(
+    train_dataset,
+    collate_fn=partial(my_collate_fn, splitter=splitter,
+                       rep=args.num_splits if splitter is not None else 1,
+                       mode=args.group),
+    num_workers=0,
+    batch_size=1
+)
+val_dataloader = torch.utils.data.DataLoader(
+    val_dataset,
     collate_fn=partial(my_collate_fn, splitter=splitter,
                        rep=args.num_splits if splitter is not None else 1,
                        mode=args.group),
@@ -186,14 +204,26 @@ elif args.group == 'mlm':
     ).to(device)
 
 
-checkpoint_callback = ModelCheckpoint(dirpath=args.checkpoint_dir, save_top_k=2, monitor='loss')
+if args.group == 'coles':
+    val_monitor = 'recall_top_k'
+elif args.group == 'cpc':
+    val_monitor = 'cpc_accuracy'
+elif args.group == 'rtd':
+    val_monitor = 'valid_auroc'
+elif args.group == 'mlm':
+    val_monitor = 'mlm/valid_mlm_loss' 
+
+lr_monitor = LearningRateMonitor(logging_interval='step')
+checkpoint_callback = ModelCheckpoint(dirpath=args.checkpoint_dir + args.group + '/',
+                                      filename=run_name+'{epoch}-{step}-{'+val_monitor+':.5f}',
+                                      save_top_k=2, monitor=val_monitor)
 
 trainer = pl.Trainer(
     max_epochs=args.num_epochs,
     gpus=args.num_gpus,
-    callbacks=[checkpoint_callback],
+    callbacks=[checkpoint_callback, lr_monitor],
     logger=wandb_logger,
 )
 
-trainer.fit(model, dataloader)
-torch.save(model.state_dict(), args.checkpoint_dir + '/ptls_ckpts/' + run_name + '-final.ckpt')
+trainer.fit(model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
+torch.save(model.state_dict(), args.checkpoint_dir + args.group + '/' + run_name + '-final.ckpt')
