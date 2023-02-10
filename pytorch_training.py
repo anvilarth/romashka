@@ -3,7 +3,7 @@ import wandb
 import pandas as pd
 import torch.nn as nn
 from tqdm.notebook import tqdm
-from sklearn.metrics import roc_auc_score, accuracy_score
+from sklearn.metrics import roc_auc_score, accuracy_score, precision_score, f1_score, recall_score
 from augmentations import mask_tokens
 
 from data_generators import batches_generator
@@ -52,7 +52,8 @@ def train_epoch(model, optimizer, dataloader, task='default',
         elif task == 'next_time':
             output = model(batch)
             trues = make_time_batch(batch)
-            batch_loss = loss_function(output, trues, mask=batch['mask']) 
+            next_time_mask = trues[-1]
+            batch_loss = loss_function(output, trues, mask=next_time_mask) 
         
         elif task == 'product':
             output = model(batch)
@@ -100,15 +101,20 @@ def eval_model(model, dataloader, task='default', data='vtb', batch_size=32, dev
         preds = []
         targets = []
         
-    if task == 'product':
+    elif task == 'product':
         log_dict = {start + 'acc': 0.0}
         preds = []
         targets = []
         
-    elif task == 'next':
+    elif task == 'next' or task == 'next_num_feature' or task == 'next_cat_feature':
         log_dict = {start + elem: 0.0 for elem in num_features_names + cat_features_names}
         acc = 0.0
         pred_err = 0.00
+        
+    elif task == 'next_time':
+        log_dict = {start + 'amnt': 0.0, start + 'num': 0.0}
+        cat_preds = []
+        cat_targets = []
 
     with torch.no_grad():
         for batch in tqdm(dataloader, desc='Evaluating model'):
@@ -121,7 +127,7 @@ def eval_model(model, dataloader, task='default', data='vtb', batch_size=32, dev
                     
                 preds.extend(output.cpu().numpy().flatten())
 
-            elif task == 'next':
+            elif task == 'next' or task == 'next_num_feature' or task == 'next_cat_feature':
                 targets = torch.stack(batch['cat_features'])
                 output = model(batch)
                 
@@ -150,10 +156,22 @@ def eval_model(model, dataloader, task='default', data='vtb', batch_size=32, dev
 #                     acc += (not_masked_acc * mask).sum(axis=(1, 2))
 #                     num_batches += mask.sum()
               
-    num_tmp = [(abs(output['num_features'][i].squeeze() - batch['num_features'][i][:, 1:]) * mask).mean(axis=1).sum().item() for i in range(len(num_features_names))]
+                num_tmp = [(abs(output['num_features'][i].squeeze() - batch['num_features'][i][:, 1:]) * mask).mean(axis=1).sum().item() for i in range(len(num_features_names))]
 
                 for i, name in enumerate(num_features_names):
-                    log_dict[start + name] = num_tmp[i]
+                    log_dict[start + 'amnt'] = num_tmp[i]
+            
+            elif task == 'next_time':
+                output = model(batch)
+                trues = make_time_batch(batch)
+                all_amnt_transactions, all_num_transactions, all_code_transactions, next_time_mask = trues
+                
+                code_preds = (torch.sigmoid(all_code_transactions) > 0.5).int()
+                targets.extend(all_code_transactions.cpu().numpy())
+                preds.extend(code_preds.cpu().numpy())
+                
+                log_dict[start + 'amnt'] += (abs(out[0][:, :-1].squeeze() - all_amnt_transactions) * next_time_mask).mean(axis=1).sum().item()
+                log_dict[start + 'num'] += (abs(out[1][:, :-1].squeeze() - all_num_transactions) * next_time_mask).mean(axis=1).sum().item()
                 
 #                 pred = torch.tensor([(abs(output['num_features'][i].squeeze() - batch['num_features'][i][:, 1:]) / abs(output['num_features'][i].squeeze())).mean(1).mean(0) \
 #                         for i in range(len(batch['num_features']))])
@@ -170,6 +188,17 @@ def eval_model(model, dataloader, task='default', data='vtb', batch_size=32, dev
 
     if task == 'default':
         log_dict[start + 'roc_auc'] = roc_auc_score(targets, preds)
+    elif task == 'product':
+        log_dict[start + 'acc'] = accuracy_score(targets, preds)
+    elif task == 'next_time':
+        targets = np.concatenate(targets)
+        preds = np.concatenate(preds)
+        1_score(targets, preds)
+        log_dict[start + 'code_precision'] = precision(targets, preds)
+        log_dict[start + 'code_recall'] = recall(targets, preds)
+        
+        log_dict[start + 'amnt'] /= num_objects
+        log_dict[start + 'num'] /= num_objects
         
     else:
         for key in log_dict:
