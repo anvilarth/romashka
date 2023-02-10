@@ -27,7 +27,6 @@ def train_epoch(model, optimizer, dataloader, task='default',
         loss_function = nn.CrossEntropyLoss()
     elif task == 'next_num_feature':
         loss_function = NextNumericalFeatureLoss(num_number)
-    
     elif task == 'next_cat_feature':
         loss_function = NextCatFeatureLoss(cat_number)
     else:
@@ -167,11 +166,11 @@ def eval_model(model, dataloader, task='default', data='vtb', batch_size=32, dev
                 all_amnt_transactions, all_num_transactions, all_code_transactions, next_time_mask = trues
                 
                 code_preds = (torch.sigmoid(all_code_transactions) > 0.5).int()
-                targets.extend(all_code_transactions.cpu().numpy())
-                preds.extend(code_preds.cpu().numpy())
+                cat_targets.extend(all_code_transactions.cpu().numpy())
+                cat_preds.extend(code_preds.cpu().numpy())
                 
-                log_dict[start + 'amnt'] += (abs(out[0][:, :-1].squeeze() - all_amnt_transactions) * next_time_mask).mean(axis=1).sum().item()
-                log_dict[start + 'num'] += (abs(out[1][:, :-1].squeeze() - all_num_transactions) * next_time_mask).mean(axis=1).sum().item()
+                log_dict[start + 'amnt'] += (abs(output[0][:, :-1].squeeze() - all_amnt_transactions) * next_time_mask).mean(axis=1).sum().item()
+                log_dict[start + 'num'] += (abs(output[1][:, :-1].squeeze() - all_num_transactions) * next_time_mask).mean(axis=1).sum().item()
                 
 #                 pred = torch.tensor([(abs(output['num_features'][i].squeeze() - batch['num_features'][i][:, 1:]) / abs(output['num_features'][i].squeeze())).mean(1).mean(0) \
 #                         for i in range(len(batch['num_features']))])
@@ -188,12 +187,14 @@ def eval_model(model, dataloader, task='default', data='vtb', batch_size=32, dev
 
     if task == 'default':
         log_dict[start + 'roc_auc'] = roc_auc_score(targets, preds)
+        
     elif task == 'product':
         log_dict[start + 'acc'] = accuracy_score(targets, preds)
+        
     elif task == 'next_time':
         targets = np.concatenate(targets)
         preds = np.concatenate(preds)
-        1_score(targets, preds)
+        log_dict[start + 'code_f1'] = f1_score(targets, preds)
         log_dict[start + 'code_precision'] = precision(targets, preds)
         log_dict[start + 'code_recall'] = recall(targets, preds)
         

@@ -10,6 +10,7 @@ import argparse
 import os
 import random
 import string
+import yaml
 
 from copy import deepcopy
 from transformers import get_linear_schedule_with_warmup
@@ -48,6 +49,10 @@ def loading_ptls_model(ckpt_dict):
             new_dict['embedding.' + key[len(embedding_prefix):]] = ckpt[key]
     
     return new_dict
+
+config_parser = argparse.ArgumentParser(description='Training Config', add_help=False)
+config_parser.add_argument('-c', '--config', default='', type=str, metavar='FILE',
+                        help='YAML config file specifying default arguments')
 
 
 parser = argparse.ArgumentParser()
@@ -88,14 +93,23 @@ parser.add_argument('--adapters', action='store_true')
 parser.add_argument('--max_seq_len', type=int, default=None)
 parser.add_argument('--num_number', type=int, default=None)
 parser.add_argument('--cat_number', type=int, default=None)
+parser.add_argument('--val_reduce_size', type=float, default=1.0)
 
-args = parser.parse_args()
+args_config, remaining = config_parser.parse_known_args()
+if args_config.config:
+    with open(args_config.config, 'r') as f:
+        cfg = yaml.safe_load(f)
+        parser.set_defaults(**cfg)
+# The main arg parser parses the rest of the args, the usual
+# defaults will have been overridden if config file specified.
+args = parser.parse_args(remaining)
+
 logging_freq = int((128 / args.batch_size) * args.loss_freq * args.reduce_size)
 
 rnd_prt = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(12))
 
 if args.run_name == '':
-    run_name = f'{args.model}-{args.num_layers}-emb_mult={args.emb_mult}-mixup={args.mixup}-{args.optimizer}-lr={args.lr}-{rnd_prt}-rel_pos_embs={args.rel_pos_embs}'
+    run_name = f'{args.encoder_type}-{args.num_layers}-emb_mult={args.emb_mult}-mixup={args.mixup}-{args.optimizer}-lr={args.lr}-{rnd_prt}-rel_pos_embs={args.rel_pos_embs}'
 else:
     run_name = args.run_name
 
@@ -110,7 +124,7 @@ os.mkdir(checkpoint_dir)
 
 num_epochs = int(args.num_epochs * (np.log(1 / args.reduce_size) + 1))
 train_batch_size = args.batch_size
-val_batch_size = args.batch_size
+val_batch_size = args.batch_size * 2
 
 with open('./assets/num_embedding_projections.pkl', 'rb') as f:
     num_embedding_projections = pickle.load(f)
@@ -329,7 +343,7 @@ if 'vtb' not in args.data:
     # train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, shuffle=True,
     #                                 device='cpu', is_train=True, output_format='torch')
     
-    fake_train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, shuffle=True,
+    fake_train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, shuffle=False, dry_run=True,
                                             device='cpu', is_train=True, output_format='torch',  reduce_size=args.reduce_size,
                                              max_seq_len=args.max_seq_len)
     
@@ -352,32 +366,32 @@ else:
     
 for epoch in range(num_epochs):
     print(f'Starting epoch {epoch+1}')
-    if args.data == 'alfa':
-        train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, shuffle=True,
-                                            device=device, is_train=True, output_format='torch', reduce_size=args.reduce_size)
-    else:
-        train_dataloader = DataLoader(dataset_train, batch_size=train_batch_size, collate_fn=dataset_train.collate_fn, shuffle=True)
+#     if args.data == 'alfa':
+#         train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, shuffle=True,
+#                                             device=device, is_train=True, output_format='torch', reduce_size=args.reduce_size)
+#     else:
+#         train_dataloader = DataLoader(dataset_train, batch_size=train_batch_size, collate_fn=dataset_train.collate_fn, shuffle=True)
 
-    train_epoch(model, optimizer, train_dataloader, task=args.task, print_loss_every_n_batches=logging_freq, device=device, 
-                scheduler=scheduler, cat_weights=cat_weights, num_weights=num_weights, num_number=args.num_number, cat_number=args.cat_number)
+#     train_epoch(model, optimizer, train_dataloader, task=args.task, print_loss_every_n_batches=logging_freq, device=device, 
+#                 scheduler=scheduler, cat_weights=cat_weights, num_weights=num_weights, num_number=args.num_number, cat_number=args.cat_number)
     
     if args.data == 'alfa':
-        val_dataloader = batches_generator(dataset_val, batch_size=train_batch_size, device=device, is_train=True, output_format='torch')
+        val_dataloader = batches_generator(dataset_val, batch_size=val_batch_size, device=device, is_train=True, output_format='torch', reduce_size=args.val_reduce_size)
         train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, device=device, is_train=True, output_format='torch', reduce_size=args.reduce_size)
     
     else:
         val_dataloader = DataLoader(dataset_val, batch_size=train_batch_size, collate_fn=dataset_val.collate_fn, shuffle=False)
-        train_dataloader = DataLoader(dataset_train, batch_size=train_batch_size, collate_fn=dataset_train.collate_fn, shuffle=False)
+        train_dataloader = DataLoader(dataset_train, batch_size=val_batch_size, collate_fn=dataset_train.collate_fn, shuffle=False)
     
 
     eval_model(model, val_dataloader, task=args.task, data=args.data, device=device, train=False, num_number=args.num_number, cat_number=args.cat_number)    
-    eval_model(model, train_dataloader, task=args.task, data=args.data, device=device, train=True, num_number=args.num_number, cat_number=args.cat_number)
+    # eval_model(model, train_dataloader, task=args.task, data=args.data, device=device, train=True, num_number=args.num_number, cat_number=args.cat_number)
     
      
     if epoch % 5 == 0:
         torch.save(model.state_dict(), checkpoint_dir + f'/epoch_{epoch}.ckpt')
     
     if args.task == 'default':
-        print(f'Epoch {epoch+1} completed. Train roc-auc: {train_roc_auc}, Val roc-auc: {val_roc_auc}')
+        print(f'Epoch {epoch+1} completed')
 
 torch.save(model.state_dict(), checkpoint_dir + f'/final_model.ckpt')
