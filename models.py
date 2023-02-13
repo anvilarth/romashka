@@ -56,6 +56,7 @@ config_names = { 'decision-transformer': 'edbeeching/decision-transformer-gym-ho
     'whisper/tiny':'openai/whisper-tiny',
     'whisper/small':'openai/whisper-small',
     'whisper/medium':'openai/whisper-medium',
+    'whisper/large': 'openai/whisper-large',
     's2t/small': 'facebook/s2t-small-librispeech-asr',
     's2t/medium': 'facebook/s2t-medium-librispeech-asr',
     's2t/large': 'facebook/s2t-large-librispeech-asr',
@@ -148,7 +149,7 @@ class TransactionsModel(nn.Module):
                 model = AutoAdapterModel.from_config(config)
             else:
                 model  = AutoModel.from_config(config)
-
+        
         if encoder_type == 'mybert':
             self.encoder = BERT(hidden_size, heads=2*emb_mult, num_layers=num_layers, dropout=dropout, layer_norm_eps=1e-7, rel_pos_embs=rel_pos_embs)
         

@@ -2,6 +2,8 @@ import torch
 import wandb
 import pandas as pd
 import torch.nn as nn
+import numpy as np
+
 from tqdm.notebook import tqdm
 from sklearn.metrics import roc_auc_score, accuracy_score, precision_score, f1_score, recall_score
 from augmentations import mask_tokens
@@ -112,8 +114,8 @@ def eval_model(model, dataloader, task='default', data='vtb', batch_size=32, dev
         
     elif task == 'next_time':
         log_dict = {start + 'amnt': 0.0, start + 'num': 0.0}
-        cat_preds = []
-        cat_targets = []
+        preds = []
+        targets = []
 
     with torch.no_grad():
         for batch in tqdm(dataloader, desc='Evaluating model'):
@@ -194,9 +196,15 @@ def eval_model(model, dataloader, task='default', data='vtb', batch_size=32, dev
     elif task == 'next_time':
         targets = np.concatenate(targets)
         preds = np.concatenate(preds)
+<<<<<<< Updated upstream
         log_dict[start + 'code_f1'] = f1_score(targets, preds)
         log_dict[start + 'code_precision'] = precision(targets, preds)
         log_dict[start + 'code_recall'] = recall(targets, preds)
+=======
+        log_dict[start + 'code_f1'] = f1_score(targets, preds, average='weighted')
+        log_dict[start + 'code_precision'] = precision(targets, preds, average='weighted')
+        log_dict[start + 'code_recall'] = recall(targets, preds, average='weighted')
+>>>>>>> Stashed changes
         
         log_dict[start + 'amnt'] /= num_objects
         log_dict[start + 'num'] /= num_objects

@@ -1,3 +1,10 @@
 group: 'product'
 task: 'product'
 head_type: 'product'
+
+scheduler: True
+num_epochs: 15
+optimizer: 'adamw'
+lr: 0.00001
+batch_size: 4
+weight_decay: 0.0001

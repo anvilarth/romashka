@@ -109,7 +109,11 @@ logging_freq = int((128 / args.batch_size) * args.loss_freq * args.reduce_size)
 rnd_prt = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(12))
 
 if args.run_name == '':
+<<<<<<< Updated upstream
     run_name = f'{args.encoder_type}-{args.num_layers}-emb_mult={args.emb_mult}-mixup={args.mixup}-{args.optimizer}-lr={args.lr}-{rnd_prt}-rel_pos_embs={args.rel_pos_embs}'
+=======
+    run_name = f'task={args.task}-{args.encoder_type}-finetune={args.finetune}-{args.optimizer}-lr={args.lr}-{rnd_prt}'
+>>>>>>> Stashed changes
 else:
     run_name = args.run_name
 
