@@ -60,6 +60,8 @@ parser.add_argument('--cnt_max', type=int, default=200)
 
 parser.add_argument('--encoder', type=str, default='rnn', choices=['rnn', 'bert', 'gpt', 't5'])
 parser.add_argument('--hidden_size', type=int, default=256)
+parser.add_argument('--num_layers', type=int, default=2)
+parser.add_argument('--num_heads', type=int, default=1)
 
 parser.add_argument('--batch_size', type=int, default=64)
 parser.add_argument('--lr', type=float, default=0.001)
@@ -84,7 +86,10 @@ with open('./assets/meta_embedding_projections.pkl', 'rb') as f:
     meta_embedding_projections = pickle.load(f)
 
 
-run_name = f'ptls-{args.group}-{args.encoder}-splitter={str(args.splitter)}-splits={args.num_splits}-seqlen={args.seq_len}-bs={args.batch_size}-lr={args.lr}'
+run_name = f'ptls-{args.group}-{args.encoder}-splitter={str(args.splitter)}-splits={args.num_splits}-seqlen={args.seq_len}-bs={args.batch_size}-lr={args.lr}-layers={args.num_layers}'
+if args.encoder != 'rnn':
+    run_name += f'-heads={args.num_heads}'
+
 wandb_logger = WandbLogger(name=run_name, project="romashka", entity=args.entity, group=args.group)
 
 
@@ -150,6 +155,7 @@ if args.encoder == 'rnn':
         seq_encoder = RnnEncoder(
             input_size=trx_encoder.get_embedding_size(),
             hidden_size=trx_encoder.get_embedding_size(),
+            num_layers=args.num_layers,
             type='gru',
         )
     else:
@@ -157,6 +163,7 @@ if args.encoder == 'rnn':
             input_size=trx_encoder.get_embedding_size(),
             trx_encoder=trx_encoder,
             hidden_size=args.hidden_size,
+            num_layers=args.num_layers,
             type='gru',
         )
 else:
@@ -164,7 +171,9 @@ else:
         seq_encoder = MySeqEncoder(
             trx_encoder=trx_encoder,
             input_size=trx_encoder.get_embedding_size(),
-            encoder_type=args.encoder
+            encoder_type=args.encoder,
+            num_layers=args.num_layers,
+            num_heads=args.num_heads
         )
 
     
