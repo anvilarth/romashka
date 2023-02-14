@@ -10,6 +10,7 @@ import argparse
 import os
 import random
 import string
+import yaml
 
 from copy import deepcopy
 from transformers import get_linear_schedule_with_warmup
@@ -28,6 +29,8 @@ from data_utils import read_parquet_dataset_from_local
 from models import TransactionsModel
 from tools import set_seeds, count_parameters
 from data import  TransactionClickStreamDataset, TransactionClickStreamDatasetClickstream, TransactionClickStreamDatasetTransactions
+
+from adapter_transformers import UniPELTConfig, AdapterConfig
 
 
 #os.environ['WANDB_API_KEY'] = 'e1847d5866973dab40f29db28eefb77987d4b66a' # andrei
@@ -48,6 +51,10 @@ def loading_ptls_model(ckpt_dict):
     
     return new_dict
 
+config_parser = argparse.ArgumentParser(description='Training Config', add_help=False)
+config_parser.add_argument('-c', '--config', default='', type=str, metavar='FILE',
+                        help='YAML config file specifying default arguments')
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--model', type=str, default='transformer')
@@ -57,9 +64,9 @@ parser.add_argument('--optimizer', type=str, default='adam')
 parser.add_argument('--lr', type=float, default=1e-4)
 parser.add_argument('--rel_pos_embs', action='store_true')
 parser.add_argument('--emb_mult', type=int, default=1)
-parser.add_argument('--loss_freq', type=int, default=100)
+parser.add_argument('--loss_freq', type=int, default=500)
 parser.add_argument('--scheduler', action='store_true')
-parser.add_argument('--dropout', type=float, default=0.1)
+parser.add_argument('--embedding_dropout', type=float, default=0.0)
 parser.add_argument('--weight_decay', type=float, default=1e-2)
 parser.add_argument('--cutmix', action='store_true')
 parser.add_argument('--alpha', type=float, default=1.0)
@@ -71,9 +78,9 @@ parser.add_argument('--group', type=str, default='models')
 parser.add_argument('--numerical', action='store_true')
 parser.add_argument('--seed', type=int, default=0)
 parser.add_argument('--finetune', type=str, default=None)
-parser.add_argument('--train_limitation', type=int, default=10)
+parser.add_argument('--reduce_size', type=float, default=1.)
 parser.add_argument('--freeze_model', action='store_true')
-parser.add_argument('--datapath', type=str, default='/home/jovyan/afilatov/data/alfa/')
+parser.add_argument('--datapath', type=str, default='/home/jovyan/data/alfa/')
 parser.add_argument('--data', type=str, default='alfa')
 parser.add_argument('--task', type=str, default='next')
 parser.add_argument('--batch_size', type=int, default=128)
@@ -84,17 +91,34 @@ parser.add_argument('--pretrained', action='store_true', default=False)
 parser.add_argument('--run_name', type=str, default='')
 parser.add_argument('--model_source', type=str, default='scratch')
 parser.add_argument('--adapters', action='store_true')
+parser.add_argument('--max_seq_len', type=int, default=None)
+parser.add_argument('--num_number', type=int, default=None)
+parser.add_argument('--cat_number', type=int, default=None)
+parser.add_argument('--val_reduce_size', type=float, default=1.0)
 
-args = parser.parse_args()
+args_config, remaining = config_parser.parse_known_args()
+if args_config.config:
+    with open(args_config.config, 'r') as f:
+        cfg = yaml.safe_load(f)
+        parser.set_defaults(**cfg)
+# The main arg parser parses the rest of the args, the usual
+# defaults will have been overridden if config file specified.
+args = parser.parse_args(remaining)
+
+logging_freq = int((128 / args.batch_size) * args.loss_freq * args.reduce_size)
+
 rnd_prt = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(12))
 
 if args.run_name == '':
-    run_name = f'{args.model}-{args.num_layers}-emb_mult={args.emb_mult}-mixup={args.mixup}-{args.optimizer}-lr={args.lr}-{rnd_prt}-rel_pos_embs={args.rel_pos_embs}'
+<<<<<<< Updated upstream
+    run_name = f'{args.encoder_type}-{args.num_layers}-emb_mult={args.emb_mult}-mixup={args.mixup}-{args.optimizer}-lr={args.lr}-{rnd_prt}-rel_pos_embs={args.rel_pos_embs}'
+=======
+    run_name = f'task={args.task}-{args.encoder_type}-finetune={args.finetune}-{args.optimizer}-lr={args.lr}-{rnd_prt}'
+>>>>>>> Stashed changes
 else:
     run_name = args.run_name
 
-#wandb.init(project="romashka", entity="serofade", group=args.group, name=run_name)
-wandb.init(project="romashka", entity="vasilev-va", group=args.group, name=run_name)
+wandb.init(project="romashka", entity="serofade", group=args.group, name=run_name)
 wandb.config.update(args)
 
 set_seeds(args.seed)
@@ -103,9 +127,9 @@ checkpoint_dir = wandb.run.dir + '/checkpoints'
 
 os.mkdir(checkpoint_dir)
 
-num_epochs = args.num_epochs
+num_epochs = int(args.num_epochs * (np.log(1 / args.reduce_size) + 1))
 train_batch_size = args.batch_size
-val_batch_size = args.batch_size
+val_batch_size = args.batch_size * 2
 
 with open('./assets/num_embedding_projections.pkl', 'rb') as f:
     num_embedding_projections = pickle.load(f)
@@ -127,8 +151,6 @@ if args.data == 'alfa':
 
     dir_with_datasets = os.listdir(path_to_dataset)
     dataset_train = sorted([os.path.join(path_to_dataset, x) for x in dir_with_datasets])
-
-    dataset_train = dataset_train[:args.train_limitation]
     
     cat_weights=torch.ones(len(cat_features_names))
     num_weights=torch.ones(len(num_features_names))
@@ -197,6 +219,10 @@ elif args.data == 'vtb_click':
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 buckets = None 
 
+if args.task == 'product':
+    meta_embedding_projections = None
+    meta_features_names = None
+
 if args.model == 'transformer':
     print("USING TRANSFORMER")
     model = TransactionsModel(cat_embedding_projections,
@@ -208,7 +234,7 @@ if args.model == 'transformer':
                               num_layers=args.num_layers,
                               head_type=args.head_type,
                               encoder_type=args.encoder_type,
-                              dropout=args.dropout,
+                              embedding_dropout=args.embedding_dropout,
                               mixup=args.mixup,
                               cutmix=args.cutmix,
                               emb_mult=args.emb_mult,
@@ -237,17 +263,28 @@ if args.model == 'transformer':
             param.requires_grad = False
             
         if args.adapters:
-            model.encoder.add_adapter("bottleneck_adapter")
-            model.encoder.train_adapter("bottleneck_adapter")
+            print("USING ADAPTERS")            
+            config = AdapterConfig(mh_adapter=True, output_adapter=True, reduction_factor=16, non_linearity='gelu')
+            model.encoder.add_adapter("alfa_battle", config=config)
+            model.encoder.train_adapter("alfa_battle")
+            
+            adapter_parameters = []
+            standard_parameters = []
+            
+            for p in model.modules():
+                if type(p) == nn.LayerNorm:
+                    p.requires_grad_(True)
+            
+            for param in model.parameters():
+                if param.requires_grad:
+                    adapter_parameters.append(param)
+                else:
+                    standard_parameters.append(param)
+            
+                    
         
         model.cls_token.requires_grad_(True)
         model.head.requires_grad_(True)
-        
-        
-        # for p in m.modules():
-        #     if type(p) == nn.LayerNorm:
-        #         p.requires_grad_(True)
-
         
         if args.finetune == 'all':
             model.requires_grad_(True)
@@ -279,8 +316,29 @@ print("CREATING OPTIMIZER")
 
 if args.optimizer == 'adam':
     optimizer = torch.optim.Adam(lr=args.lr, params=model.parameters())
+    
+    if args.adapters:
+        optimizer = torch.optim.Adam(
+            [
+                {"params": adapter_parameters, "lr": 1e-4},
+                {"params": standard_parameters, "lr": args.lr},
+            ],
+            lr=args.lr,
+        )
+    
+    
 elif args.optimizer == 'adamw':
     optimizer = torch.optim.AdamW(lr=args.lr, params=model.parameters(), weight_decay=args.weight_decay)
+    
+    if args.adapters:
+        optimizer = torch.optim.AdamW(
+            [
+                {"params": adapter_parameters, "lr": 1e-4},
+                {"params": standard_parameters, "lr": args.lr},
+            ],
+            lr=args.lr, weight_decay=args.weight_decay
+        )
+    
 else:
     raise NotImplementedError
 
@@ -290,9 +348,16 @@ if 'vtb' not in args.data:
     # train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, shuffle=True,
     #                                 device='cpu', is_train=True, output_format='torch')
     
-    epoch_len = 7200 * 128 / args.batch_size 
+    fake_train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, shuffle=False, dry_run=True,
+                                            device='cpu', is_train=True, output_format='torch',  reduce_size=args.reduce_size,
+                                             max_seq_len=args.max_seq_len)
+    
+    epoch_len = 0
+    for _ in fake_train_dataloader:
+        epoch_len += 1
+    
     num_training_steps = num_epochs * epoch_len
-    warmup_steps = int(1e3 * 128 / args.batch_size)
+    warmup_steps = int(1e3 * 128 / args.batch_size * args.reduce_size)
 else:
     epoch_len= 138
     num_training_steps = num_epochs * epoch_len
@@ -306,48 +371,32 @@ else:
     
 for epoch in range(num_epochs):
     print(f'Starting epoch {epoch+1}')
-    if args.data == 'alfa':
-        train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, shuffle=True,
-                                            device=device, is_train=True, output_format='torch')
-    else:
-        train_dataloader = DataLoader(dataset_train, batch_size=train_batch_size, collate_fn=dataset_train.collate_fn, shuffle=True)
+#     if args.data == 'alfa':
+#         train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, shuffle=True,
+#                                             device=device, is_train=True, output_format='torch', reduce_size=args.reduce_size)
+#     else:
+#         train_dataloader = DataLoader(dataset_train, batch_size=train_batch_size, collate_fn=dataset_train.collate_fn, shuffle=True)
 
-    train_epoch(model, optimizer, train_dataloader, task=args.task, print_loss_every_n_batches=args.loss_freq, device=device, 
-                scheduler=scheduler, cat_weights=cat_weights, num_weights=num_weights)
+#     train_epoch(model, optimizer, train_dataloader, task=args.task, print_loss_every_n_batches=logging_freq, device=device, 
+#                 scheduler=scheduler, cat_weights=cat_weights, num_weights=num_weights, num_number=args.num_number, cat_number=args.cat_number)
     
     if args.data == 'alfa':
-        val_dataloader = batches_generator(dataset_val, batch_size=train_batch_size, device=device, is_train=True, output_format='torch')
+        val_dataloader = batches_generator(dataset_val, batch_size=val_batch_size, device=device, is_train=True, output_format='torch', reduce_size=args.val_reduce_size)
+        train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, device=device, is_train=True, output_format='torch', reduce_size=args.reduce_size)
+    
     else:
         val_dataloader = DataLoader(dataset_val, batch_size=train_batch_size, collate_fn=dataset_val.collate_fn, shuffle=False)
+        train_dataloader = DataLoader(dataset_train, batch_size=val_batch_size, collate_fn=dataset_train.collate_fn, shuffle=False)
+    
+
+    eval_model(model, val_dataloader, task=args.task, data=args.data, device=device, train=False, num_number=args.num_number, cat_number=args.cat_number)    
+    # eval_model(model, train_dataloader, task=args.task, data=args.data, device=device, train=True, num_number=args.num_number, cat_number=args.cat_number)
+    
+     
+    if epoch % 5 == 0:
+        torch.save(model.state_dict(), checkpoint_dir + f'/epoch_{epoch}.ckpt')
     
     if args.task == 'default':
-        val_roc_auc, _ = eval_model(model, val_dataloader, task=args.task, data=args.data, device=device)
-    
-    else:
-        val_acc, val_num = eval_model(model, val_dataloader, task=args.task, data=args.data, device=device)
-    
-    if args.data == 'alfa':
-        train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, device=device, is_train=True, output_format='torch')
-    
-    else:
-        train_dataloader = DataLoader(dataset_train, batch_size=train_batch_size, collate_fn=dataset_train.collate_fn, shuffle=False)
-    
-    if args.task == 'default':
-        train_roc_auc, _ = eval_model(model, train_dataloader, task=args.task, data=args.data, device=device)
-    else:
-        train_acc, train_num = eval_model(model, train_dataloader, task=args.task, data=args.data, device=device)
-    
-    
-    if args.task == 'default':
-        wandb.log({'train_roc_auc': train_roc_auc, 'val_roc_auc': val_roc_auc})
-    else:
-        for i, elem in enumerate(cat_features_names):
-            wandb.log({f'train_{elem}': train_acc[i], f'val_{elem}': val_acc[i]})
-        
-        for i, elem in enumerate(num_features_names):
-            wandb.log({f'train_{elem}': train_num[i], f'val_{elem}': val_num[i]})
-    
-    torch.save(model.state_dict(), checkpoint_dir + f'/epoch_{epoch}.ckpt')
-    
-    if args.task == 'default':
-        print(f'Epoch {epoch+1} completed. Train roc-auc: {train_roc_auc}, Val roc-auc: {val_roc_auc}')
+        print(f'Epoch {epoch+1} completed')
+
+torch.save(model.state_dict(), checkpoint_dir + f'/final_model.ckpt')
