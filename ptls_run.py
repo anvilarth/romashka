@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from data_generators import cat_features_names, num_features_names, meta_features_names
 
 from ptls_my import my_collate_fn
-from ptls_my import GPTEncoder, MySeqEncoder
+from ptls_my import MyEncoder, MySeqEncoder
 from ptls_my import MyPaddedBatch, IterDataset, PtlsEmbeddingLayer, MySampleUniform
 
 from ptls.nn import RnnEncoder, RnnSeqEncoder, TransformerEncoder
@@ -94,8 +94,8 @@ path_to_val_dataset = args.path_to_dataset + 'val_buckets'
 dir_with_train_datasets = os.listdir(path_to_train_dataset)
 dir_with_val_datasets = os.listdir(path_to_val_dataset)
 
-dataset_train = sorted([os.path.join(path_to_train_dataset, x) for x in dir_with_train_datasets])[0:1]
-dataset_val = sorted([os.path.join(path_to_val_dataset, x) for x in dir_with_val_datasets])[0:1]
+dataset_train = sorted([os.path.join(path_to_train_dataset, x) for x in dir_with_train_datasets])
+dataset_val = sorted([os.path.join(path_to_val_dataset, x) for x in dir_with_val_datasets])
 
 train_dataset = IterDataset(dataset_train, args.batch_size, device, args.seq_len)
 val_dataset = IterDataset(dataset_val, args.batch_size, device, args.seq_len)
@@ -119,13 +119,14 @@ else:
     splitter = None
     
 
+
 train_dataloader = torch.utils.data.DataLoader(
     train_dataset,
     collate_fn=partial(my_collate_fn, splitter=splitter,
                        rep=args.num_splits if splitter is not None else 1,
                        mode=args.group),
     num_workers=0,
-    batch_size=1
+    batch_size=args.num_splits if args.group == 'mlm' or 'rtd' else 1
 )
 val_dataloader = torch.utils.data.DataLoader(
     val_dataset,
@@ -133,7 +134,7 @@ val_dataloader = torch.utils.data.DataLoader(
                        rep=args.num_splits if splitter is not None else 1,
                        mode=args.group),
     num_workers=0,
-    batch_size=1
+    batch_size=args.num_splits if args.group == 'mlm' or 'rtd' else 1
 )
 
 trx_encoder = PtlsEmbeddingLayer(splitter,
@@ -148,8 +149,7 @@ if args.encoder == 'rnn':
         print(f'The mode is MLM. Param hidden_size was assigned to output_size of trx_encoder: {trx_encoder.output_size}')
         seq_encoder = RnnEncoder(
             input_size=trx_encoder.get_embedding_size(),
-            is_reduce_sequence=False,
-            hidden_size=trx_encoder.output_size,
+            hidden_size=trx_encoder.get_embedding_size(),
             type='gru',
         )
     else:
@@ -160,11 +160,12 @@ if args.encoder == 'rnn':
             type='gru',
         )
 else:
-    seq_encoder = MySeqEncoder(
-        trx_encoder=trx_encoder,
-        hidden_size=args.hidden_size,
-        type='gru',
-    )
+    if args.group == 'coles':
+        seq_encoder = MySeqEncoder(
+            trx_encoder=trx_encoder,
+            input_size=trx_encoder.get_embedding_size(),
+            encoder_type=args.encoder
+        )
 
     
 if args.group == 'coles':
@@ -200,6 +201,7 @@ elif args.group == 'mlm':
     model = MLMPretrainModule(
         trx_encoder=trx_encoder, 
         seq_encoder=seq_encoder,
+        max_lr=args.lr,
         total_steps=args.total_steps
     ).to(device)
 
@@ -211,7 +213,7 @@ elif args.group == 'cpc':
 elif args.group == 'rtd':
     val_monitor = 'valid_auroc'
 elif args.group == 'mlm':
-    val_monitor = 'mlm/valid_mlm_loss' 
+    val_monitor = 'mlm/valid_mlm_loss'
 
 lr_monitor = LearningRateMonitor(logging_interval='step')
 checkpoint_callback = ModelCheckpoint(dirpath=args.checkpoint_dir + args.group + '/',
