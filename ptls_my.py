@@ -2,8 +2,8 @@ import torch
 import numpy as np
 
 from copy import deepcopy
-from transformers import GPT2Config, GPT2Model
 from torch.utils.data import IterableDataset
+from transformers import GPT2Model, GPT2Config, BertConfig, BertModel, T5Config, T5Model
 
 from embedding import EmbeddingLayer
 from data_generators import batches_generator
@@ -137,26 +137,43 @@ def my_collate_fn(batch, splitter, rep=5, mode='coles'):
         return batch
 
 
-class GPTEncoder(AbsSeqEncoder):
-    def __init__(self, 
+class MyEncoder(AbsSeqEncoder):
+    def __init__(self,
                  input_size=None,
-                 hidden_size=None,
                  is_reduce_sequence=False,
-                 type='gru'
+                 encoder_type='gpt'
                 ):
     
         super().__init__(is_reduce_sequence=is_reduce_sequence)
+        self.encoder_type = encoder_type
+        print(f'Sequential Encoder is {self.encoder_type}')
         
-        configuration = GPT2Config(vocab_size=1, n_positions=2000, 
-                           n_embd=input_size, n_layer=2, 
-                           n_head=1, resid_pdrop=0,
-                           embd_pdrop=0, attn_pdrop=0)
+        if self.encoder_type == 'gpt':
+            configuration = GPT2Config(vocab_size=1, n_positions=2000,
+                                       n_embd=input_size, n_layer=2,
+                                       n_head=1, resid_pdrop=0.1,
+                                       embd_pdrop=0.1, attn_pdrop=0.1)
+            
+            self.encoder = GPT2Model(configuration)
+        elif self.encoder_type == 'bert':
+            configuration = BertConfig(vocab_size=1, hidden_size=input_size,
+                                       num_hidden_layers=2, num_attention_heads=1,
+                                       intermediate_size=512, hidden_dropout_prob=0.1,
+                                       attention_probs_dropout_prob=0.1,
+                                       max_position_embeddings=2048)
+            
+            self.encoder = BertModel(configuration)
+        elif self.encoder_type == 't5':
+            configuration = T5Config(vocab_size=1, d_model=input_size,
+                                     d_kv=input_size // 1, d_ff=512,
+                                     num_layers=2, num_heads=1)
+            
+            self.encoder = T5Model(configuration)
         
-        self.encoder = GPT2Model(configuration)
         self.hidden_size = input_size
         self.input_size = input_size
         
-    def forward(self, x, h_0=None):
+    def forward(self, x):
         """
         :param x:
         :param h_0: None or [1, B, H] float tensor
@@ -166,8 +183,12 @@ class GPTEncoder(AbsSeqEncoder):
         :return:
         """
         shape = x.payload.size()
-        out = self.encoder(inputs_embeds=x.payload).last_hidden_state[:, -1]
         
+        if self.encoder_type == 't5':
+            out = self.encoder(inputs_embeds=x.payload, decoder_inputs_embeds=x.payload).last_hidden_state[:, -1]
+        else:
+            out = self.encoder(inputs_embeds=x.payload).last_hidden_state[:, -1]
+                
         return out
 
     @property
@@ -184,7 +205,7 @@ class MySeqEncoder(SeqEncoderContainer):
                  ):
         super().__init__(
             trx_encoder=trx_encoder,
-            seq_encoder_cls=GPTEncoder,
+            seq_encoder_cls=MyEncoder,
             input_size=input_size,
             seq_encoder_params=seq_encoder_params,
             is_reduce_sequence=is_reduce_sequence,
@@ -192,5 +213,5 @@ class MySeqEncoder(SeqEncoderContainer):
 
     def forward(self, x, h_0=None):
         x = self.trx_encoder(x)
-        x = self.seq_encoder(x, h_0)
+        x = self.seq_encoder(x)
         return x
