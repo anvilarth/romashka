@@ -94,6 +94,7 @@ def split_process(batch, splitter):
         else:
             new_v = v 
         res[k] = new_v
+    res['mask'] = res['cat_features'][0] != 0
     return res
 
 
@@ -141,39 +142,43 @@ class MyEncoder(AbsSeqEncoder):
     def __init__(self,
                  input_size=None,
                  is_reduce_sequence=False,
-                 encoder_type='gpt'
+                 encoder_type='gpt',
+                 num_layers=2,
+                 num_heads=1
                 ):
     
         super().__init__(is_reduce_sequence=is_reduce_sequence)
         self.encoder_type = encoder_type
         print(f'Sequential Encoder is {self.encoder_type}')
+        print(f'Num layers is {num_layers}')
+        print(f'Num heads is {num_heads}')
         
         if self.encoder_type == 'gpt':
-            configuration = GPT2Config(vocab_size=1, n_positions=2000,
-                                       n_embd=input_size, n_layer=2,
-                                       n_head=1, resid_pdrop=0.1,
+            configuration = GPT2Config(n_positions=2048,
+                                       n_embd=input_size, n_layer=num_layers,
+                                       n_head=num_heads, resid_pdrop=0.1,
                                        embd_pdrop=0.1, attn_pdrop=0.1)
             
             self.encoder = GPT2Model(configuration)
         elif self.encoder_type == 'bert':
-            configuration = BertConfig(vocab_size=1, hidden_size=input_size,
-                                       num_hidden_layers=2, num_attention_heads=1,
+            configuration = BertConfig(hidden_size=input_size,
+                                       num_hidden_layers=num_layers, num_attention_heads=num_heads,
                                        intermediate_size=512, hidden_dropout_prob=0.1,
                                        attention_probs_dropout_prob=0.1,
                                        max_position_embeddings=2048)
             
             self.encoder = BertModel(configuration)
         elif self.encoder_type == 't5':
-            configuration = T5Config(vocab_size=1, d_model=input_size,
+            configuration = T5Config(d_model=input_size,
                                      d_kv=input_size // 1, d_ff=512,
-                                     num_layers=2, num_heads=1)
+                                     num_layers=num_layers, num_heads=num_heads)
             
             self.encoder = T5Model(configuration)
         
         self.hidden_size = input_size
         self.input_size = input_size
         
-    def forward(self, x):
+    def forward(self, x, mask):
         """
         :param x:
         :param h_0: None or [1, B, H] float tensor
@@ -185,9 +190,12 @@ class MyEncoder(AbsSeqEncoder):
         shape = x.payload.size()
         
         if self.encoder_type == 't5':
-            out = self.encoder(inputs_embeds=x.payload, decoder_inputs_embeds=x.payload).last_hidden_state[:, -1]
+            out = self.encoder(inputs_embeds=x.payload,
+                               decoder_inputs_embeds=x.payload,
+                               attention_mask=mask).last_hidden_state[:, -1]
         else:
-            out = self.encoder(inputs_embeds=x.payload).last_hidden_state[:, -1]
+            out = self.encoder(inputs_embeds=x.payload,
+                               attention_mask=mask).last_hidden_state[:, -1]
                 
         return out
 
@@ -212,6 +220,7 @@ class MySeqEncoder(SeqEncoderContainer):
         )
 
     def forward(self, x, h_0=None):
+        mask = x['mask']
         x = self.trx_encoder(x)
-        x = self.seq_encoder(x)
+        x = self.seq_encoder(x, mask)
         return x
