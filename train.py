@@ -109,11 +109,7 @@ logging_freq = int((128 / args.batch_size) * args.loss_freq * args.reduce_size)
 rnd_prt = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(12))
 
 if args.run_name == '':
-<<<<<<< Updated upstream
-    run_name = f'{args.encoder_type}-{args.num_layers}-emb_mult={args.emb_mult}-mixup={args.mixup}-{args.optimizer}-lr={args.lr}-{rnd_prt}-rel_pos_embs={args.rel_pos_embs}'
-=======
     run_name = f'task={args.task}-{args.encoder_type}-finetune={args.finetune}-{args.optimizer}-lr={args.lr}-{rnd_prt}'
->>>>>>> Stashed changes
 else:
     run_name = args.run_name
 
@@ -218,9 +214,9 @@ elif args.data == 'vtb_click':
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 buckets = None 
 
-if args.task == 'product':
-    meta_embedding_projections = None
-    meta_features_names = None
+# if args.task == 'product':
+#     meta_embedding_projections = None
+#     meta_features_names = None
 
 if args.model == 'transformer':
     print("USING TRANSFORMER")
@@ -370,14 +366,14 @@ else:
     
 for epoch in range(num_epochs):
     print(f'Starting epoch {epoch+1}')
-#     if args.data == 'alfa':
-#         train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, shuffle=True,
-#                                             device=device, is_train=True, output_format='torch', reduce_size=args.reduce_size)
-#     else:
-#         train_dataloader = DataLoader(dataset_train, batch_size=train_batch_size, collate_fn=dataset_train.collate_fn, shuffle=True)
+    if args.data == 'alfa':
+        train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, shuffle=True,
+                                            device=device, is_train=True, output_format='torch', reduce_size=args.reduce_size)
+    else:
+        train_dataloader = DataLoader(dataset_train, batch_size=train_batch_size, collate_fn=dataset_train.collate_fn, shuffle=True)
 
-#     train_epoch(model, optimizer, train_dataloader, task=args.task, print_loss_every_n_batches=logging_freq, device=device, 
-#                 scheduler=scheduler, cat_weights=cat_weights, num_weights=num_weights, num_number=args.num_number, cat_number=args.cat_number)
+    train_epoch(model, optimizer, train_dataloader, task=args.task, print_loss_every_n_batches=logging_freq, device=device,
+                scheduler=scheduler, cat_weights=cat_weights, num_weights=num_weights, num_number=args.num_number, cat_number=args.cat_number)
     
     if args.data == 'alfa':
         val_dataloader = batches_generator(dataset_val, batch_size=val_batch_size, device=device, is_train=True, output_format='torch', reduce_size=args.val_reduce_size)
@@ -388,8 +384,8 @@ for epoch in range(num_epochs):
         train_dataloader = DataLoader(dataset_train, batch_size=val_batch_size, collate_fn=dataset_train.collate_fn, shuffle=False)
     
 
-    eval_model(model, val_dataloader, task=args.task, data=args.data, device=device, train=False, num_number=args.num_number, cat_number=args.cat_number)    
-    # eval_model(model, train_dataloader, task=args.task, data=args.data, device=device, train=True, num_number=args.num_number, cat_number=args.cat_number)
+    eval_model(model, val_dataloader, epoch, task=args.task, data=args.data, device=device, train=False, num_number=args.num_number, cat_number=args.cat_number)    
+    eval_model(model, train_dataloader, epoch, task=args.task, data=args.data, device=device, train=True, num_number=args.num_number, cat_number=args.cat_number)
     
      
     if epoch % 5 == 0:

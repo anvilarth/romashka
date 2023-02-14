@@ -8,7 +8,7 @@ from tqdm.notebook import tqdm
 from sklearn.metrics import roc_auc_score, accuracy_score, precision_score, f1_score, recall_score
 from augmentations import mask_tokens
 
-from data_generators import batches_generator
+from data_generators import batches_generator, transaction_features, num_features_names, cat_features_names, meta_features_names
 from losses import NextTransactionLoss, MaskedMSELoss, NextTimeLoss, NextNumericalFeatureLoss
 from torch.utils.data import DataLoader
 
@@ -25,8 +25,8 @@ def train_epoch(model, optimizer, dataloader, task='default',
         loss_function = NextTransactionLoss()
     elif task == 'next_time':
         loss_function = NextTimeLoss()
-    elif task == 'product':
-        loss_function = nn.CrossEntropyLoss()
+    # elif task == 'product':
+    #     loss_function = nn.CrossEntropyLoss()
     elif task == 'next_num_feature':
         loss_function = NextNumericalFeatureLoss(num_number)
     elif task == 'next_cat_feature':
@@ -56,10 +56,10 @@ def train_epoch(model, optimizer, dataloader, task='default',
             next_time_mask = trues[-1]
             batch_loss = loss_function(output, trues, mask=next_time_mask) 
         
-        elif task == 'product':
-            output = model(batch)
-            trues = batch['meta_features'][0]
-            batch_loss = loss_function(output, trues)
+        # elif task == 'product':
+        #     output = model(batch)
+        #     trues = batch['meta_features'][0]
+        #     batch_loss = loss_function(output, trues)
             
         batch_loss.backward()
         
@@ -82,7 +82,7 @@ def train_epoch(model, optimizer, dataloader, task='default',
     print(f'Training loss after epoch: {running_loss / num_batches}', end='\r')
     
 
-def eval_model(model, dataloader, task='default', data='vtb', batch_size=32, device=None, process_numerical=False, train=False, num_number=None, cat_number=None) -> float:
+def eval_model(model, dataloader, epoch_num, task='default', data='vtb', batch_size=32, device=None, process_numerical=False, train=False, num_number=None, cat_number=None) -> float:
     """
     функция для оценки качества модели на отложенной выборке, возвращает roc-auc на валидационной
     выборке
@@ -98,14 +98,14 @@ def eval_model(model, dataloader, task='default', data='vtb', batch_size=32, dev
     num_objects = 0
 
     if task == 'default':
-        log_dict = {start + 'roc_auc': 0.0}
+        log_dict = {start + 'roc_auc': 0.0, }
         preds = []
         targets = []
         
-    elif task == 'product':
-        log_dict = {start + 'acc': 0.0}
-        preds = []
-        targets = []
+    # elif task == 'product':
+    #     log_dict = {start + 'acc': 0.0}
+    #     preds = []
+    #     targets = []
         
     elif task == 'next' or task == 'next_num_feature' or task == 'next_cat_feature':
         log_dict = {start + elem: 0.0 for elem in num_features_names + cat_features_names}
@@ -116,15 +116,17 @@ def eval_model(model, dataloader, task='default', data='vtb', batch_size=32, dev
         log_dict = {start + 'amnt': 0.0, start + 'num': 0.0}
         preds = []
         targets = []
+        
+    log_dict['epoch_num'] = epoch_num
 
     with torch.no_grad():
         for batch in tqdm(dataloader, desc='Evaluating model'):
             num_objects += batch['mask'].shape[0]
-            if task == 'default' or task == 'product':
+            if task == 'default':
                 targets.extend(batch['label'].cpu().numpy().flatten())
                 output = model(batch)
-                if task == 'product':
-                    output = output.argmax(-1) 
+                # if task == 'product':
+                #     output = output.argmax(-1) 
                     
                 preds.extend(output.cpu().numpy().flatten())
 
@@ -190,21 +192,15 @@ def eval_model(model, dataloader, task='default', data='vtb', batch_size=32, dev
     if task == 'default':
         log_dict[start + 'roc_auc'] = roc_auc_score(targets, preds)
         
-    elif task == 'product':
-        log_dict[start + 'acc'] = accuracy_score(targets, preds)
+    # elif task == 'product':
+    #     log_dict[start + 'acc'] = accuracy_score(targets, preds)
         
     elif task == 'next_time':
         targets = np.concatenate(targets)
         preds = np.concatenate(preds)
-<<<<<<< Updated upstream
-        log_dict[start + 'code_f1'] = f1_score(targets, preds)
-        log_dict[start + 'code_precision'] = precision(targets, preds)
-        log_dict[start + 'code_recall'] = recall(targets, preds)
-=======
         log_dict[start + 'code_f1'] = f1_score(targets, preds, average='weighted')
         log_dict[start + 'code_precision'] = precision(targets, preds, average='weighted')
         log_dict[start + 'code_recall'] = recall(targets, preds, average='weighted')
->>>>>>> Stashed changes
         
         log_dict[start + 'amnt'] /= num_objects
         log_dict[start + 'num'] /= num_objects

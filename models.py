@@ -127,20 +127,22 @@ class TransactionsModel(nn.Module):
                                         time_embedding,
                                         dropout=embedding_dropout)
         inp_size = self.embedding.get_embedding_size()
-            
-        config_name = config_names[encoder_type]
-        encoder_type, encoder_size = encoder_type.split('/')
+        config_name = None
         
+        if encoder_type in config_names:
+            config_name = config_names[encoder_type]
+            encoder_type, encoder_size = encoder_type.split('/')
+
         self.add_token = add_token
         self.head_type = head_type
         self.encoder_type = encoder_type
         
-        if pretrained:
+        if pretrained and config_name is not None:
             if adapters:
                 model = AutoAdapterModel.from_pretrained(config_name)
             else:
                 model = AutoModel.from_pretrained(config_name)
-        else:
+        elif config_name is not None:
             config = AutoConfig.from_pretrained(config_name)
             if config_name == 'bert-base-uncased' or config_name == 'bert-large-uncased':
                 config.update_from_string('max_position_embeddings=1024')
@@ -159,10 +161,11 @@ class TransactionsModel(nn.Module):
                         n_heads=2*emb_mult,
                         num_layers=num_layers)
             self.encoder = Informer(configs)
-        elif encoder_type == 'rnn':
-            self.encoder = nn.GRU(hidden_size, hidden_size, batch_first=True)
-        elif encoder_type == 'rnn2':
-            self.encoder = nn.GRU(hidden_size, hidden_size, num_layers=2, batch_first=True)
+        elif encoder_type == 'gru':
+            if hidden_size is None:
+                hidden_size = inp_size
+                
+            self.encoder = nn.GRU(inp_size, hidden_size, batch_first=True)
         
         elif encoder_type == 'bert':
             self.encoder = model
@@ -268,8 +271,7 @@ class TransactionsModel(nn.Module):
         else:
             embedding = embeds
         
-        if self.head_type != 'next' or self.head_type != 'next_time':
-            if self.add_token == 'before':
+        if self.head_type != 'next' and self.head_type != 'next_time' and self.add_token == 'before':
                 cls_token = self.cls_token.repeat(batch_size, 1, 1)
                 embedding = torch.cat([embedding, cls_token], dim=1)
 
@@ -282,7 +284,7 @@ class TransactionsModel(nn.Module):
         elif self.encoder_type == 't5':
             x = self.encoder(inputs_embeds=embedding, decoder_inputs_embeds=embedding, attention_mask=mask).last_hidden_state
         
-        elif 'rnn' in self.encoder_type:
+        elif 'gru' in self.encoder_type:
             x, _ = self.encoder(embedding)
         elif self.encoder_type == 'mybert':
             mask = mask.unsqueeze(1).unsqueeze(2)
@@ -300,7 +302,7 @@ class TransactionsModel(nn.Module):
         else:
             x = self.encoder(embedding, mask)
             
-        if self.add_token == 'after':
+        if self.head_type != 'next' and self.head_type != 'next_time' and self.add_token == 'after':
             cls_token = self.cls_token.repeat(batch_size, 1, 1)
             x = torch.cat([x, cls_token], dim=1)
             
