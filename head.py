@@ -1,8 +1,6 @@
 import torch
 import torch.nn as nn
 
-from encoder import BERT
-
 class LinearHead(nn.Module):
     def __init__(self, input_size):
         super().__init__()
@@ -64,7 +62,35 @@ class RNNClassificationHead(nn.Module):
         last_hidden = torch.reshape(last_hidden.permute(1, 2, 0), shape=(batch_size, d * 2))
 
         return self.linear(last_hidden)
+    
+class NextActionsHead(nn.Module):
+    def __init__(self,
+                 embedding_dim,
+                ):
+        super().__init__()
+    
+        self.amnt_head = nn.Linear(embedding_dim, 1)
+        self.num_head = nn.Linear(embedding_dim, 1)
+        self.need_head = nn.Linear(embedding_dim, 28)
 
+    def forward(self, x, mask=None):
+        
+        amnt_out = self.amnt_head(x)
+        num_out = self.num_head(x)
+        need_out = self.need_head(x)
+        
+        return [amnt_out, num_out, need_out]
+        
+        
+class ClassificationHead(nn.Module):
+    def __init__(self, embedding_dim, n_classes):
+        super().__init__()
+        self.head = nn.Linear(embedding_dim, n_classes)
+        
+    def forward(self, x, mask=None):
+        x = x[:, -1]
+        return self.head(x)
+    
 class NSPHead(nn.Module):
     def __init__(self, 
                  embedding_dim, 

@@ -9,13 +9,14 @@ from transformers import GPT2Model, GPT2Config, BertConfig, BertModel, T5Config,
 from transformers import DecisionTransformerModel, Wav2Vec2Model, Data2VecAudioModel, Data2VecTextModel
 from transformers import HubertForSequenceClassification, AutoModel, ViTModel
 from transformers import PerceiverModel, Data2VecVisionModel, AutoConfig
+import copy
 
-from embedding import EmbeddingLayer, PerceiverMapping, LinearMapping
+from embedding import EmbeddingLayer, PerceiverMapping, LinearMapping, IdentityMapping
 from augmentations import mixup_data
 
-from encoder import BERT, Informer, InformerConfigs
-from head import LinearHead, RNNClassificationHead, NSPHead, MLPHead, TransformerHead, IdentityHead
-from tools import LambdaLayer
+from head import LinearHead, RNNClassificationHead, NSPHead, MLPHead, TransformerHead, IdentityHead, NextActionsHead, ClassificationHead
+from tools import LambdaLayer, calculate_embedding_size
+from adapter_transformers import AutoAdapterModel
 
 # sys.path.append('/home/jovyan/romashka/perceiver-pytorch')
 
@@ -44,45 +45,42 @@ config_names = { 'decision-transformer': 'edbeeching/decision-transformer-gym-ho
     'gpt2/medium': 'gpt2-medium',
     'gpt2/large': 'gpt2-large',
     'gpt2/xl': 'gpt2-xl',
-    'vit/base': 'google/vit-base-patch16-224',
-    'vit/large': 'google/vit-large-patch16-224',
+    'vit-mae/base': 'facebook/vit-mae-base',
+    'vit-mae/large': 'facebook/vit-mae-large',
+    'vit-mae/huge': 'facebook/vit-mae-huge',
     'videomae/base': "MCG-NJU/videomae-base",
     'videomae/large': "MCG-NJU/videomae-large",
     'data2vec-vision/base': 'facebook/data2vec-vision-base',
     'data2vec-vision/large': 'facebook/data2vec-vision-large',
-    'graphcodebert': 'microsoft/graphcodebert-base'
+    'graphcodebert': 'microsoft/graphcodebert-base',
+    'whisper/tiny':'openai/whisper-tiny',
+    'whisper/small':'openai/whisper-small',
+    'whisper/medium':'openai/whisper-medium',
+    'whisper/large': 'openai/whisper-large',
+    's2t/small': 'facebook/s2t-small-librispeech-asr',
+    's2t/medium': 'facebook/s2t-medium-librispeech-asr',
+    's2t/large': 'facebook/s2t-large-librispeech-asr',
 }
 
-static_embedding_maps = {
-    'decision-transformer': 128,
-    'wav2vec2/large': 1024,
-    'wav2vec2/base': 768,
-    'data2vec-audio/base': 768,
-    'data2vec-audio/large': 1024,
-    'data2vec-text/base': 768,
-    'data2vec-text/large': 1024,
-    'hubert/base': 768,
-    'hubert/large': 1024,
-    'hubert/xlarge': 1280,
-    'bert/base': 768,
-    'bert/large': 1024,
-    't5/small': 512,
-    't5/base': 768,
-    't5/large': 1024,
-    'gpt2/base': 768,
-    'gpt2/medium': 1024,
-    'gpt2/large': 1280,
-    'gpt2/xl': 1600,
-}
-seq_embedding_maps = {
-    'vit/base': 768,
-    'vit/large': 1024,
-    'videomae/base': 768,
-    'videomae/large': 1024,
-    'data2vec-vision/base': 768,
-    'data2vec-vision/large': 1024,
-    'graphcodebert': 768
-}
+static_embedding_maps = [
+    'decision-transformer',
+    'wav2vec2',
+    'data2vec-audio',
+    'data2vec-text',
+    'hubert',
+    'bert',
+    't5',
+    'gpt2',
+    'whisper',
+    's2t',
+]
+
+seq_embedding_maps = [
+    'vit-mae',
+    'videomae',
+    'data2vec-vision',
+    'graphcodebert'
+]
 
 class WrapVisionModel(nn.Module):
     def __init__(self, process,  encoder):
@@ -105,10 +103,10 @@ class TransactionsModel(nn.Module):
                  meta_features=None,
                  time_embedding=None,
                  head_type='linear',
-                 encoder_type='bert',
+                 encoder_type='gpt2/base',
                  add_token='before',
                  num_layers=6, 
-                 dropout=0.1,
+                 embedding_dropout=0.0,
                  cutmix=False,
                  mixup=False,
                  emb_mult=1,
@@ -127,51 +125,31 @@ class TransactionsModel(nn.Module):
                                         meta_embedding_projections,
                                         meta_features,
                                         time_embedding,
-                                        dropout=dropout)
+                                        dropout=embedding_dropout)
         inp_size = self.embedding.get_embedding_size()
-        
-        
-        
-        if hidden_size is not None:
-            self.mapping_embedding = LinearMapping(inp_size, hidden_size)
             
-        elif encoder_type in static_embedding_maps: 
-            hidden_size = static_embedding_maps[encoder_type]
-            self.mapping_embedding = LinearMapping(inp_size, hidden_size)
-        
-        elif encoder_type in seq_embedding_maps:
-            hidden_size = seq_embedding_maps[encoder_type]
-            num_latents=16
-            if encoder_type == 'data2vec-vision/large' or encoder_type == 'data2vec-vision/base':
-                num_latents = 196
-                
-            elif encoder_type == 'graphcodebert':
-                num_latents = 10
-                
-            self.mapping_embedding = PerceiverMapping(inp_size, hidden_size, num_latents)
-        
-        else:
-            hidden_size = inp_size
-            self.mapping_embedding = nn.Identity()
-            
-        
         config_name = config_names[encoder_type]
         encoder_type, encoder_size = encoder_type.split('/')
         
         self.add_token = add_token
         self.head_type = head_type
         self.encoder_type = encoder_type
-        self.cls_token = nn.Parameter(torch.randn(1, 1, hidden_size))
         
         if pretrained:
-            model = AutoModel.from_pretrained(config_name)
+            if adapters:
+                model = AutoAdapterModel.from_pretrained(config_name)
+            else:
+                model = AutoModel.from_pretrained(config_name)
         else:
             config = AutoConfig.from_pretrained(config_name)
             if config_name == 'bert-base-uncased' or config_name == 'bert-large-uncased':
                 config.update_from_string('max_position_embeddings=1024')
-            model  = AutoModel.from_config(config)
-            
-
+                
+            if adapters:
+                model = AutoAdapterModel.from_config(config)
+            else:
+                model  = AutoModel.from_config(config)
+        
         if encoder_type == 'mybert':
             self.encoder = BERT(hidden_size, heads=2*emb_mult, num_layers=num_layers, dropout=dropout, layer_norm_eps=1e-7, rel_pos_embs=rel_pos_embs)
         
@@ -218,16 +196,43 @@ class TransactionsModel(nn.Module):
             self.encoder = model.hubert.encoder
             self.encoder.pos_conv_embed = nn.Identity()
         
-        elif encoder_type in ['video-mae', 'vit-base',  'data2vec-vision',  'graphcodebert']:
+        elif encoder_type in ['videomae', 'vit-base',  'data2vec-vision',  'graphcodebert', 'vit-mae']:
             self.encoder = model.encoder
                 
         elif encoder_type == 'perceiver-vision':
             self.encoder = PerceiverModel.from_pretrained("deepmind/vision-perceiver-fourier")
+        elif encoder_type in ['whisper', 's2t']:
+            self.encoder = model.decoder
+            self.encoder.embed_positions = LambdaLayer(lambda x: 0)
         
         else:
             raise NotImplementedError("Incorrect model name")
 
             
+        if hidden_size is not None:
+            self.mapping_embedding = LinearMapping(inp_size, hidden_size)
+            
+        elif encoder_type in static_embedding_maps: 
+            hidden_size = calculate_embedding_size(model)
+            self.mapping_embedding = LinearMapping(inp_size, hidden_size)
+        
+        elif encoder_type in seq_embedding_maps:
+            hidden_size = calculate_embedding_size(model)
+            num_latents=16
+            if encoder_type == 'data2vec-vision/large' or encoder_type == 'data2vec-vision/base':
+                num_latents = 196
+                
+            elif encoder_type == 'graphcodebert':
+                num_latents = 10
+                
+            self.mapping_embedding = PerceiverMapping(inp_size, hidden_size, num_latents)
+        
+        else:
+            hidden_size = inp_size
+            self.mapping_embedding = IdentityMapping()
+            
+        self.cls_token = nn.Parameter(torch.randn(1, 1, hidden_size))
+        
             
         if head_type == 'linear':
             self.head = LinearHead(hidden_size)
@@ -241,6 +246,10 @@ class TransactionsModel(nn.Module):
             self.head = IdentityHead()
         elif head_type == 'next':
             self.head = NSPHead(hidden_size, cat_embedding_projections, num_embedding_projections)
+        elif head_type == 'next_time':
+            self.head = NextActionsHead(hidden_size)
+        elif head_type == 'product':
+            self.head = ClassificationHead(hidden_size, 5)
         else:
             raise NotImplementedError
 
@@ -259,7 +268,7 @@ class TransactionsModel(nn.Module):
         else:
             embedding = embeds
         
-        if self.head_type != 'next':
+        if self.head_type != 'next' or self.head_type != 'next_time':
             if self.add_token == 'before':
                 cls_token = self.cls_token.repeat(batch_size, 1, 1)
                 embedding = torch.cat([embedding, cls_token], dim=1)
@@ -267,8 +276,9 @@ class TransactionsModel(nn.Module):
                 cls_token_mask = torch.ones(batch_size, 1, dtype=bool, device=mask.device)
                 mask = torch.cat([mask, cls_token_mask], dim=1)
         
-        if self.encoder_type in ['gpt2', 'decision-transformer', 'bert']:
+        if self.encoder_type in ['gpt2', 'decision-transformer', 'bert',  's2t', 'whisper']:
             x = self.encoder(inputs_embeds=embedding, attention_mask=mask).last_hidden_state
+            
         elif self.encoder_type == 't5':
             x = self.encoder(inputs_embeds=embedding, decoder_inputs_embeds=embedding, attention_mask=mask).last_hidden_state
         
@@ -285,7 +295,7 @@ class TransactionsModel(nn.Module):
         elif self.encoder_type in ['wav2vec2', 'data2vec-audio', 'hubert']:
             x = self.encoder(embedding, attention_mask=mask).last_hidden_state
             
-        elif self.encoder_type in ['vit-base', 'video-mae', 'data2vec-vision', 'graphcodebert']:
+        elif self.encoder_type in ['vit-base', 'videomae', 'data2vec-vision', 'graphcodebert', 'vit-mae']:
             x = self.encoder(embedding).last_hidden_state
         else:
             x = self.encoder(embedding, mask)
