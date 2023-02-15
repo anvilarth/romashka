@@ -200,7 +200,7 @@ def eval_model(model, dataloader, epoch_num, task='default', data='vtb', batch_s
                 log_dict[start + 'code_precision'] += np.sum(prs, axis=0)
                 log_dict[start + 'code_recall'] += np.sum(recalls, axis=0)
                 
-                num_transactions = mask.sum(1)
+                num_transactions = padding_mask.sum(1)
                 masked_amnt = (abs(output[0].squeeze() - all_amnt_transactions) * padding_mask).sum(1) / num_transactions # cat_feat x bs
                 masked_num = (abs(output[1].squeeze() - all_num_transactions) * padding_mask).sum(1) / num_transactions
                 
