@@ -234,8 +234,7 @@ def eval_model(model, dataloader, epoch_num, task='default', data='vtb', batch_s
             log_dict[elem] /= num_objects
             
     else:
-        
-        for key in num_features_names:
+        for key in num_features_names + cat_features_names:
             log_dict[start + key] /= num_objects
         
         if task == 'next_cat_feature':
