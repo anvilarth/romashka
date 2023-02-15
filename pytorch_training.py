@@ -231,7 +231,7 @@ def eval_model(model, dataloader, epoch_num, task='default', data='vtb', batch_s
         it_list.remove('epoch_num')
         
         for elem in it_list:
-            log_dict[it_list] /= num_objects
+            log_dict[elem] /= num_objects
             
     else:
         
