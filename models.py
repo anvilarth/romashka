@@ -111,7 +111,6 @@ class TransactionsModel(nn.Module):
                  mixup=False,
                  emb_mult=1,
                  rel_pos_embs=False,
-                 embedding_dim_size=None,
                  pretrained=False,
                  adapters=False,
                  hidden_size=None,
@@ -128,6 +127,7 @@ class TransactionsModel(nn.Module):
                                         dropout=embedding_dropout)
         inp_size = self.embedding.get_embedding_size()
         config_name = None
+        output_size = None
         
         if encoder_type in config_names:
             config_name = config_names[encoder_type]
@@ -166,6 +166,8 @@ class TransactionsModel(nn.Module):
                 hidden_size = inp_size
                 
             self.encoder = nn.GRU(inp_size, hidden_size, batch_first=True)
+            output_size = hidden_size
+            hidden_size = None
         
         elif encoder_type == 'bert':
             self.encoder = model
@@ -234,25 +236,30 @@ class TransactionsModel(nn.Module):
             hidden_size = inp_size
             self.mapping_embedding = IdentityMapping()
             
+        print("USING", encoder_type)
+            
         self.cls_token = nn.Parameter(torch.randn(1, 1, hidden_size))
+        
+        if output_size is None:
+            output_size = hidden_size
         
             
         if head_type == 'linear':
-            self.head = LinearHead(hidden_size)
+            self.head = LinearHead(output_size)
         elif head_type == 'rnn':
-            self.head = RNNClassificationHead(hidden_size)
+            self.head = RNNClassificationHead(output_size)
         elif head_type == 'mlp':
-            self.head = MLPHead(hidden_size)
+            self.head = MLPHead(output_size)
         elif head_type == 'transformer':
-            self.head = TransformerHead(hidden_size)
+            self.head = TransformerHead(output_size)
         elif head_type == 'id':
             self.head = IdentityHead()
         elif head_type == 'next':
-            self.head = NSPHead(hidden_size, cat_embedding_projections, num_embedding_projections)
+            self.head = NSPHead(output_size, cat_embedding_projections, num_embedding_projections)
         elif head_type == 'next_time':
-            self.head = NextActionsHead(hidden_size)
+            self.head = NextActionsHead(output_size)
         elif head_type == 'product':
-            self.head = ClassificationHead(hidden_size, 5)
+            self.head = ClassificationHead(output_size, 5)
         else:
             raise NotImplementedError
 

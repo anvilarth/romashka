@@ -32,7 +32,6 @@ from data import  TransactionClickStreamDataset, TransactionClickStreamDatasetCl
 
 from adapter_transformers import UniPELTConfig, AdapterConfig
 
-
 os.environ['WANDB_API_KEY'] = 'e1847d5866973dab40f29db28eefb77987d4b66a'
 
 def loading_ptls_model(ckpt_dict):
@@ -85,7 +84,7 @@ parser.add_argument('--task', type=str, default='next')
 parser.add_argument('--batch_size', type=int, default=128)
 parser.add_argument('--focus_feature', type=str, default=None)
 parser.add_argument('--add_token', type=str, default='before')
-parser.add_argument('--embedding_dim_size', type=int, default=None)
+parser.add_argument('--hidden_size', type=int, default=None)
 parser.add_argument('--pretrained', action='store_true', default=False)
 parser.add_argument('--run_name', type=str, default='')
 parser.add_argument('--model_source', type=str, default='scratch')
@@ -236,7 +235,7 @@ if args.model == 'transformer':
                               alpha=args.alpha,
                               rel_pos_embs=args.rel_pos_embs,
                               add_token=args.add_token,
-                              embedding_dim_size=args.embedding_dim_size,
+                              hidden_size=args.hidden_size,
                               pretrained=args.pretrained,
                               adapters=args.adapters,
                              )
@@ -275,7 +274,6 @@ if args.model == 'transformer':
                     adapter_parameters.append(param)
                 else:
                     standard_parameters.append(param)
-            
                     
         
         model.cls_token.requires_grad_(True)
@@ -395,3 +393,4 @@ for epoch in range(num_epochs):
         print(f'Epoch {epoch+1} completed')
 
 torch.save(model.state_dict(), checkpoint_dir + f'/final_model.ckpt')
+wandb.finish()

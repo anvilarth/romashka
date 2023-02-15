@@ -43,9 +43,9 @@ class NextTimeLoss(nn.Module):
         all_amnt_transactions, all_num_transactions, all_code_transactions, next_time_mask = trues
         loss_mask = next_time_mask & mask
 
-        l_amnt = self.num_criterion(amnt_out[:, :-1].squeeze(), all_amnt_transactions.squeeze(), loss_mask)
-        l_num = self.num_criterion(num_out[:, :-1].squeeze(), all_num_transactions.squeeze(), loss_mask)
-        l_need = (self.cat_criterion(need_out[:, :-1], all_code_transactions) * loss_mask.unsqueeze(-1)).sum()
+        l_amnt = self.num_criterion(amnt_out.squeeze(), all_amnt_transactions.squeeze(), loss_mask)
+        l_num = self.num_criterion(num_out.squeeze(), all_num_transactions.squeeze(), loss_mask)
+        l_need = (self.cat_criterion(need_out, all_code_transactions) * loss_mask.unsqueeze(-1)).sum()
         
         l_need /= loss_mask.sum()
 

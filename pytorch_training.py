@@ -109,8 +109,10 @@ def eval_model(model, dataloader, epoch_num, task='default', data='vtb', batch_s
         
     elif task == 'next' or task == 'next_num_feature' or task == 'next_cat_feature':
         log_dict = {start + elem: 0.0 for elem in num_features_names + cat_features_names}
-        acc = 0.0
         pred_err = 0.00
+        
+        preds = []
+        targets = [] 
         
     elif task == 'next_time':
         log_dict = {start + 'amnt': 0.0, start + 'num': 0.0}
@@ -131,15 +133,17 @@ def eval_model(model, dataloader, epoch_num, task='default', data='vtb', batch_s
                 preds.extend(output.cpu().numpy().flatten())
 
             elif task == 'next' or task == 'next_num_feature' or task == 'next_cat_feature':
-                targets = torch.stack(batch['cat_features'])
                 output = model(batch)
+                mask = batch['mask'][:, 1:]
                 
-                masked_acc = (not_masked_acc * mask).sum(axis=2)
-                num_transactions = mask.sum(1)
-                cat_tmp = (masked_acc / num_transactions).sum(1)
-
-                for i, name in enumerate(cat_features_names):
-                    log_dict[start + name] = cat_tmp[i]
+                cat_pred = list(map(lambda x: x.argmax(-1), output['cat_features']))
+                t_pred = torch.stack(cat_pred, dim=-1)
+                
+                t_targets = torch.stack(batch['cat_features'], dim=-1)[:, 1:][mask].cpu().numpy()
+                
+                preds.extend(t_pred[mask].cpu().numpy())
+                targets.extend(t_targets)
+                
 
 #                 not_masked_acc = (t_pred == targets[..., 1:])
                 
@@ -170,11 +174,11 @@ def eval_model(model, dataloader, epoch_num, task='default', data='vtb', batch_s
                 all_amnt_transactions, all_num_transactions, all_code_transactions, next_time_mask = trues
                 
                 code_preds = (torch.sigmoid(all_code_transactions) > 0.5).int()
-                cat_targets.extend(all_code_transactions.cpu().numpy())
-                cat_preds.extend(code_preds.cpu().numpy())
+                targets.extend(all_code_transactions.cpu().numpy())
+                preds.extend(code_preds.cpu().numpy())
                 
-                log_dict[start + 'amnt'] += (abs(output[0][:, :-1].squeeze() - all_amnt_transactions) * next_time_mask).mean(axis=1).sum().item()
-                log_dict[start + 'num'] += (abs(output[1][:, :-1].squeeze() - all_num_transactions) * next_time_mask).mean(axis=1).sum().item()
+                log_dict[start + 'amnt'] += (abs(output[0].squeeze() - all_amnt_transactions) * next_time_mask).mean(axis=1).sum().item()
+                log_dict[start + 'num'] += (abs(output[1].squeeze() - all_num_transactions) * next_time_mask).mean(axis=1).sum().item()
                 
 #                 pred = torch.tensor([(abs(output['num_features'][i].squeeze() - batch['num_features'][i][:, 1:]) / abs(output['num_features'][i].squeeze())).mean(1).mean(0) \
 #                         for i in range(len(batch['num_features']))])
@@ -199,15 +203,21 @@ def eval_model(model, dataloader, epoch_num, task='default', data='vtb', batch_s
         targets = np.concatenate(targets)
         preds = np.concatenate(preds)
         log_dict[start + 'code_f1'] = f1_score(targets, preds, average='weighted')
-        log_dict[start + 'code_precision'] = precision(targets, preds, average='weighted')
-        log_dict[start + 'code_recall'] = recall(targets, preds, average='weighted')
+        log_dict[start + 'code_precision'] = precision_score(targets, preds, average='weighted')
+        log_dict[start + 'code_recall'] = recall_score(targets, preds, average='weighted')
         
         log_dict[start + 'amnt'] /= num_objects
         log_dict[start + 'num'] /= num_objects
         
     else:
-        for key in log_dict:
-            log_dict[key] /= num_objects
+        targets = np.stack(targets)
+        preds = np.stack(preds)
+        
+        for i, feature in enumerate(cat_features_names):
+            log_dict[start + feature] = accuracy_score(targets[:, i], preds[:, i])
+            
+        for key in num_features_names:
+            log_dict[start + key] /= num_objects
         
         if task == 'next_cat_feature':
             feature_name = start + cat_features_names[cat_number]
