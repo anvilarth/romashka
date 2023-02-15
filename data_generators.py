@@ -16,8 +16,8 @@ num_features_indices = [transaction_features.index(x) for x in num_features_name
 cat_features_indices = [transaction_features.index(x) for x in cat_features_names]
 
 
-def batches_generator(list_of_paths, batch_size=32, shuffle=False, is_infinite=False,
-                      verbose=False, device=None, output_format='torch', is_train=True, min_seq_len=None):
+def batches_generator(list_of_paths, batch_size=32, shuffle=False, is_infinite=False, dry_run=False,
+                      verbose=False, device=None, output_format='torch', is_train=True, min_seq_len=None, max_seq_len=None, reduce_size=1.):
     """
     функция для создания батчей на вход для нейронной сети для моделей на keras и pytorch.
     так же может использоваться как функция на стадии инференса
@@ -45,6 +45,18 @@ def batches_generator(list_of_paths, batch_size=32, shuffle=False, is_infinite=F
 
             with open(path, 'rb') as f:
                 data = pickle.load(f)
+            
+            ind_list = []
+            for elem in data['targets']:
+                size = elem.shape[0]
+                inds = np.arange(int(size*reduce_size))
+                ind_list.append(inds)
+
+            for key in data:
+                for ind in range(len(ind_list)):
+                    data[key][ind] = data[key][ind][ind_list[ind]]
+            
+                
             padded_sequences, targets, products = data['padded_sequences'], data['targets'], data[
                 'products']
             app_ids = data['app_id']
@@ -65,6 +77,9 @@ def batches_generator(list_of_paths, batch_size=32, shuffle=False, is_infinite=F
                     target = targets[idx]
                 
                 for jdx in range(0, len(bucket), batch_size):
+                    if dry_run:
+                        yield None
+                        
                     batch_sequences = bucket[jdx: jdx + batch_size]
                     if is_train:
                         batch_targets = target[jdx: jdx + batch_size]
@@ -77,6 +92,9 @@ def batches_generator(list_of_paths, batch_size=32, shuffle=False, is_infinite=F
                     
                     if min_seq_len is not None:
                         if mask.shape[1] < min_seq_len:
+                            continue
+                    if max_seq_len is not None:
+                        if mask.shape[1] > max_seq_len:
                             continue
                     
                     if is_train:
