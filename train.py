@@ -338,9 +338,6 @@ else:
 print("OPTIMIZER DONE")
     
 if 'vtb' not in args.data:
-    # train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, shuffle=True,
-    #                                 device='cpu', is_train=True, output_format='torch')
-    
     fake_train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, shuffle=False, dry_run=True,
                                             device='cpu', is_train=True, output_format='torch',  reduce_size=args.reduce_size,
                                              max_seq_len=args.max_seq_len)

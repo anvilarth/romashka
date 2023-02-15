@@ -51,10 +51,14 @@ def train_epoch(model, optimizer, dataloader, task='default',
             batch_loss = loss_function(output, batch, num_weights=num_weights, cat_weights=cat_weights)
         
         elif task == 'next_time':
-            output = model(batch)
             trues = make_time_batch(batch)
-            next_time_mask = trues[-1]
-            batch_loss = loss_function(output, trues, mask=next_time_mask) 
+            padding_mask = trues[-1]
+            
+            if any(padding_mask.sum(1) == 0):
+                continue
+                
+            output = model(batch)
+            batch_loss = loss_function(output, trues, mask=padding_mask) 
         
         # elif task == 'product':
         #     output = model(batch)
@@ -115,9 +119,8 @@ def eval_model(model, dataloader, epoch_num, task='default', data='vtb', batch_s
         targets = [] 
         
     elif task == 'next_time':
-        log_dict = {start + 'amnt': 0.0, start + 'num': 0.0}
-        preds = []
-        targets = []
+        log_dict = {start + 'amnt': 0.0, start + 'num': 0.0, 
+                    start + 'code_f1': 0.0, start + 'code_recall': 0.0, start + 'code_precision': 0.0}
         
     log_dict['epoch_num'] = epoch_num
 
@@ -137,13 +140,16 @@ def eval_model(model, dataloader, epoch_num, task='default', data='vtb', batch_s
                 mask = batch['mask'][:, 1:]
                 
                 cat_pred = list(map(lambda x: x.argmax(-1), output['cat_features']))
-                t_pred = torch.stack(cat_pred, dim=-1)
+                t_pred = torch.stack(cat_pred)
+                t_targets = torch.stack(batch['cat_features'])[..., 1:]
                 
-                t_targets = torch.stack(batch['cat_features'], dim=-1)[:, 1:][mask].cpu().numpy()
-                
-                preds.extend(t_pred[mask].cpu().numpy())
-                targets.extend(t_targets)
-                
+                not_masked_acc = (t_pred == t_targets) # cat_feat x bs x seq_len
+                masked_acc = (not_masked_acc * mask).sum(axis=2) # cat_feat x bs
+                num_transactions = mask.sum(1)
+                cat_tmp = (masked_acc / num_transactions).sum(1)
+
+                for i, name in enumerate(cat_features_names):
+                    log_dict[start + name] += cat_tmp[i]
 
 #                 not_masked_acc = (t_pred == targets[..., 1:])
                 
@@ -166,19 +172,40 @@ def eval_model(model, dataloader, epoch_num, task='default', data='vtb', batch_s
                 num_tmp = [(abs(output['num_features'][i].squeeze() - batch['num_features'][i][:, 1:]) * mask).mean(axis=1).sum().item() for i in range(len(num_features_names))]
 
                 for i, name in enumerate(num_features_names):
-                    log_dict[start + 'amnt'] = num_tmp[i]
+                    log_dict[start + 'amnt'] += num_tmp[i]
             
             elif task == 'next_time':
-                output = model(batch)
+
                 trues = make_time_batch(batch)
-                all_amnt_transactions, all_num_transactions, all_code_transactions, next_time_mask = trues
+                all_amnt_transactions, all_num_transactions, all_code_transactions, padding_mask = trues
                 
-                code_preds = (torch.sigmoid(all_code_transactions) > 0.5).int()
-                targets.extend(all_code_transactions.cpu().numpy())
-                preds.extend(code_preds.cpu().numpy())
+                if any(padding_mask.sum(1) == 0):
+                    continue
                 
-                log_dict[start + 'amnt'] += (abs(output[0].squeeze() - all_amnt_transactions) * next_time_mask).mean(axis=1).sum().item()
-                log_dict[start + 'num'] += (abs(output[1].squeeze() - all_num_transactions) * next_time_mask).mean(axis=1).sum().item()
+                output = model(batch)
+                code_preds = (torch.sigmoid(output[-1]) > 0.5).int()
+                
+                f1s = []
+                prs = []
+                recalls = []
+
+                for i in range(batch['mask'].shape[0]):
+                    indices = torch.where(padding_mask[i] == 1)[0]
+                    
+                    f1s.append(f1_score(code_preds[i][indices].cpu(), all_code_transactions[i][indices].cpu(), average=None, zero_division=1))
+                    prs.append(precision_score(code_preds[i][indices].cpu(), all_code_transactions[i][indices].cpu(), average=None, zero_division=1))
+                    recalls.append(recall_score(code_preds[i][indices].cpu(), all_code_transactions[i][indices].cpu(), average=None, zero_division=1))
+                
+                log_dict[start + 'code_f1'] +=  np.sum(f1s, axis=0)
+                log_dict[start + 'code_precision'] += np.sum(prs, axis=0)
+                log_dict[start + 'code_recall'] += np.sum(recalls, axis=0)
+                
+                num_transactions = mask.sum(1)
+                masked_amnt = (abs(output[0].squeeze() - all_amnt_transactions) * padding_mask).sum(1) / num_transactions # cat_feat x bs
+                masked_num = (abs(output[1].squeeze() - all_num_transactions) * padding_mask).sum(1) / num_transactions
+                
+                log_dict[start + 'amnt'] += masked_amnt.sum().item()
+                log_dict[start + 'num'] += masked_num.sum().item()
                 
 #                 pred = torch.tensor([(abs(output['num_features'][i].squeeze() - batch['num_features'][i][:, 1:]) / abs(output['num_features'][i].squeeze())).mean(1).mean(0) \
 #                         for i in range(len(batch['num_features']))])
@@ -200,22 +227,14 @@ def eval_model(model, dataloader, epoch_num, task='default', data='vtb', batch_s
     #     log_dict[start + 'acc'] = accuracy_score(targets, preds)
         
     elif task == 'next_time':
-        targets = np.concatenate(targets)
-        preds = np.concatenate(preds)
-        log_dict[start + 'code_f1'] = f1_score(targets, preds, average='weighted')
-        log_dict[start + 'code_precision'] = precision_score(targets, preds, average='weighted')
-        log_dict[start + 'code_recall'] = recall_score(targets, preds, average='weighted')
+        it_list = list(log_dict.keys())
+        it_list.remove('epoch_num')
         
-        log_dict[start + 'amnt'] /= num_objects
-        log_dict[start + 'num'] /= num_objects
-        
-    else:
-        targets = np.stack(targets)
-        preds = np.stack(preds)
-        
-        for i, feature in enumerate(cat_features_names):
-            log_dict[start + feature] = accuracy_score(targets[:, i], preds[:, i])
+        for elem in it_list:
+            log_dict[it_list] /= num_objects
             
+    else:
+        
         for key in num_features_names:
             log_dict[start + key] /= num_objects
         

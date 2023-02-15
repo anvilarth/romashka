@@ -108,8 +108,8 @@ def make_time_batch(batch, number_days=30):
     device = batch['mask'].device
     time_tr = batch['num_features'][1] * 365
     
-    pairwise_difference_mask = abs(time_tr.unsqueeze(1) - time_tr.unsqueeze(2)) <= 7
-    last_elements_mask = time_tr >= 7
+    pairwise_difference_mask = abs(time_tr.unsqueeze(1) - time_tr.unsqueeze(2)) <= number_days
+    last_elements_mask = time_tr >= number_days
     
     last_elements_repeated = last_elements_mask.unsqueeze(2).repeat(1, 1, time_tr.shape[1])
     tmp_mask = pairwise_difference_mask * last_elements_repeated
@@ -132,7 +132,7 @@ def make_time_batch(batch, number_days=30):
     
     next_time_mask = torch.any(tmp_mask, dim=2).long()
     
-    return all_amnt_transactions,  all_num_transactions, all_code_transactions, next_time_mask
+    return all_amnt_transactions,  all_num_transactions, all_code_transactions, last_elements_mask.long()
 
 
 def next_time_batch(batch, number_days=30):
