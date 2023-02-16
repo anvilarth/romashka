@@ -93,6 +93,8 @@ parser.add_argument('--max_seq_len', type=int, default=None)
 parser.add_argument('--num_number', type=int, default=None)
 parser.add_argument('--cat_number', type=int, default=None)
 parser.add_argument('--val_reduce_size', type=float, default=1.0)
+parser.add_argument('--val_steps', type=float, default=2.0)
+parser.add_argument('--features_list', nargs='+', type=str, default=num_features_names+cat_features_names)
 
 args_config, remaining = config_parser.parse_known_args()
 if args_config.config:
@@ -103,7 +105,7 @@ if args_config.config:
 # defaults will have been overridden if config file specified.
 args = parser.parse_args(remaining)
 
-logging_freq = int((128 / args.batch_size) * args.loss_freq * args.reduce_size)
+logging_freq = max(int((128 / args.batch_size) * args.loss_freq * args.reduce_size), 10)
 
 rnd_prt = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(12))
 
@@ -353,41 +355,60 @@ else:
     num_training_steps = num_epochs * epoch_len
     warmup_steps = int(1e2)
     
+val_steps = int(args.val_steps * epoch_len)
+    
 if args.scheduler:
     scheduler = get_linear_schedule_with_warmup(optimizer, warmup_steps, num_training_steps)
     print("USING scheduler warmup_steps", warmup_steps)
 else:
     scheduler = None
     
+if args.task == 'next':
+    num_feature_ids = []
+    cat_feature_ids = []
+
+    for elem in args.features_list:
+        if elem in num_features_names:
+            num_feature_ids.append(num_features_names.index(elem))
+
+        elif elem in cat_features_names:
+            cat_feature_ids.append(cat_features_names.index(elem))
+
+        else:
+            raise ValueError("Incorrect feature name")
+    
+if args.data != 'alfa':
+    val_dataloader = DataLoader(dataset_val, batch_size=train_batch_size, collate_fn=dataset_val.collate_fn, shuffle=False)
+    train_dataloader = DataLoader(dataset_train, batch_size=val_batch_size, collate_fn=dataset_train.collate_fn, shuffle=True)
+    
 for epoch in range(num_epochs):
     print(f'Starting epoch {epoch+1}')
     if args.data == 'alfa':
         train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, shuffle=True,
                                             device=device, is_train=True, output_format='torch', reduce_size=args.reduce_size)
-    else:
-        train_dataloader = DataLoader(dataset_train, batch_size=train_batch_size, collate_fn=dataset_train.collate_fn, shuffle=True)
+        val_dataloader = batches_generator(dataset_val, batch_size=val_batch_size, device=device, is_train=True, output_format='torch', reduce_size=args.val_reduce_size)
 
-    train_epoch(model, optimizer, train_dataloader, task=args.task, print_loss_every_n_batches=logging_freq, device=device,
-                scheduler=scheduler, cat_weights=cat_weights, num_weights=num_weights, num_number=args.num_number, cat_number=args.cat_number)
+    train_epoch(model, optimizer, train_dataloader, val_dataloader, task=args.task, print_loss_every_n_batches=logging_freq, device=device, 
+                scheduler=scheduler, cat_weights=cat_weights, num_weights=num_weights, val_steps=val_steps, num_feature_ids=num_feature_ids, cat_feature_ids=cat_feature_ids)
     
     if args.data == 'alfa':
         val_dataloader = batches_generator(dataset_val, batch_size=val_batch_size, device=device, is_train=True, output_format='torch', reduce_size=args.val_reduce_size)
-        train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, device=device, is_train=True, output_format='torch', reduce_size=args.reduce_size)
-    
-    else:
-        val_dataloader = DataLoader(dataset_val, batch_size=train_batch_size, collate_fn=dataset_val.collate_fn, shuffle=False)
-        train_dataloader = DataLoader(dataset_train, batch_size=val_batch_size, collate_fn=dataset_train.collate_fn, shuffle=False)
-    
+        train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, device=device, is_train=True, output_format='torch', reduce_size=args.reduce_size)    
 
-    eval_model(model, val_dataloader, epoch, task=args.task, data=args.data, device=device, train=False, num_number=args.num_number, cat_number=args.cat_number)    
-    eval_model(model, train_dataloader, epoch, task=args.task, data=args.data, device=device, train=True, num_number=args.num_number, cat_number=args.cat_number)
+    val_log_dict = eval_model(model, val_dataloader, task=args.task, data=args.data, device=device, train=False, num_feature_ids=num_feature_ids, cat_feature_ids=cat_feature_ids)    
+    _ = eval_model(model, train_dataloader, task=args.task, data=args.data, device=device, train=True, num_feature_ids=num_feature_ids, cat_feature_ids=cat_feature_ids)
     
      
     if epoch % 5 == 0:
         torch.save(model.state_dict(), checkpoint_dir + f'/epoch_{epoch}.ckpt')
     
-    if args.task == 'default':
-        print(f'Epoch {epoch+1} completed')
+
+    print(f'Epoch {epoch+1} completed')
 
 torch.save(model.state_dict(), checkpoint_dir + f'/final_model.ckpt')
+
+for key in val_log_dict:
+    val_log_dict['final_' + key] = val_log_dict[key]
+    del val_log_dict[key]
+
 wandb.finish()

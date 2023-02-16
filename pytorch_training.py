@@ -15,9 +15,12 @@ from torch.utils.data import DataLoader
 from tools import make_time_batch
 
 
-def train_epoch(model, optimizer, dataloader, task='default',
+def train_epoch(model, optimizer, train_dataloader, val_dataloader, task='default',
                 print_loss_every_n_batches=500, device=None, scheduler=None,
-                cat_weights=None, num_weights=None, num_number=None, cat_number=None):
+                cat_weights=None, num_weights=None, num_feature_ids=None, cat_feature_ids=None, val_steps=None):
+    
+    cat_feature_ids = [] if cat_feature_ids is None else cat_feature_ids
+    num_feature_ids = [] if num_feature_ids is None else num_feature_ids
     
     if task == 'default':
         loss_function = nn.BCEWithLogitsLoss()
@@ -27,10 +30,10 @@ def train_epoch(model, optimizer, dataloader, task='default',
         loss_function = NextTimeLoss()
     # elif task == 'product':
     #     loss_function = nn.CrossEntropyLoss()
-    elif task == 'next_num_feature':
-        loss_function = NextNumericalFeatureLoss(num_number)
-    elif task == 'next_cat_feature':
-        loss_function = NextCatFeatureLoss(cat_number)
+    # elif task == 'next_num_feature':
+    #     loss_function = NextNumericalFeatureLoss(num_number)
+    # elif task == 'next_cat_feature':
+    #     loss_function = NextCatFeatureLoss(cat_number)
     else:
         raise NotImplementedError
         
@@ -40,15 +43,15 @@ def train_epoch(model, optimizer, dataloader, task='default',
 
     model.train()
 
-    for batch in tqdm(dataloader, desc='Training'):
+    for batch_idx, batch in tqdm(enumerate(train_dataloader), desc='Training'):
         
         if task == 'default':
             output = torch.flatten(model(batch))
             batch_loss = loss_function(output, batch['label'].float())
             
-        elif task == 'next' or task == 'next_num_feature' or task == 'next_cat_feature':
+        elif task == 'next':
             output = model(batch)
-            batch_loss = loss_function(output, batch, num_weights=num_weights, cat_weights=cat_weights)
+            batch_loss = loss_function(output, batch, num_weights=num_weights, cat_weights=cat_weights, cat_feature_ids=cat_feature_ids, num_feature_ids=num_feature_ids)
         
         elif task == 'next_time':
             trues = make_time_batch(batch)
@@ -82,11 +85,15 @@ def train_epoch(model, optimizer, dataloader, task='default',
             wandb.log({'train_loss': batch_loss.item()})
         
         num_batches += 1
+        
     
     print(f'Training loss after epoch: {running_loss / num_batches}', end='\r')
-    
+    if val_steps is not None:
+        if batch_idx % val_steps == 0 and batch_idx != 0:
+            eval_model(model, val_dataloader)
 
-def eval_model(model, dataloader, epoch_num, task='default', data='vtb', batch_size=32, device=None, process_numerical=False, train=False, num_number=None, cat_number=None) -> float:
+
+def eval_model(model, dataloader, task='default', data='vtb', batch_size=32, device=None, process_numerical=False, train=False, num_feature_ids=None, cat_feature_ids=None) -> float:
     """
     функция для оценки качества модели на отложенной выборке, возвращает roc-auc на валидационной
     выборке
@@ -97,6 +104,9 @@ def eval_model(model, dataloader, epoch_num, task='default', data='vtb', batch_s
     :return: val roc-auc score
     """
     model.eval()
+    
+    cat_feature_ids = [] if cat_feature_ids is None else cat_feature_ids
+    num_feature_ids = [] if num_feature_ids is None else num_feature_ids
     
     start = 'train_' if train else 'val_'
     num_objects = 0
@@ -111,18 +121,18 @@ def eval_model(model, dataloader, epoch_num, task='default', data='vtb', batch_s
     #     preds = []
     #     targets = []
         
-    elif task == 'next' or task == 'next_num_feature' or task == 'next_cat_feature':
-        log_dict = {start + elem: 0.0 for elem in num_features_names + cat_features_names}
-        pred_err = 0.00
+    elif task == 'next':
+        log_dict = {}
+        for elem in num_feature_ids:
+            log_dict = {start + num_features_names[elem]: 0.0}
         
-        preds = []
-        targets = [] 
+        for elem in cat_feature_ids:
+            log_dict = {start + cat_features_names[elem]: 0.0}
+            
         
     elif task == 'next_time':
         log_dict = {start + 'amnt': 0.0, start + 'num': 0.0, 
                     start + 'code_f1': 0.0, start + 'code_recall': 0.0, start + 'code_precision': 0.0}
-        
-    log_dict['epoch_num'] = epoch_num
 
     with torch.no_grad():
         for batch in tqdm(dataloader, desc='Evaluating model'):
@@ -135,7 +145,7 @@ def eval_model(model, dataloader, epoch_num, task='default', data='vtb', batch_s
                     
                 preds.extend(output.cpu().numpy().flatten())
 
-            elif task == 'next' or task == 'next_num_feature' or task == 'next_cat_feature':
+            elif task == 'next':
                 output = model(batch)
                 mask = batch['mask'][:, 1:]
                 
@@ -148,8 +158,8 @@ def eval_model(model, dataloader, epoch_num, task='default', data='vtb', batch_s
                 num_transactions = mask.sum(1)
                 cat_tmp = (masked_acc / num_transactions).sum(1)
 
-                for i, name in enumerate(cat_features_names):
-                    log_dict[start + name] += cat_tmp[i]
+                for i in cat_feature_ids:
+                    log_dict[start + cat_features_names[i]] += cat_tmp[i]
 
 #                 not_masked_acc = (t_pred == targets[..., 1:])
                 
@@ -171,8 +181,8 @@ def eval_model(model, dataloader, epoch_num, task='default', data='vtb', batch_s
               
                 num_tmp = [(abs(output['num_features'][i].squeeze() - batch['num_features'][i][:, 1:]) * mask).mean(axis=1).sum().item() for i in range(len(num_features_names))]
 
-                for i, name in enumerate(num_features_names):
-                    log_dict[start + 'amnt'] += num_tmp[i]
+                for i in num_feature_ids:
+                    log_dict[start + num_features_names[i]] += num_tmp[i]
             
             elif task == 'next_time':
 
@@ -228,21 +238,16 @@ def eval_model(model, dataloader, epoch_num, task='default', data='vtb', batch_s
         
     elif task == 'next_time':
         it_list = list(log_dict.keys())
-        it_list.remove('epoch_num')
         
         for elem in it_list:
             log_dict[elem] /= num_objects
             
     else:
-        for key in num_features_names + cat_features_names:
-            log_dict[start + key] /= num_objects
+        for elem in num_feature_ids:
+            log_dict[start + num_features_names[elem]] /= num_objects
         
-        if task == 'next_cat_feature':
-            feature_name = start + cat_features_names[cat_number]
-            log_dict = {feature_name: log_dict[feature_name]}
-        
-        elif task == 'next_num_feature':
-            feature_name = start + num_features_names[num_number]
-            log_dict = {feature_name: log_dict[feature_name]}
+        for elem in cat_feature_ids:
+            log_dict[start + cat_features_names[elem]] /= num_objects
                         
     wandb.log(log_dict)
+    return log_dict
