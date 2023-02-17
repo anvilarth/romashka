@@ -56,7 +56,7 @@ config_parser.add_argument('-c', '--config', default='', type=str, metavar='FILE
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--model', type=str, default='transformer')
-parser.add_argument('--num_layers', type=int, default=6)
+parser.add_argument('--num_layers', type=int, default=1)
 parser.add_argument('--mixup', action='store_true')
 parser.add_argument('--optimizer', type=str, default='adam')
 parser.add_argument('--lr', type=float, default=1e-4)
