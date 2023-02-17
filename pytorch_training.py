@@ -123,11 +123,11 @@ def eval_model(model, dataloader, task='default', data='vtb', batch_size=32, dev
         
     elif task == 'next':
         log_dict = {}
-        for i in num_feature_ids:
-            log_dict = {start + num_features_names[i]: 0.0}
+        for j in num_feature_ids:
+            log_dict[start + num_features_names[j]] = 0.0
         
-        for i in cat_feature_ids:
-            log_dict = {start + cat_features_names[i]: 0.0}
+        for j in cat_feature_ids:
+            log_dict[start + cat_features_names[j]] = 0.0
             
         
     elif task == 'next_time':
@@ -242,12 +242,15 @@ def eval_model(model, dataloader, task='default', data='vtb', batch_size=32, dev
         for elem in it_list:
             log_dict[elem] /= num_objects
             
-    else:
+    elif task == 'next':
         for i in num_feature_ids:
             log_dict[start + num_features_names[i]] /= num_objects
         
         for i in cat_feature_ids:
             log_dict[start + cat_features_names[i]] /= num_objects
-                        
+                       
+    else:
+        raise NotImplementedError
+    
     wandb.log(log_dict)
     return log_dict

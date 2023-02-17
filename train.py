@@ -410,5 +410,7 @@ torch.save(model.state_dict(), checkpoint_dir + f'/final_model.ckpt')
 for key in val_log_dict:
     val_log_dict['final_' + key] = val_log_dict[key]
     del val_log_dict[key]
+    
+wandb.log(val_log_dict)
 
 wandb.finish()
