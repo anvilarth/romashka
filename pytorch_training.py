@@ -12,7 +12,7 @@ from data_generators import batches_generator, transaction_features, num_feature
 from losses import NextTransactionLoss, MaskedMSELoss, NextTimeLoss, NextNumericalFeatureLoss
 from torch.utils.data import DataLoader
 
-from tools import make_time_batch
+from tools import make_time_batch, masked_mean
 
 
 def train_epoch(model, optimizer, train_dataloader, val_dataloader, task='default',
@@ -129,6 +129,9 @@ def eval_model(model, dataloader, task='default', data='vtb', batch_size=32, dev
         for j in cat_feature_ids:
             log_dict[start + cat_features_names[j]] = 0.0
             
+        for i in [1, 3, 6, 12, 24, 72, 168]:
+            log_dict[start + f'interval_{i}_hours'] = 0.0
+            
         
     elif task == 'next_time':
         log_dict = {start + 'amnt': 0.0, start + 'num': 0.0, 
@@ -179,10 +182,17 @@ def eval_model(model, dataloader, task='default', data='vtb', batch_size=32, dev
 #                     acc += (not_masked_acc * mask).sum(axis=(1, 2))
 #                     num_batches += mask.sum()
               
-                num_tmp = [(abs(output['num_features'][i].squeeze() - batch['num_features'][i][:, 1:]) * mask).mean(axis=1).sum().item() for i in range(len(num_features_names))]
+                
+                num_tmp = [masked_mean(abs(output['num_features'][i].squeeze() - batch['num_features'][i][:, 1:]), mask).sum().item() for i in range(len(num_features_names))]
 
                 for i in num_feature_ids:
                     log_dict[start + num_features_names[i]] += num_tmp[i]
+                    
+                    
+                for i in [1, 3, 6, 12, 24, 72, 168]:
+                    tmp_interval = torch.isclose(output['num_features'][-1].squeeze(2)[:, 1:], batch['num_features'][-1][:, 1:-1], atol=i/95, rtol=0.0).float()
+                    tmp_interval_masked = masked_mean(tmp_interval, mask[:, 1:]).sum().item()
+                    log_dict[start + f'interval_{i}_hours'] += tmp_interval_masked
             
             elif task == 'next_time':
 
@@ -202,17 +212,16 @@ def eval_model(model, dataloader, task='default', data='vtb', batch_size=32, dev
                 for i in range(batch['mask'].shape[0]):
                     indices = torch.where(padding_mask[i] == 1)[0]
                     
-                    f1s.append(f1_score(code_preds[i][indices].cpu(), all_code_transactions[i][indices].cpu(), average=None, zero_division=1))
-                    prs.append(precision_score(code_preds[i][indices].cpu(), all_code_transactions[i][indices].cpu(), average=None, zero_division=1))
-                    recalls.append(recall_score(code_preds[i][indices].cpu(), all_code_transactions[i][indices].cpu(), average=None, zero_division=1))
+                    f1s.append(f1_score(code_preds[i][indices].cpu().numpy(), all_code_transactions[i][indices].cpu().numpy(), average=None, zero_division=1))
+                    prs.append(precision_score(code_preds[i][indices].cpu().numpy(), all_code_transactions[i][indices].cpu().numpy(), average=None, zero_division=1))
+                    recalls.append(recall_score(code_preds[i][indices].cpu().numpy(), all_code_transactions[i][indices].cpu().numpy(), average=None, zero_division=1))
                 
                 log_dict[start + 'code_f1'] +=  np.sum(f1s, axis=0)
                 log_dict[start + 'code_precision'] += np.sum(prs, axis=0)
                 log_dict[start + 'code_recall'] += np.sum(recalls, axis=0)
                 
-                num_transactions = padding_mask.sum(1)
-                masked_amnt = (abs(output[0].squeeze() - all_amnt_transactions) * padding_mask).sum(1) / num_transactions # cat_feat x bs
-                masked_num = (abs(output[1].squeeze() - all_num_transactions) * padding_mask).sum(1) / num_transactions
+                masked_amnt = masked_mean(abs(output[0].squeeze() - all_amnt_transactions), padding_mask)
+                masked_num = masked_mean(abs(output[1].squeeze() - all_num_transactions), padding_mask)
                 
                 log_dict[start + 'amnt'] += masked_amnt.sum().item()
                 log_dict[start + 'num'] += masked_num.sum().item()
@@ -248,6 +257,9 @@ def eval_model(model, dataloader, task='default', data='vtb', batch_size=32, dev
         
         for i in cat_feature_ids:
             log_dict[start + cat_features_names[i]] /= num_objects
+            
+        for i in [1, 3, 6, 12, 24, 72, 168]:
+            log_dict[start + f'interval_{i}_hours'] /= num_objects
                        
     else:
         raise NotImplementedError

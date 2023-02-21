@@ -20,6 +20,11 @@ def set_seeds(seed):
 def freeze_model(model):
     pass
 
+def masked_mean(inp, mask, axis=1):
+    down = mask.sum(axis)
+    out = (inp * mask).sum(axis) / down
+    return out
+
 class LambdaLayer(nn.Module):
     def __init__(self, function):
         super().__init__()
