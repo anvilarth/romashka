@@ -56,7 +56,7 @@ config_parser.add_argument('-c', '--config', default='', type=str, metavar='FILE
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--model', type=str, default='transformer')
-parser.add_argument('--num_layers', type=int, default=6)
+parser.add_argument('--num_layers', type=int, default=1)
 parser.add_argument('--mixup', action='store_true')
 parser.add_argument('--optimizer', type=str, default='adam')
 parser.add_argument('--lr', type=float, default=1e-4)
@@ -410,5 +410,7 @@ torch.save(model.state_dict(), checkpoint_dir + f'/final_model.ckpt')
 for key in val_log_dict:
     val_log_dict['final_' + key] = val_log_dict[key]
     del val_log_dict[key]
+    
+wandb.log(val_log_dict)
 
 wandb.finish()

@@ -105,7 +105,7 @@ class TransactionsModel(nn.Module):
                  head_type='linear',
                  encoder_type='gpt2/base',
                  add_token='before',
-                 num_layers=6, 
+                 num_layers=1, 
                  embedding_dropout=0.0,
                  cutmix=False,
                  mixup=False,
@@ -165,7 +165,7 @@ class TransactionsModel(nn.Module):
             if hidden_size is None:
                 hidden_size = inp_size
                 
-            self.encoder = nn.GRU(inp_size, hidden_size, batch_first=True)
+            self.encoder = nn.GRU(inp_size, hidden_size, num_layers=num_layers, batch_first=True)
             output_size = hidden_size
             hidden_size = None
         

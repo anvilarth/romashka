@@ -88,9 +88,9 @@ def train_epoch(model, optimizer, train_dataloader, val_dataloader, task='defaul
         
     
     print(f'Training loss after epoch: {running_loss / num_batches}', end='\r')
-    if val_steps is not None:
-        if batch_idx % val_steps == 0 and batch_idx != 0:
-            eval_model(model, val_dataloader)
+    # if val_steps is not None:
+    #     if batch_idx % val_steps == 0 and batch_idx != 0:
+    #         eval_model(model, val_dataloader)
 
 
 def eval_model(model, dataloader, task='default', data='vtb', batch_size=32, device=None, process_numerical=False, train=False, num_feature_ids=None, cat_feature_ids=None) -> float:
@@ -123,11 +123,11 @@ def eval_model(model, dataloader, task='default', data='vtb', batch_size=32, dev
         
     elif task == 'next':
         log_dict = {}
-        for elem in num_feature_ids:
-            log_dict = {start + num_features_names[elem]: 0.0}
+        for j in num_feature_ids:
+            log_dict[start + num_features_names[j]] = 0.0
         
-        for elem in cat_feature_ids:
-            log_dict = {start + cat_features_names[elem]: 0.0}
+        for j in cat_feature_ids:
+            log_dict[start + cat_features_names[j]] = 0.0
             
         
     elif task == 'next_time':
@@ -242,12 +242,15 @@ def eval_model(model, dataloader, task='default', data='vtb', batch_size=32, dev
         for elem in it_list:
             log_dict[elem] /= num_objects
             
-    else:
-        for elem in num_feature_ids:
-            log_dict[start + num_features_names[elem]] /= num_objects
+    elif task == 'next':
+        for i in num_feature_ids:
+            log_dict[start + num_features_names[i]] /= num_objects
         
-        for elem in cat_feature_ids:
-            log_dict[start + cat_features_names[elem]] /= num_objects
-                        
+        for i in cat_feature_ids:
+            log_dict[start + cat_features_names[i]] /= num_objects
+                       
+    else:
+        raise NotImplementedError
+    
     wandb.log(log_dict)
     return log_dict
