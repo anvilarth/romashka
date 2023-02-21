@@ -129,6 +129,9 @@ def eval_model(model, dataloader, task='default', data='vtb', batch_size=32, dev
         for j in cat_feature_ids:
             log_dict[start + cat_features_names[j]] = 0.0
             
+        for i in [1, 3, 6, 12, 24, 72, 168]:
+            log_dict[start + f'interval_{i}_hours'] = 0.0
+            
         
     elif task == 'next_time':
         log_dict = {start + 'amnt': 0.0, start + 'num': 0.0, 
@@ -179,10 +182,16 @@ def eval_model(model, dataloader, task='default', data='vtb', batch_size=32, dev
 #                     acc += (not_masked_acc * mask).sum(axis=(1, 2))
 #                     num_batches += mask.sum()
               
+                
                 num_tmp = [(abs(output['num_features'][i].squeeze() - batch['num_features'][i][:, 1:]) * mask).mean(axis=1).sum().item() for i in range(len(num_features_names))]
 
                 for i in num_feature_ids:
                     log_dict[start + num_features_names[i]] += num_tmp[i]
+                    
+                    
+                for i in [1, 3, 6, 12, 24, 72, 168]:
+                    tmp_interval = torch.isclose(output['num_features'][-1].squeeze(2)[:, 1:], batch['num_features'][-1][:, 1:-1], atol=i/95, rtol=0.0).float().mean(1).sum().item()
+                    log_dict[start + f'interval_{i}_hours'] += tmp_interval
             
             elif task == 'next_time':
 
@@ -248,6 +257,9 @@ def eval_model(model, dataloader, task='default', data='vtb', batch_size=32, dev
         
         for i in cat_feature_ids:
             log_dict[start + cat_features_names[i]] /= num_objects
+            
+        for i in [1, 3, 6, 12, 24, 72, 168]:
+            log_dict[start + f'interval_{i}_hours'] /= num_objects
                        
     else:
         raise NotImplementedError
