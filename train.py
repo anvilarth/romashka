@@ -55,7 +55,6 @@ config_parser.add_argument('-c', '--config', default='', type=str, metavar='FILE
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--model', type=str, default='transformer')
 parser.add_argument('--num_layers', type=int, default=1)
 parser.add_argument('--mixup', action='store_true')
 parser.add_argument('--optimizer', type=str, default='adam')
@@ -219,86 +218,81 @@ buckets = None
 #     meta_embedding_projections = None
 #     meta_features_names = None
 
-if args.model == 'transformer':
-    print("USING TRANSFORMER")
-    model = TransactionsModel(cat_embedding_projections,
-                              cat_features_names,
-                              num_embedding_projections,
-                              num_features_names,
-                              meta_embedding_projections,
-                              meta_features_names,
-                              num_layers=args.num_layers,
-                              head_type=args.head_type,
-                              encoder_type=args.encoder_type,
-                              embedding_dropout=args.embedding_dropout,
-                              mixup=args.mixup,
-                              cutmix=args.cutmix,
-                              emb_mult=args.emb_mult,
-                              alpha=args.alpha,
-                              rel_pos_embs=args.rel_pos_embs,
-                              add_token=args.add_token,
-                              hidden_size=args.hidden_size,
-                              pretrained=args.pretrained,
-                              adapters=args.adapters,
-                             )
-    
-    wandb.config.update({'parameters': count_parameters(model)})
-    
-    if args.checkpoint_path != '':
-        # ckpt = torch.load('/home/jovyan/romashka/wandb/run-20221205_220219-1nfqlfsm/files/checkpoints/epoch_15.ckpt')
-        ckpt = torch.load(args.checkpoint_path)
-        
-        if args.model_source == 'ptls':
-            ckpt = loading_ptls_model(ckpt)
-        
-        
-        model.load_state_dict(ckpt, strict=False)
-        
-    if args.finetune is not None:
-        for param in model.parameters():
-            param.requires_grad = False
-            
-        if args.adapters:
-            print("USING ADAPTERS")            
-            config = AdapterConfig(mh_adapter=True, output_adapter=True, reduction_factor=16, non_linearity='gelu')
-            model.encoder.add_adapter("alfa_battle", config=config)
-            model.encoder.train_adapter("alfa_battle")
-            
-            adapter_parameters = []
-            standard_parameters = []
-            
-            for p in model.modules():
-                if type(p) == nn.LayerNorm:
-                    p.requires_grad_(True)
-            
-            for param in model.parameters():
-                if param.requires_grad:
-                    adapter_parameters.append(param)
-                else:
-                    standard_parameters.append(param)
-                    
-        
-        model.cls_token.requires_grad_(True)
-        model.head.requires_grad_(True)
-        
-        if args.finetune == 'all':
-            model.requires_grad_(True)
-            
-        elif args.finetune ==  'embedding':
-            model.embedding.requires_grad_(True)
-            model.mapping_embedding.requires_grad_(True)
-            
-        elif args.finetune == 'encoder':
-            model.encoder.requires_grad_(True)
-            
-        elif args.finetune == 'none':
-            pass
-               
-    wandb.config.update({'train_parameters': count_parameters(model)})
-    model.to(device)
+model = TransactionsModel(cat_embedding_projections,
+                          cat_features_names,
+                          num_embedding_projections,
+                          num_features_names,
+                          meta_embedding_projections,
+                          meta_features_names,
+                          num_layers=args.num_layers,
+                          head_type=args.head_type,
+                          encoder_type=args.encoder_type,
+                          embedding_dropout=args.embedding_dropout,
+                          mixup=args.mixup,
+                          cutmix=args.cutmix,
+                          emb_mult=args.emb_mult,
+                          alpha=args.alpha,
+                          rel_pos_embs=args.rel_pos_embs,
+                          add_token=args.add_token,
+                          hidden_size=args.hidden_size,
+                          pretrained=args.pretrained,
+                          adapters=args.adapters,
+                         )
 
-else:
-    raise NotImplementedError
+wandb.config.update({'parameters': count_parameters(model)})
+
+if args.checkpoint_path != '':
+    # ckpt = torch.load('/home/jovyan/romashka/wandb/run-20221205_220219-1nfqlfsm/files/checkpoints/epoch_15.ckpt')
+    ckpt = torch.load(args.checkpoint_path)
+
+    if args.model_source == 'ptls':
+        ckpt = loading_ptls_model(ckpt)
+
+
+    model.load_state_dict(ckpt, strict=False)
+
+if args.finetune is not None:
+    for param in model.parameters():
+        param.requires_grad = False
+
+    if args.adapters:
+        print("USING ADAPTERS")            
+        config = AdapterConfig(mh_adapter=True, output_adapter=True, reduction_factor=16, non_linearity='gelu')
+        model.encoder.add_adapter("alfa_battle", config=config)
+        model.encoder.train_adapter("alfa_battle")
+
+        adapter_parameters = []
+        standard_parameters = []
+
+        for p in model.modules():
+            if type(p) == nn.LayerNorm:
+                p.requires_grad_(True)
+
+        for param in model.parameters():
+            if param.requires_grad:
+                adapter_parameters.append(param)
+            else:
+                standard_parameters.append(param)
+
+
+    model.cls_token.requires_grad_(True)
+    model.head.requires_grad_(True)
+
+    if args.finetune == 'all':
+        model.requires_grad_(True)
+
+    elif args.finetune ==  'embedding':
+        model.embedding.requires_grad_(True)
+        model.mapping_embedding.requires_grad_(True)
+
+    elif args.finetune == 'encoder':
+        model.encoder.requires_grad_(True)
+
+    elif args.finetune == 'none':
+        pass
+
+wandb.config.update({'train_parameters': count_parameters(model)})
+model.to(device)
 
 # if args.checkpoint_path != '':
 #     ckpt = torch.load(args.checkpoint_path)
@@ -362,11 +356,11 @@ if args.scheduler:
     print("USING scheduler warmup_steps", warmup_steps)
 else:
     scheduler = None
+
+num_feature_ids = []
+cat_feature_ids = []
     
 if args.task == 'next':
-    num_feature_ids = []
-    cat_feature_ids = []
-
     for elem in args.features_list:
         if elem in num_features_names:
             num_feature_ids.append(num_features_names.index(elem))
