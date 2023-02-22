@@ -3,13 +3,61 @@ import torch.nn as nn
 
 from losses.masked_loss import MaskedMSELoss
 
+
+class NextNumericalFeatureLoss(nn.Module):
+    def __init__(self, number):
+        super().__init__()
+        self.num_criterion = MaskedMSELoss()
+        self.number = number
+        
+    def forward(self, output, batch, mask=None, cat_weights=None, num_weights=None):
+        mask = batch['mask'][:, 1:]
+        num_pred = output['num_features'][self.number]
+        num_trues = batch['num_features'][self.number]
+        
+        return self.num_criterion(num_pred.squeeze(), num_trues[:, 1:].squeeze(), mask)
+    
+class NextCatFeatureLoss(nn.Module):
+    def __init__(self, number):
+        super().__init__()
+        self.cat_criterion = nn.CrossEntropyLoss(ignore_index=0)
+        self.number = number
+        
+    def forward(self, output, batch, mask=None, cat_weights=None, num_weights=None):
+        mask = batch['mask'][:, 1:]
+        cat_pred = output['cat_features'][self.number]
+        cat_trues = batch['cat_features'][self.number]
+    
+        return self.cat_criterion(cat_pred.permute(0, 2, 1), cat_trues[:, 1:])
+
+class NextTimeLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+        
+        self.cat_criterion = nn.BCEWithLogitsLoss(reduction='none')
+        self.num_criterion = MaskedMSELoss()
+        
+        
+    def forward(self, output, trues, mask=None):
+        amnt_out, num_out, need_out = output
+        all_amnt_transactions, all_num_transactions, all_code_transactions, next_time_mask = trues
+        loss_mask = next_time_mask & mask
+
+        l_amnt = self.num_criterion(amnt_out.squeeze(), all_amnt_transactions.squeeze(), loss_mask)
+        l_num = self.num_criterion(num_out.squeeze(), all_num_transactions.squeeze(), loss_mask)
+        l_need = (self.cat_criterion(need_out, all_code_transactions) * loss_mask.unsqueeze(-1)).sum()
+        
+        l_need /= loss_mask.sum()
+
+        return l_amnt + l_need + l_num
+        
 class NextTransactionLoss(nn.Module):
     def __init__(self):
         super().__init__()
         self.cat_criterion = nn.CrossEntropyLoss(ignore_index=0)
         self.num_criterion = MaskedMSELoss()
 
-    def forward(self, output, batch, mask=None, cat_weights=None, num_weights=None):
+    def forward(self, output, batch, mask=None, cat_weights=None, num_weights=None, cat_feature_ids=None, num_feature_ids=None):
         cat_pred, num_pred = output['cat_features'], output['num_features']
         cat_trues, num_trues = batch['cat_features'], batch['num_features']
         mask = batch['mask'][:, 1:]
@@ -17,15 +65,21 @@ class NextTransactionLoss(nn.Module):
         res = []
         
         for i, (pred, true) in enumerate(zip(cat_pred, cat_trues)):
-            if cat_weights is not None:
+            if i not in cat_feature_ids:
+                continue
+            elif cat_weights is not None:
                 coef = cat_weights[i]
             else:
                 coef = 1.0
             res.append(coef * self.cat_criterion(pred.permute(0, 2, 1), true[:, 1:]))
         
         for i, (pred, true) in enumerate(zip(num_pred, num_trues)):
-            if num_weights is not None:
+            if i not in num_feature_ids:
+                continue
+            
+            elif num_weights is not None:
                 coef = num_weights[i]
+                
             else:
                 coef = 1.0
                 
