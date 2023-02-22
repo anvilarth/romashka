@@ -32,8 +32,8 @@ class IterDataset(IterableDataset):
 
 
 class PtlsEmbeddingLayer(EmbeddingLayer):
-    def __init__(self, splitter, *args, **kwargs):
-        self.splitter = splitter
+    def __init__(self, *args, **kwargs):
+        #self.splitter = splitter
         super().__init__(*args, **kwargs)
         self.output_size = self.get_embedding_size()
 
