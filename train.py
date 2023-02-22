@@ -30,24 +30,26 @@ from models import TransactionsModel
 from tools import set_seeds, count_parameters
 from data import  TransactionClickStreamDataset, TransactionClickStreamDatasetClickstream, TransactionClickStreamDatasetTransactions
 
-from adapter_transformers import UniPELTConfig, AdapterConfig
+#from adapter_transformers import UniPELTConfig, AdapterConfig
 
-
-#os.environ['WANDB_API_KEY'] = 'e1847d5866973dab40f29db28eefb77987d4b66a' # andrei
+#os.environ['WANDB_API_KEY'] = 'e1847d5866973dab40f29db28eefb77987d4b66a'
 os.environ['WANDB_API_KEY'] = 'ee24c5854ca7591cbe2d99f6a6e6095ed92981c1' # slava
 
 def loading_ptls_model(ckpt_dict):
     new_dict = {}
 
-    encoder_prefix = '_seq_encoder.seq_encoder.encoder.'
+    encoder_prefix = '_seq_encoder.seq_encoder.'
     embedding_prefix = '_seq_encoder.trx_encoder.'
-
+    
+    if 'state_dict' in ckpt_dict.keys():
+        ckpt_dict = ckpt_dict['state_dict']
+    
     for key in ckpt_dict:
         if encoder_prefix in key:
-            new_dict[key[len(encoder_prefix):]] = ckpt[key]
+            new_dict['encoder.' + key[len(encoder_prefix):]] = ckpt_dict[key]
 
         if embedding_prefix in key:
-            new_dict['embedding.' + key[len(embedding_prefix):]] = ckpt[key]
+            new_dict['embedding.' + key[len(embedding_prefix):]] = ckpt_dict[key]
     
     return new_dict
 
@@ -58,10 +60,22 @@ config_parser.add_argument('-c', '--config', default='', type=str, metavar='FILE
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--model', type=str, default='transformer')
+parser.add_argument('--group', type=str, default='models')
+parser.add_argument('--data', type=str, default='alfa')
+parser.add_argument('--task', type=str, default='next')
+parser.add_argument('--finetune', type=str, default=None)
+parser.add_argument('--pretrained', action='store_true', default=False)
+
+parser.add_argument('--encoder_type', type=str, default='bert')
 parser.add_argument('--num_layers', type=int, default=6)
+parser.add_argument('--head_type', type=str, default='linear')
+parser.add_argument('--hidden_size', type=int, default=None)
+
+parser.add_argument('--num_epochs', type=int, default=20)
+parser.add_argument('--lr', type=float, default=1e-4)
+parser.add_argument('--batch_size', type=int, default=128)
 parser.add_argument('--mixup', action='store_true')
 parser.add_argument('--optimizer', type=str, default='adam')
-parser.add_argument('--lr', type=float, default=1e-4)
 parser.add_argument('--rel_pos_embs', action='store_true')
 parser.add_argument('--emb_mult', type=int, default=1)
 parser.add_argument('--loss_freq', type=int, default=500)
@@ -70,31 +84,28 @@ parser.add_argument('--embedding_dropout', type=float, default=0.0)
 parser.add_argument('--weight_decay', type=float, default=1e-2)
 parser.add_argument('--cutmix', action='store_true')
 parser.add_argument('--alpha', type=float, default=1.0)
-parser.add_argument('--num_epochs', type=int, default=10)
-parser.add_argument('--head_type', type=str, default='linear')
-parser.add_argument('--encoder_type', type=str, default='bert')
-parser.add_argument('--checkpoint_path', type=str, default='')
-parser.add_argument('--group', type=str, default='models')
+parser.add_argument('--val_reduce_size', type=float, default=1.0)
+parser.add_argument('--val_steps', type=float, default=2.0)
+
 parser.add_argument('--numerical', action='store_true')
 parser.add_argument('--seed', type=int, default=0)
-parser.add_argument('--finetune', type=str, default=None)
 parser.add_argument('--reduce_size', type=float, default=1.)
 parser.add_argument('--freeze_model', action='store_true')
-parser.add_argument('--datapath', type=str, default='/home/jovyan/data/alfa/')
-parser.add_argument('--data', type=str, default='alfa')
-parser.add_argument('--task', type=str, default='next')
-parser.add_argument('--batch_size', type=int, default=128)
+parser.add_argument('--datapath', type=str, default='/home/jovyan/afilatov/data/alfa/')
+parser.add_argument('--checkpoint_path', type=str, default='')
+parser.add_argument('--checkpoint_dir', type=str, default='/home/jovyan/v_vasilev/checkpoints/ptls_finetune/')
+
 parser.add_argument('--focus_feature', type=str, default=None)
 parser.add_argument('--add_token', type=str, default='before')
-parser.add_argument('--embedding_dim_size', type=int, default=None)
-parser.add_argument('--pretrained', action='store_true', default=False)
 parser.add_argument('--run_name', type=str, default='')
+parser.add_argument('--name_prefix', type=str, default='')
 parser.add_argument('--model_source', type=str, default='scratch')
 parser.add_argument('--adapters', action='store_true')
 parser.add_argument('--max_seq_len', type=int, default=None)
 parser.add_argument('--num_number', type=int, default=None)
 parser.add_argument('--cat_number', type=int, default=None)
-parser.add_argument('--val_reduce_size', type=float, default=1.0)
+parser.add_argument('--features_list', nargs='+', type=str, default=num_features_names+cat_features_names)
+parser.add_argument('--entity', type=str, default='vasilev-va') # serofade
 
 args_config, remaining = config_parser.parse_known_args()
 if args_config.config:
@@ -105,27 +116,25 @@ if args_config.config:
 # defaults will have been overridden if config file specified.
 args = parser.parse_args(remaining)
 
-logging_freq = int((128 / args.batch_size) * args.loss_freq * args.reduce_size)
+logging_freq = max(int((128 / args.batch_size) * args.loss_freq * args.reduce_size), 10)
 
 rnd_prt = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(12))
 
+checkpoint_dir = args.checkpoint_dir
+
 if args.run_name == '':
-<<<<<<< Updated upstream
-    run_name = f'{args.encoder_type}-{args.num_layers}-emb_mult={args.emb_mult}-mixup={args.mixup}-{args.optimizer}-lr={args.lr}-{rnd_prt}-rel_pos_embs={args.rel_pos_embs}'
-=======
-    run_name = f'task={args.task}-{args.encoder_type}-finetune={args.finetune}-{args.optimizer}-lr={args.lr}-{rnd_prt}'
->>>>>>> Stashed changes
+    run_name = f'task={args.task}-{args.encoder_type}-finetune={args.finetune}-num_layers={args.num_layers}-{args.optimizer}-lr={args.lr}'
 else:
     run_name = args.run_name
+if args.name_prefix != '':
+    run_name = args.name_prefix + '_' + run_name
+    checkpoint_dir = checkpoint_dir + args.name_prefix + '/'
 
-wandb.init(project="romashka", entity="serofade", group=args.group, name=run_name)
+wandb.init(project="romashka", entity=args.entity, group=args.group, name=run_name)
 wandb.config.update(args)
 
 set_seeds(args.seed)
-
-checkpoint_dir = wandb.run.dir + '/checkpoints'
-
-os.mkdir(checkpoint_dir)
+os.makedirs(checkpoint_dir, exist_ok=True)
 
 num_epochs = int(args.num_epochs * (np.log(1 / args.reduce_size) + 1))
 train_batch_size = args.batch_size
@@ -217,14 +226,14 @@ elif args.data == 'vtb_click':
     meta_features_names = None
     
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-buckets = None 
+buckets = None
 
-if args.task == 'product':
-    meta_embedding_projections = None
-    meta_features_names = None
+# if args.task == 'product':
+#     meta_embedding_projections = None
+#     meta_features_names = None
 
 if args.model == 'transformer':
-    print("USING TRANSFORMER")
+    #print("USING TRANSFORMER")
     model = TransactionsModel(cat_embedding_projections,
                               cat_features_names,
                               num_embedding_projections,
@@ -234,6 +243,7 @@ if args.model == 'transformer':
                               num_layers=args.num_layers,
                               head_type=args.head_type,
                               encoder_type=args.encoder_type,
+                              model_source=args.model_source,
                               embedding_dropout=args.embedding_dropout,
                               mixup=args.mixup,
                               cutmix=args.cutmix,
@@ -241,7 +251,7 @@ if args.model == 'transformer':
                               alpha=args.alpha,
                               rel_pos_embs=args.rel_pos_embs,
                               add_token=args.add_token,
-                              embedding_dim_size=args.embedding_dim_size,
+                              hidden_size=args.hidden_size,
                               pretrained=args.pretrained,
                               adapters=args.adapters,
                              )
@@ -280,7 +290,6 @@ if args.model == 'transformer':
                     adapter_parameters.append(param)
                 else:
                     standard_parameters.append(param)
-            
                     
         
         model.cls_token.requires_grad_(True)
@@ -345,9 +354,6 @@ else:
 print("OPTIMIZER DONE")
     
 if 'vtb' not in args.data:
-    # train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, shuffle=True,
-    #                                 device='cpu', is_train=True, output_format='torch')
-    
     fake_train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, shuffle=False, dry_run=True,
                                             device='cpu', is_train=True, output_format='torch',  reduce_size=args.reduce_size,
                                              max_seq_len=args.max_seq_len)
@@ -363,40 +369,63 @@ else:
     num_training_steps = num_epochs * epoch_len
     warmup_steps = int(1e2)
     
+val_steps = int(args.val_steps * epoch_len)
+    
 if args.scheduler:
     scheduler = get_linear_schedule_with_warmup(optimizer, warmup_steps, num_training_steps)
     print("USING scheduler warmup_steps", warmup_steps)
 else:
     scheduler = None
+
+num_feature_ids = None
+cat_feature_ids = None
+
+if args.task == 'next':
+    num_feature_ids = []
+    cat_feature_ids = []
+
+    for elem in args.features_list:
+        if elem in num_features_names:
+            num_feature_ids.append(num_features_names.index(elem))
+
+        elif elem in cat_features_names:
+            cat_feature_ids.append(cat_features_names.index(elem))
+
+        else:
+            raise ValueError("Incorrect feature name")
+    
+if args.data != 'alfa':
+    val_dataloader = DataLoader(dataset_val, batch_size=train_batch_size, collate_fn=dataset_val.collate_fn, shuffle=False)
+    train_dataloader = DataLoader(dataset_train, batch_size=val_batch_size, collate_fn=dataset_train.collate_fn, shuffle=True)
     
 for epoch in range(num_epochs):
     print(f'Starting epoch {epoch+1}')
-#     if args.data == 'alfa':
-#         train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, shuffle=True,
-#                                             device=device, is_train=True, output_format='torch', reduce_size=args.reduce_size)
-#     else:
-#         train_dataloader = DataLoader(dataset_train, batch_size=train_batch_size, collate_fn=dataset_train.collate_fn, shuffle=True)
+    if args.data == 'alfa':
+        train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, shuffle=True,
+                                            device=device, is_train=True, output_format='torch', reduce_size=args.reduce_size)
+        val_dataloader = batches_generator(dataset_val, batch_size=val_batch_size, device=device, is_train=True, output_format='torch', reduce_size=args.val_reduce_size)
 
-#     train_epoch(model, optimizer, train_dataloader, task=args.task, print_loss_every_n_batches=logging_freq, device=device, 
-#                 scheduler=scheduler, cat_weights=cat_weights, num_weights=num_weights, num_number=args.num_number, cat_number=args.cat_number)
+    train_epoch(model, optimizer, train_dataloader, val_dataloader, task=args.task, print_loss_every_n_batches=logging_freq, device=device, 
+                scheduler=scheduler, cat_weights=cat_weights, num_weights=num_weights, val_steps=val_steps, num_feature_ids=num_feature_ids, cat_feature_ids=cat_feature_ids)
     
     if args.data == 'alfa':
         val_dataloader = batches_generator(dataset_val, batch_size=val_batch_size, device=device, is_train=True, output_format='torch', reduce_size=args.val_reduce_size)
-        train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, device=device, is_train=True, output_format='torch', reduce_size=args.reduce_size)
-    
-    else:
-        val_dataloader = DataLoader(dataset_val, batch_size=train_batch_size, collate_fn=dataset_val.collate_fn, shuffle=False)
-        train_dataloader = DataLoader(dataset_train, batch_size=val_batch_size, collate_fn=dataset_train.collate_fn, shuffle=False)
-    
+        train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, device=device, is_train=True, output_format='torch', reduce_size=args.reduce_size)    
 
-    eval_model(model, val_dataloader, task=args.task, data=args.data, device=device, train=False, num_number=args.num_number, cat_number=args.cat_number)    
-    # eval_model(model, train_dataloader, task=args.task, data=args.data, device=device, train=True, num_number=args.num_number, cat_number=args.cat_number)
+    val_log_dict = eval_model(model, val_dataloader, task=args.task, data=args.data, device=device, train=False, num_feature_ids=num_feature_ids, cat_feature_ids=cat_feature_ids)    
+    _ = eval_model(model, train_dataloader, task=args.task, data=args.data, device=device, train=True, num_feature_ids=num_feature_ids, cat_feature_ids=cat_feature_ids)
     
      
     if epoch % 5 == 0:
-        torch.save(model.state_dict(), checkpoint_dir + f'/epoch_{epoch}.ckpt')
+        torch.save(model.state_dict(), checkpoint_dir + f'/{run_name}+epoch_{epoch}.ckpt')
     
-    if args.task == 'default':
-        print(f'Epoch {epoch+1} completed')
 
-torch.save(model.state_dict(), checkpoint_dir + f'/final_model.ckpt')
+    print(f'Epoch {epoch+1} completed')
+
+torch.save(model.state_dict(), checkpoint_dir + f'/{run_name}+final_model.ckpt')
+
+for key in val_log_dict:
+    val_log_dict['final_' + key] = val_log_dict[key]
+    del val_log_dict[key]
+
+wandb.finish()

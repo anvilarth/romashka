@@ -11,12 +11,15 @@ from transformers import HubertForSequenceClassification, AutoModel, ViTModel
 from transformers import PerceiverModel, Data2VecVisionModel, AutoConfig
 import copy
 
+from ptls.nn.seq_encoder.rnn_encoder import RnnEncoder
+
 from embedding import EmbeddingLayer, PerceiverMapping, LinearMapping, IdentityMapping
+from ptls_my import PtlsEmbeddingLayer, MyPaddedBatch
 from augmentations import mixup_data
 
 from head import LinearHead, RNNClassificationHead, NSPHead, MLPHead, TransformerHead, IdentityHead, NextActionsHead, ClassificationHead
 from tools import LambdaLayer, calculate_embedding_size
-from adapter_transformers import AutoAdapterModel
+#from adapter_transformers import AutoAdapterModel
 
 # sys.path.append('/home/jovyan/romashka/perceiver-pytorch')
 
@@ -104,6 +107,7 @@ class TransactionsModel(nn.Module):
                  time_embedding=None,
                  head_type='linear',
                  encoder_type='gpt2/base',
+                 model_source='scratch',
                  add_token='before',
                  num_layers=6, 
                  embedding_dropout=0.0,
@@ -111,44 +115,54 @@ class TransactionsModel(nn.Module):
                  mixup=False,
                  emb_mult=1,
                  rel_pos_embs=False,
-                 embedding_dim_size=None,
                  pretrained=False,
                  adapters=False,
                  hidden_size=None,
                  alpha=1.0):
 
         super().__init__()
-        self.embedding = EmbeddingLayer(cat_embedding_projections, 
-                                        cat_features, 
-                                        num_embedding_projections, 
-                                        num_features,
-                                        meta_embedding_projections,
-                                        meta_features,
-                                        time_embedding,
-                                        dropout=embedding_dropout)
-        inp_size = self.embedding.get_embedding_size()
-            
-        config_name = config_names[encoder_type]
-        encoder_type, encoder_size = encoder_type.split('/')
         
+        self.model_source = model_source
+        if self.model_source == 'ptls':
+            self.embedding = PtlsEmbeddingLayer(cat_embedding_projections,
+                                                cat_features,
+                                                num_embedding_projections,
+                                                 num_features)
+        else:
+            self.embedding = EmbeddingLayer(cat_embedding_projections, 
+                                            cat_features, 
+                                            num_embedding_projections, 
+                                            num_features,
+                                            meta_embedding_projections,
+                                            meta_features,
+                                            time_embedding,
+                                            dropout=embedding_dropout)
+        inp_size = self.embedding.get_embedding_size()
+        config_name = None
+        output_size = None
+        
+        if encoder_type in config_names:
+            config_name = config_names[encoder_type]
+            encoder_type, encoder_size = encoder_type.split('/')
+
         self.add_token = add_token
         self.head_type = head_type
         self.encoder_type = encoder_type
         
-        if pretrained:
-            if adapters:
-                model = AutoAdapterModel.from_pretrained(config_name)
-            else:
-                model = AutoModel.from_pretrained(config_name)
-        else:
+        if pretrained and config_name is not None:
+            #if adapters:
+            #    model = AutoAdapterModel.from_pretrained(config_name)
+            #else:
+            model = AutoModel.from_pretrained(config_name)
+        elif config_name is not None:
             config = AutoConfig.from_pretrained(config_name)
             if config_name == 'bert-base-uncased' or config_name == 'bert-large-uncased':
                 config.update_from_string('max_position_embeddings=1024')
                 
-            if adapters:
-                model = AutoAdapterModel.from_config(config)
-            else:
-                model  = AutoModel.from_config(config)
+            #if adapters:
+            #model = AutoAdapterModel.from_config(config)
+            #else:
+            model  = AutoModel.from_config(config)
         
         if encoder_type == 'mybert':
             self.encoder = BERT(hidden_size, heads=2*emb_mult, num_layers=num_layers, dropout=dropout, layer_norm_eps=1e-7, rel_pos_embs=rel_pos_embs)
@@ -159,10 +173,16 @@ class TransactionsModel(nn.Module):
                         n_heads=2*emb_mult,
                         num_layers=num_layers)
             self.encoder = Informer(configs)
-        elif encoder_type == 'rnn':
-            self.encoder = nn.GRU(hidden_size, hidden_size, batch_first=True)
-        elif encoder_type == 'rnn2':
-            self.encoder = nn.GRU(hidden_size, hidden_size, num_layers=2, batch_first=True)
+        elif encoder_type == 'gru' or encoder_type == 'lstm':
+            if hidden_size is None:
+                hidden_size = inp_size
+            
+            if self.model_source == 'ptls':
+                self.encoder = RnnEncoder(inp_size, hidden_size=hidden_size, num_layers=num_layers, type=encoder_type)
+            elif encoder_type == 'gru':
+                self.encoder = nn.GRU(inp_size, hidden_size, batch_first=True)
+            output_size = hidden_size
+            hidden_size = None
         
         elif encoder_type == 'bert':
             self.encoder = model
@@ -231,25 +251,30 @@ class TransactionsModel(nn.Module):
             hidden_size = inp_size
             self.mapping_embedding = IdentityMapping()
             
+        print("USING", encoder_type)
+            
         self.cls_token = nn.Parameter(torch.randn(1, 1, hidden_size))
+        
+        if output_size is None:
+            output_size = hidden_size
         
             
         if head_type == 'linear':
-            self.head = LinearHead(hidden_size)
+            self.head = LinearHead(output_size)
         elif head_type == 'rnn':
-            self.head = RNNClassificationHead(hidden_size)
+            self.head = RNNClassificationHead(output_size)
         elif head_type == 'mlp':
-            self.head = MLPHead(hidden_size)
+            self.head = MLPHead(output_size)
         elif head_type == 'transformer':
-            self.head = TransformerHead(hidden_size)
+            self.head = TransformerHead(output_size)
         elif head_type == 'id':
             self.head = IdentityHead()
         elif head_type == 'next':
-            self.head = NSPHead(hidden_size, cat_embedding_projections, num_embedding_projections)
+            self.head = NSPHead(output_size, cat_embedding_projections, num_embedding_projections)
         elif head_type == 'next_time':
-            self.head = NextActionsHead(hidden_size)
+            self.head = NextActionsHead(output_size)
         elif head_type == 'product':
-            self.head = ClassificationHead(hidden_size, 5)
+            self.head = ClassificationHead(output_size, 5)
         else:
             raise NotImplementedError
 
@@ -264,12 +289,14 @@ class TransactionsModel(nn.Module):
         
         if embeds is None:
             embedding = self.embedding(batch)
+            
+            if self.model_source == 'ptls':
+                embedding = embedding.payload
             embedding = self.mapping_embedding(embedding, attention_mask=mask)
         else:
             embedding = embeds
         
-        if self.head_type != 'next' or self.head_type != 'next_time':
-            if self.add_token == 'before':
+        if self.head_type != 'next' and self.head_type != 'next_time' and self.add_token == 'before':
                 cls_token = self.cls_token.repeat(batch_size, 1, 1)
                 embedding = torch.cat([embedding, cls_token], dim=1)
 
@@ -282,8 +309,11 @@ class TransactionsModel(nn.Module):
         elif self.encoder_type == 't5':
             x = self.encoder(inputs_embeds=embedding, decoder_inputs_embeds=embedding, attention_mask=mask).last_hidden_state
         
-        elif 'rnn' in self.encoder_type:
-            x, _ = self.encoder(embedding)
+        elif 'gru' or 'lstm' in self.encoder_type:
+            if self.model_source == 'ptls':
+                x = self.encoder(MyPaddedBatch(embedding, mask))
+            else:
+                x, _ = self.encoder(embedding)
         elif self.encoder_type == 'mybert':
             mask = mask.unsqueeze(1).unsqueeze(2)
             x = self.encoder(embedding, mask)
@@ -300,7 +330,7 @@ class TransactionsModel(nn.Module):
         else:
             x = self.encoder(embedding, mask)
             
-        if self.add_token == 'after':
+        if self.head_type != 'next' and self.head_type != 'next_time' and self.add_token == 'after':
             cls_token = self.cls_token.repeat(batch_size, 1, 1)
             x = torch.cat([x, cls_token], dim=1)
             
@@ -310,8 +340,10 @@ class TransactionsModel(nn.Module):
         return x, mask
     
     def forward(self, batch=None, embeds=None):
-        x, mask = self.get_embs(batch, embeds)
-                
+        x, mask = self.get_embs(batch, embeds)    
+        if self.model_source == 'ptls':
+            x = x.payload
+            
         logit = self.head(x, mask)
         
         return logit
