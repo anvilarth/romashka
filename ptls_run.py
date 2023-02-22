@@ -58,7 +58,7 @@ parser.add_argument('--seq_len', type=int, default=200)
 parser.add_argument('--cnt_min', type=int, default=100)
 parser.add_argument('--cnt_max', type=int, default=200)
 
-parser.add_argument('--encoder', type=str, default='rnn', choices=['rnn', 'bert', 'gpt', 't5'])
+parser.add_argument('--encoder', type=str, default='lstm', choices=['lstm', 'gru', 'bert', 'gpt', 't5'])
 parser.add_argument('--hidden_size', type=int, default=256)
 parser.add_argument('--num_layers', type=int, default=2)
 parser.add_argument('--num_heads', type=int, default=1)
@@ -87,7 +87,7 @@ with open('./assets/meta_embedding_projections.pkl', 'rb') as f:
 
 
 run_name = f'ptls-{args.group}-{args.encoder}-splitter={str(args.splitter)}-splits={args.num_splits}-seqlen={args.seq_len}-bs={args.batch_size}-lr={args.lr}-layers={args.num_layers}'
-if args.encoder != 'rnn':
+if args.encoder != 'lstm' and args.encoder != 'gru':
     run_name += f'-heads={args.num_heads}'
 
 wandb_logger = WandbLogger(name=run_name, project="romashka", entity=args.entity, group=args.group)
@@ -142,21 +142,21 @@ val_dataloader = torch.utils.data.DataLoader(
     batch_size=args.num_splits if args.group == 'mlm' or 'rtd' else 1
 )
 
-trx_encoder = PtlsEmbeddingLayer(splitter,
+trx_encoder = PtlsEmbeddingLayer(#splitter,
                                  cat_embedding_projections,
                                  cat_features_names,
                                  num_embedding_projections,
                                  num_features_names)
     
 
-if args.encoder == 'rnn':
+if args.encoder == 'gru' or args.encoder == 'lstm':
     if args.group == 'mlm':
         print(f'The mode is MLM. Param hidden_size was assigned to output_size of trx_encoder: {trx_encoder.output_size}')
         seq_encoder = RnnEncoder(
             input_size=trx_encoder.get_embedding_size(),
             hidden_size=trx_encoder.get_embedding_size(),
             num_layers=args.num_layers,
-            type='gru',
+            type=args.encoder,
         )
     else:
         seq_encoder = RnnSeqEncoder(
@@ -164,7 +164,7 @@ if args.encoder == 'rnn':
             trx_encoder=trx_encoder,
             hidden_size=args.hidden_size,
             num_layers=args.num_layers,
-            type='gru',
+            type=args.encoder,
         )
 else:
     if args.group == 'coles':
@@ -227,7 +227,7 @@ elif args.group == 'mlm':
 lr_monitor = LearningRateMonitor(logging_interval='step')
 checkpoint_callback = ModelCheckpoint(dirpath=args.checkpoint_dir + args.group + '/',
                                       filename=run_name+'{epoch}-{step}-{'+val_monitor+':.5f}',
-                                      save_top_k=2, monitor=val_monitor)
+                                      save_top_k=-1, monitor=val_monitor)
 
 trainer = pl.Trainer(
     max_epochs=args.num_epochs,
