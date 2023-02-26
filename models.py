@@ -181,11 +181,11 @@ class TransactionsModel(nn.Module):
             if self.model_source == 'ptls':
                 self.encoder = RnnEncoder(inp_size, hidden_size=hidden_size, num_layers=num_layers, type=encoder_type)
             elif encoder_type == 'gru':
-                self.encoder = nn.GRU(inp_size, hidden_size, batch_first=True)
+                self.encoder = nn.GRU(inp_size, hidden_size, num_layers=num_layers, batch_first=True)
             output_size = hidden_size
             hidden_size = None
         
-        elif encoder_type == 'bert' or encoder_type == 't5' or encoder_type == 'gpt':
+        elif encoder_type in ['bert', 't5', 'gpt']:
             if self.model_source == 'ptls':
                 self.encoder = MyEncoder(input_size=inp_size,
                                          encoder_type=encoder_type,
