@@ -14,7 +14,7 @@ import copy
 from ptls.nn.seq_encoder.rnn_encoder import RnnEncoder
 
 from embedding import EmbeddingLayer, PerceiverMapping, LinearMapping, IdentityMapping
-from ptls_my import PtlsEmbeddingLayer, MyPaddedBatch
+from ptls_my import PtlsEmbeddingLayer, MyPaddedBatch, MyEncoder
 from augmentations import mixup_data
 
 from head import LinearHead, RNNClassificationHead, NSPHead, MLPHead, TransformerHead, IdentityHead, NextActionsHead, ClassificationHead
@@ -173,6 +173,7 @@ class TransactionsModel(nn.Module):
                         n_heads=2*emb_mult,
                         num_layers=num_layers)
             self.encoder = Informer(configs)
+            
         elif encoder_type == 'gru' or encoder_type == 'lstm':
             if hidden_size is None:
                 hidden_size = inp_size
@@ -184,17 +185,14 @@ class TransactionsModel(nn.Module):
             output_size = hidden_size
             hidden_size = None
         
-        elif encoder_type == 'bert':
-            self.encoder = model
-            self.encoder.wpe = LambdaLayer(lambda x: 0)    
-            
-        elif encoder_type == 't5':
-            self.encoder = model
-            self.encoder.wpe = LambdaLayer(lambda x: 0)
-           
-        elif encoder_type == 'gpt2':
-            self.encoder = model
-            self.encoder.wpe = LambdaLayer(lambda x: 0)
+        elif encoder_type == 'bert' or encoder_type == 't5' or encoder_type == 'gpt':
+            if self.model_source == 'ptls':
+                self.encoder = MyEncoder(input_size=inp_size,
+                                         encoder_type=encoder_type,
+                                         num_layers=num_layers)
+            else:
+                self.encoder = model
+                self.encoder.wpe = LambdaLayer(lambda x: 0)
                 
         elif encoder_type == 'decision-transformer':
             self.encoder = model.encoder
@@ -232,7 +230,7 @@ class TransactionsModel(nn.Module):
         if hidden_size is not None:
             self.mapping_embedding = LinearMapping(inp_size, hidden_size)
             
-        elif encoder_type in static_embedding_maps: 
+        elif encoder_type in static_embedding_maps and self.model_source != 'ptls': 
             hidden_size = calculate_embedding_size(model)
             self.mapping_embedding = LinearMapping(inp_size, hidden_size)
         
@@ -303,11 +301,19 @@ class TransactionsModel(nn.Module):
                 cls_token_mask = torch.ones(batch_size, 1, dtype=bool, device=mask.device)
                 mask = torch.cat([mask, cls_token_mask], dim=1)
         
-        if self.encoder_type in ['gpt2', 'decision-transformer', 'bert',  's2t', 'whisper']:
-            x = self.encoder(inputs_embeds=embedding, attention_mask=mask).last_hidden_state
+        if self.encoder_type in ['gpt', 'decision-transformer', 'bert',  's2t', 'whisper']:
+            if self.model_source == 'ptls':
+                x = self.encoder(MyPaddedBatch(embedding, mask), mask)
+            else:
+                x = self.encoder(inputs_embeds=embedding, attention_mask=mask).last_hidden_state
             
         elif self.encoder_type == 't5':
-            x = self.encoder(inputs_embeds=embedding, decoder_inputs_embeds=embedding, attention_mask=mask).last_hidden_state
+            if self.model_source == 'ptls':
+                x = self.encoder(MyPaddedBatch(embedding, mask), mask)
+            else:
+                x = self.encoder(inputs_embeds=embedding,
+                                 decoder_inputs_embeds=embedding,
+                                 attention_mask=mask).last_hidden_state
         
         elif 'gru' or 'lstm' in self.encoder_type:
             if self.model_source == 'ptls':
@@ -341,7 +347,7 @@ class TransactionsModel(nn.Module):
     
     def forward(self, batch=None, embeds=None):
         x, mask = self.get_embs(batch, embeds)    
-        if self.model_source == 'ptls':
+        if self.model_source == 'ptls' and self.encoder_type in ['gru', 'lstm']:
             x = x.payload
             
         logit = self.head(x, mask)

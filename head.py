@@ -8,7 +8,8 @@ class LinearHead(nn.Module):
         self.linear1 = nn.Linear(input_size, 1)
     
     def forward(self, x, mask=None):
-        x = x[:, -1]
+        if len(x.shape) == 3:
+            x = x[:, -1]
         return self.linear1(x)
 
 class MLPHead(nn.Module):

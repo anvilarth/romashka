@@ -187,7 +187,7 @@ class MyEncoder(AbsSeqEncoder):
                     h_0 = None means no-previous state for all clients in batch
         :return:
         """
-        shape = x.payload.size()
+        #shape = x.payload.size()
         
         if self.encoder_type == 't5':
             out = self.encoder(inputs_embeds=x.payload,
