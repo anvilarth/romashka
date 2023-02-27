@@ -2,6 +2,11 @@ group: 'next'
 task: 'next'
 head_type: 'next'
 
+features_list: 
+- mcc_category
+- amnt
+- hour_diff
+
 scheduler: True
 num_epochs: 15
 optimizer: 'adamw'
