@@ -192,10 +192,10 @@ class MyEncoder(AbsSeqEncoder):
         if self.encoder_type == 't5':
             out = self.encoder(inputs_embeds=x.payload,
                                decoder_inputs_embeds=x.payload,
-                               attention_mask=mask).last_hidden_state[:, -1]
+                               attention_mask=mask).last_hidden_state#[:, -1]
         else:
             out = self.encoder(inputs_embeds=x.payload,
-                               attention_mask=mask).last_hidden_state[:, -1]
+                               attention_mask=mask).last_hidden_state#[:, -1]
                 
         return out
 
