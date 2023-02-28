@@ -1,0 +1,17 @@
+group: 'next_hour-amnt-mcc'
+task: 'next'
+head_type: 'next'
+
+features_list: 
+- mcc_category
+- amnt
+- hour_diff
+
+scheduler: True
+num_epochs: 15
+optimizer: 'adamw'
+lr: 0.0001
+batch_size: 4
+weight_decay: 0.00001
+embedding_dropout: 0.1
+loss_freq: 200

@@ -1,0 +1,12 @@
+group: 'next'
+task: 'next'
+head_type: 'next'
+
+scheduler: True
+num_epochs: 15
+optimizer: 'adamw'
+lr: 0.0001
+batch_size: 4
+weight_decay: 0.00001
+embedding_dropout: 0.1
+loss_freq: 200
