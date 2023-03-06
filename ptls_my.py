@@ -4,9 +4,11 @@ import numpy as np
 from copy import deepcopy
 from torch.utils.data import IterableDataset
 from transformers import GPT2Model, GPT2Config, BertConfig, BertModel, T5Config, T5Model
+from transformers import AutoModel, AutoConfig
 
-from embedding import EmbeddingLayer
+from embedding import EmbeddingLayer, LinearMapping
 from data_generators import batches_generator
+from tools import LambdaLayer, calculate_embedding_size
 
 from ptls.nn.seq_encoder.containers import SeqEncoderContainer
 from ptls.nn.seq_encoder.abs_seq_encoder import AbsSeqEncoder
@@ -144,14 +146,15 @@ class MyEncoder(AbsSeqEncoder):
                  is_reduce_sequence=False,
                  encoder_type='gpt',
                  num_layers=2,
-                 num_heads=1
+                 num_heads=1,
+                 pretrained=True
                 ):
     
         super().__init__(is_reduce_sequence=is_reduce_sequence)
         self.encoder_type = encoder_type
         print(f'Sequential Encoder is {self.encoder_type}')
-        print(f'Num layers is {num_layers}')
-        print(f'Num heads is {num_heads}')
+        #print(f'Num layers is {num_layers}')
+        #print(f'Num heads is {num_heads}')
         
         if self.encoder_type == 'gpt':
             configuration = GPT2Config(n_positions=2048,
@@ -174,6 +177,24 @@ class MyEncoder(AbsSeqEncoder):
                                      num_layers=num_layers, num_heads=num_heads)
             
             self.encoder = T5Model(configuration)
+            
+        elif self.encoder_type == 'whisper/small':
+            config_name = 'openai/whisper-small'
+            encoder_type, encoder_size = self.encoder_type.split('/')
+            
+            print('pretrained', pretrained)
+            
+            if pretrained:
+                model = AutoModel.from_pretrained(config_name)
+            else:
+                config = AutoConfig.from_pretrained(config_name)
+                model  = AutoModel.from_config(config)
+                
+            self.encoder = model.decoder
+            self.encoder.embed_positions = LambdaLayer(lambda x: 0)
+            
+            hidden_size = calculate_embedding_size(model)
+            self.mapping_embedding = LinearMapping(input_size, hidden_size)
         
         self.hidden_size = input_size
         self.input_size = input_size
@@ -188,8 +209,11 @@ class MyEncoder(AbsSeqEncoder):
         :return:
         """
         #shape = x.payload.size()
+        if self.encoder_type == 'whisper/small':
+            embedding = self.mapping_embedding(x.payload, attention_mask=mask)
+            out = self.encoder(inputs_embeds=embedding, attention_mask=mask).last_hidden_state[:, -1]
         
-        if self.encoder_type == 't5':
+        elif self.encoder_type == 't5':
             out = self.encoder(inputs_embeds=x.payload,
                                decoder_inputs_embeds=x.payload,
                                attention_mask=mask).last_hidden_state#[:, -1]
