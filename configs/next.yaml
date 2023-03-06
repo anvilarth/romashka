@@ -1,4 +1,4 @@
-group: 'next'
+group: 'next_full'
 task: 'next'
 head_type: 'next'
 
