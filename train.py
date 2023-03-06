@@ -53,6 +53,9 @@ config_parser = argparse.ArgumentParser(description='Training Config', add_help=
 config_parser.add_argument('-c', '--config', default='', type=str, metavar='FILE',
                         help='YAML config file specifying default arguments')
 
+config_parser.add_argument('--model_config', default='', type=str, metavar='FILE',
+                        help='YAML config file specifying default arguments')
+
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--num_layers', type=int, default=1)
@@ -100,15 +103,24 @@ if args_config.config:
     with open(args_config.config, 'r') as f:
         cfg = yaml.safe_load(f)
         parser.set_defaults(**cfg)
+        
+if args_config.model_config:
+    with open(args_config.model_config, 'r') as f:
+        cfg = yaml.safe_load(f)
+        parser.set_defaults(**cfg)
+        
 # The main arg parser parses the rest of the args, the usual
 # defaults will have been overridden if config file specified.
 args = parser.parse_args(remaining)
 
 logging_freq = max(int((128 / args.batch_size) * args.loss_freq * args.reduce_size), 10)
-
 rnd_prt = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(12))
 
-if args.run_name == '':
+if args_config.config != '' and args_config.model_config != '':
+    save_dir_name = f'task={args_config.config[:-5]}-model={args_config.model_config[:-5]}'
+    run_name = save_dir_name + '-' + rnd_prt
+
+elif args.run_name == '':
     run_name = f'task={args.task}-{args.encoder_type}-finetune={args.finetune}-{args.optimizer}-lr={args.lr}-{rnd_prt}'
 else:
     run_name = args.run_name
@@ -119,6 +131,7 @@ wandb.config.update(args)
 set_seeds(args.seed)
 
 checkpoint_dir = wandb.run.dir + '/checkpoints'
+checkpoint_dir2 = '/home/jovyan/checkpoints'
 
 os.mkdir(checkpoint_dir)
 
@@ -389,8 +402,8 @@ for epoch in range(num_epochs):
         val_dataloader = batches_generator(dataset_val, batch_size=val_batch_size, device=device, is_train=True, output_format='torch', reduce_size=args.val_reduce_size)
         train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, device=device, is_train=True, output_format='torch', reduce_size=args.reduce_size)    
 
-    val_log_dict = eval_model(model, val_dataloader, task=args.task, data=args.data, device=device, train=False, num_feature_ids=num_feature_ids, cat_feature_ids=cat_feature_ids)    
-    _ = eval_model(model, train_dataloader, task=args.task, data=args.data, device=device, train=True, num_feature_ids=num_feature_ids, cat_feature_ids=cat_feature_ids)
+    val_log_dict = eval_model(model, val_dataloader, epoch=epoch, task=args.task, data=args.data, device=device, train=False, num_feature_ids=num_feature_ids, cat_feature_ids=cat_feature_ids)    
+    _ = eval_model(model, train_dataloader, epoch=epoch, task=args.task, data=args.data, device=device, train=True, num_feature_ids=num_feature_ids, cat_feature_ids=cat_feature_ids)
     
      
     if epoch % 5 == 0:
@@ -403,8 +416,13 @@ torch.save(model.state_dict(), checkpoint_dir + f'/final_model.ckpt')
 
 for key in val_log_dict:
     val_log_dict['final_' + key] = val_log_dict[key]
-    del val_log_dict[key]
+
+for key in val_log_dict:
+    if not key.startswith('final_'):
+        del val_log_dict[key]
     
 wandb.log(val_log_dict)
+
+torch.save(model.state_dict(), checkpoint_dir2 + '/' + save_dir_name + '.ckpt')
 
 wandb.finish()
