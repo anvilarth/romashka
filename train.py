@@ -414,14 +414,11 @@ for epoch in range(num_epochs):
 
 torch.save(model.state_dict(), checkpoint_dir + f'/final_model.ckpt')
 
+final_dict = {}
 for key in val_log_dict:
-    val_log_dict['final_' + key] = val_log_dict[key]
-
-for key in val_log_dict:
-    if not key.startswith('final_'):
-        del val_log_dict[key]
+    final_dict['final_' + key] = val_log_dict[key]
     
-wandb.log(val_log_dict)
+wandb.log(final_dict)
 
 torch.save(model.state_dict(), checkpoint_dir2 + '/' + save_dir_name + '.ckpt')
 
