@@ -58,7 +58,7 @@ parser.add_argument('--seq_len', type=int, default=200)
 parser.add_argument('--cnt_min', type=int, default=100)
 parser.add_argument('--cnt_max', type=int, default=200)
 
-parser.add_argument('--encoder', type=str, default='lstm', choices=['lstm', 'gru', 'bert', 'gpt', 't5', 'whisper/small'])
+parser.add_argument('--encoder', type=str, default='lstm', choices=['lstm', 'gru', 'bert', 'gpt', 't5', 'ptls_whisper'])
 parser.add_argument('--hidden_size', type=int, default=256)
 parser.add_argument('--num_layers', type=int, default=2)
 parser.add_argument('--num_heads', type=int, default=1)

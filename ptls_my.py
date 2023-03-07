@@ -147,7 +147,7 @@ class MyEncoder(AbsSeqEncoder):
                  encoder_type='gpt',
                  num_layers=2,
                  num_heads=1,
-                 pretrained=True
+                 pretrained=False
                 ):
     
         super().__init__(is_reduce_sequence=is_reduce_sequence)
@@ -178,10 +178,8 @@ class MyEncoder(AbsSeqEncoder):
             
             self.encoder = T5Model(configuration)
             
-        elif self.encoder_type == 'whisper/small':
+        elif self.encoder_type == 'ptls_whisper':
             config_name = 'openai/whisper-small'
-            encoder_type, encoder_size = self.encoder_type.split('/')
-            
             print('pretrained', pretrained)
             
             if pretrained:
@@ -209,9 +207,9 @@ class MyEncoder(AbsSeqEncoder):
         :return:
         """
         #shape = x.payload.size()
-        if self.encoder_type == 'whisper/small':
+        if self.encoder_type == 'ptls_whisper':
             embedding = self.mapping_embedding(x.payload, attention_mask=mask)
-            out = self.encoder(inputs_embeds=embedding, attention_mask=mask).last_hidden_state[:, -1]
+            out = self.encoder(inputs_embeds=embedding, attention_mask=mask).last_hidden_state#[:, -1]
         
         elif self.encoder_type == 't5':
             out = self.encoder(inputs_embeds=x.payload,

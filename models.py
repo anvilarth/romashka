@@ -185,11 +185,13 @@ class TransactionsModel(nn.Module):
             output_size = hidden_size
             hidden_size = None
         
-        elif encoder_type in ['bert', 't5', 'gpt']:
+        elif encoder_type in ['bert', 't5', 'gpt', 'ptls_whisper']:
             if self.model_source == 'ptls':
                 self.encoder = MyEncoder(input_size=inp_size,
                                          encoder_type=encoder_type,
                                          num_layers=num_layers)
+                if encoder_type == 'ptls_whisper':
+                    output_size = calculate_embedding_size(self.encoder)
             else:
                 self.encoder = model
                 self.encoder.wpe = LambdaLayer(lambda x: 0)
@@ -301,7 +303,7 @@ class TransactionsModel(nn.Module):
                 cls_token_mask = torch.ones(batch_size, 1, dtype=bool, device=mask.device)
                 mask = torch.cat([mask, cls_token_mask], dim=1)
         
-        if self.encoder_type in ['gpt', 'decision-transformer', 'bert',  's2t', 'whisper']:
+        if self.encoder_type in ['gpt', 'decision-transformer', 'bert',  's2t', 'whisper', 'ptls_whisper']:
             if self.model_source == 'ptls':
                 x = self.encoder(MyPaddedBatch(embedding, mask), mask)
             else:
@@ -349,7 +351,7 @@ class TransactionsModel(nn.Module):
         x, mask = self.get_embs(batch, embeds)    
         if self.model_source == 'ptls' and self.encoder_type in ['gru', 'lstm']:
             x = x.payload
-            
+        
         logit = self.head(x, mask)
         
         return logit
