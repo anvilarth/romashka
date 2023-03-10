@@ -1,6 +1,7 @@
 import numpy as np
 import pickle
 import torch
+import gc
 
 transaction_features = ['currency', 'operation_kind', 'card_type', 'operation_type',
                         'operation_type_group', 'ecommerce_flag', 'payment_system',
@@ -42,9 +43,13 @@ def batches_generator(list_of_paths, batch_size=32, shuffle=False, is_infinite=F
         for path in list_of_paths:
             if verbose:
                 print(f'reading {path}')
-
+            
+            # Faster loading (probably)
+            gc.disable()
             with open(path, 'rb') as f:
                 data = pickle.load(f)
+            
+            gc.enable()
             
             ind_list = []
             for elem in data['targets']:

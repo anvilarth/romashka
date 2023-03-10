@@ -40,7 +40,10 @@ def calculate_embedding_size(model):
     for module in model.modules():
         if type(module) == nn.LayerNorm:
             size = module.weight.shape[0]
-            
+    
+    if size == 0:
+        raise KeyError
+    
     return size
     
 def read_parquet_dataset_from_local(path_to_dataset: str, start_from: int = 0,
