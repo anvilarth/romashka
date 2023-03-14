@@ -93,7 +93,7 @@ def train_epoch(model, optimizer, train_dataloader, val_dataloader, task='defaul
     #         eval_model(model, val_dataloader)
 
 
-def eval_model(model, dataloader, task='default', data='vtb', batch_size=32, device=None, process_numerical=False, train=False, num_feature_ids=None, cat_feature_ids=None) -> float:
+def eval_model(model, dataloader, epoch, task='default', data='vtb', batch_size=32, device=None, process_numerical=False, train=False, num_feature_ids=None, cat_feature_ids=None) -> float:
     """
     функция для оценки качества модели на отложенной выборке, возвращает roc-auc на валидационной
     выборке
@@ -134,8 +134,11 @@ def eval_model(model, dataloader, task='default', data='vtb', batch_size=32, dev
             
         
     elif task == 'next_time':
-        log_dict = {start + 'amnt': 0.0, start + 'num': 0.0, 
-                    start + 'code_f1': 0.0, start + 'code_recall': 0.0, start + 'code_precision': 0.0}
+        log_dict = {start + 'amnt': 0.0, start + 'num': 0.0, start + 'num_accuracy': 0.0}
+        for i in range(28): # alpha_num_mcc_cat
+            log_dict[start + 'mcc_cat_' + str(i) + '_code_f1'] = 0.0
+            log_dict[start + 'mcc_cat_' + str(i) + '_code_recall'] = 0.0
+            log_dict[start + 'mcc_cat_' + str(i) + '_code_precision'] = 0.0
 
     with torch.no_grad():
         for batch in tqdm(dataloader, desc='Evaluating model'):
@@ -215,16 +218,19 @@ def eval_model(model, dataloader, task='default', data='vtb', batch_size=32, dev
                     f1s.append(f1_score(code_preds[i][indices].cpu().numpy(), all_code_transactions[i][indices].cpu().numpy(), average=None, zero_division=1))
                     prs.append(precision_score(code_preds[i][indices].cpu().numpy(), all_code_transactions[i][indices].cpu().numpy(), average=None, zero_division=1))
                     recalls.append(recall_score(code_preds[i][indices].cpu().numpy(), all_code_transactions[i][indices].cpu().numpy(), average=None, zero_division=1))
+                    
+                for i in range(28):
+                    log_dict[start + 'mcc_cat_' + str(i) + '_code_f1'] +=  np.sum(f1s, axis=0)[i]
+                    log_dict[start + 'mcc_cat_' + str(i) + '_code_precision'] += np.sum(prs, axis=0)[i]
+                    log_dict[start + 'mcc_cat_' + str(i) + '_code_recall'] += np.sum(recalls, axis=0)[i]
                 
-                log_dict[start + 'code_f1'] +=  np.sum(f1s, axis=0)
-                log_dict[start + 'code_precision'] += np.sum(prs, axis=0)
-                log_dict[start + 'code_recall'] += np.sum(recalls, axis=0)
-                
-                masked_amnt = masked_mean(abs(output[0].squeeze() - all_amnt_transactions), padding_mask)
-                masked_num = masked_mean(abs(output[1].squeeze() - all_num_transactions), padding_mask)
+                masked_amnt = masked_mean(abs(output[0].squeeze(2) - all_amnt_transactions), padding_mask)
+                masked_num = masked_mean(abs(output[1].squeeze(2) - all_num_transactions), padding_mask)
+                masked_num_acc = masked_mean((torch.clamp(torch.round(output[1]).squeeze(2),  0) == all_num_transactions).float(), padding_mask)
                 
                 log_dict[start + 'amnt'] += masked_amnt.sum().item()
                 log_dict[start + 'num'] += masked_num.sum().item()
+                log_dict[start + 'num_accuracy'] += masked_num_acc.sum().item()
                 
 #                 pred = torch.tensor([(abs(output['num_features'][i].squeeze() - batch['num_features'][i][:, 1:]) / abs(output['num_features'][i].squeeze())).mean(1).mean(0) \
 #                         for i in range(len(batch['num_features']))])
@@ -263,6 +269,10 @@ def eval_model(model, dataloader, task='default', data='vtb', batch_size=32, dev
                        
     else:
         raise NotImplementedError
-    
+        
+    log_dict['epoch'] = epoch
     wandb.log(log_dict)
+    
+    del log_dict['epoch']
+    
     return log_dict
