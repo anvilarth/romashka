@@ -57,6 +57,8 @@ config_parser = argparse.ArgumentParser(description='Training Config', add_help=
 config_parser.add_argument('-c', '--config', default='', type=str, metavar='FILE',
                         help='YAML config file specifying default arguments')
 
+config_parser.add_argument('--model_config', default='', type=str, metavar='FILE',
+                        help='YAML config file specifying default arguments')
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--group', type=str, default='models')
@@ -111,6 +113,12 @@ if args_config.config:
     with open(args_config.config, 'r') as f:
         cfg = yaml.safe_load(f)
         parser.set_defaults(**cfg)
+        
+if args_config.model_config:
+    with open(args_config.model_config, 'r') as f:
+        cfg = yaml.safe_load(f)
+        parser.set_defaults(**cfg)
+        
 # The main arg parser parses the rest of the args, the usual
 # defaults will have been overridden if config file specified.
 args = parser.parse_args(remaining)
@@ -404,8 +412,8 @@ for epoch in range(num_epochs):
         val_dataloader = batches_generator(dataset_val, batch_size=val_batch_size, device=device, is_train=True, output_format='torch', reduce_size=args.val_reduce_size)
         train_dataloader = batches_generator(dataset_train, batch_size=train_batch_size, device=device, is_train=True, output_format='torch', reduce_size=args.reduce_size)    
 
-    val_log_dict = eval_model(model, val_dataloader, task=args.task, data=args.data, device=device, train=False, num_feature_ids=num_feature_ids, cat_feature_ids=cat_feature_ids)    
-    _ = eval_model(model, train_dataloader, task=args.task, data=args.data, device=device, train=True, num_feature_ids=num_feature_ids, cat_feature_ids=cat_feature_ids)
+    val_log_dict = eval_model(model, val_dataloader, epoch=epoch, task=args.task, data=args.data, device=device, train=False, num_feature_ids=num_feature_ids, cat_feature_ids=cat_feature_ids)    
+    _ = eval_model(model, train_dataloader, epoch=epoch, task=args.task, data=args.data, device=device, train=True, num_feature_ids=num_feature_ids, cat_feature_ids=cat_feature_ids)
     
      
     if epoch % 5 == 0:
@@ -416,10 +424,12 @@ for epoch in range(num_epochs):
 
 torch.save(model.state_dict(), checkpoint_dir + f'/{run_name}+final_model.ckpt')
 
+final_dict = {}
 for key in val_log_dict:
-    val_log_dict['final_' + key] = val_log_dict[key]
-    del val_log_dict[key]
+    #val_log_dict['final_' + key] = val_log_dict[key]
+    #del val_log_dict[key]
+    final_dict['final_' + key] = val_log_dict[key]
 
-wandb.log(val_log_dict)
+wandb.log(final_dict)
     
 wandb.finish()
