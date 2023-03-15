@@ -55,11 +55,13 @@ logger = WandbLogger(
     )
 
 checkpoint_callback = ModelCheckpoint(
-    monitor='accuracy3',
-    dirpath='checkpoints/',
+    # monitor='accuracy3',
+    dirpath='/home/jovyan/romashka/checkpoints/',
     filename='tqa-{epoch:02d}-{accuracy3:.2f}',
     save_weights_only=True,
     every_n_epochs=1,
+    save_last=True,
+    mode='max',
 )
 
 model_transaction = TransactionsModel(cat_embedding_projections,
@@ -85,7 +87,7 @@ tqa = TransactionQAModel(model, model_transaction, linear_mapping, tok)
 number_of_days = np.random.choice(train_days.numpy())
 
 train_dataloader = TransactionQADataset(dataset_train, batch_size=16)
-val_dataloader = TransactionQADataset(dataset_val, batch_size=16)
+val_dataloader = TransactionQADataset(dataset_val, batch_size=16, shuffle=False)
 
 trainer = pl.Trainer(limit_train_batches=10000, max_epochs=20, gpus=1, logger=logger, callbacks=[checkpoint_callback])
 trainer.fit(model=tqa, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
