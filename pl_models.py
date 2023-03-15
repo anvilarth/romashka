@@ -24,7 +24,7 @@ class TransactionQAModel(pl.LightningModule):
         self.num_days = num_days
         self.warmup_steps = warmup_steps
         
-        self.qa_pool = [('next_mcc', '</trx> Will the next transactions have merchang category code 1?', '')]
+        self.qa_pool = [('next_mcc', '</trx> Will the next transactions have merchang category code 1? Yes or No?', '')]
         
         # self.qa_pool = [('next7_num', 'how many transactions the client will make in the next 7 days', 'the client will make')]
         self.tok = tokenizer
@@ -151,7 +151,8 @@ class TransactionQAModel(pl.LightningModule):
 #         self.log('accuracy3', accuracy3, batch_size=batch_size)
 #         self.log('accuracy1', accuracy3, batch_size=batch_size)
 
-        # self.log(self.rouge(text_output, answer_output))
+        wandb.log(self.rouge(text_output, answer_output))
+    
         self.log('val_loss', outputs.loss, batch_size=batch_size)
         
         if batch_idx == 0:

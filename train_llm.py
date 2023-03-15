@@ -7,6 +7,7 @@ import wandb
 import tqdm
 import pickle
 import pytorch_lightning as pl
+import argparse
 
 from torch.utils.data import IterableDataset, DataLoader
 from pytorch_lightning.loggers import WandbLogger
@@ -21,6 +22,12 @@ from tools import make_time_batch, calculate_embedding_size
 from pl_models import TransactionQAModel
 from pl_dataloader import TransactionQADataset
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--model_name', type=str, default='google/flan-t5-small')
+
+args = parser.parse_args()
 
 with open('./assets/num_embedding_projections.pkl', 'rb') as f:
     num_embedding_projections = pickle.load(f)
@@ -42,8 +49,8 @@ dataset_val = sorted([os.path.join(valpath_to_dataset, x) for x in valdir_with_d
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-train_days = torch.load('train_days.pt')
-val_days = torch.load('val_days.pt')
+train_days = torch.load('assets/train_days.pt')
+val_days = torch.load('assets/val_days.pt')
 
 
 ckpt = torch.load('/home/jovyan/romashka/wandb/run-20230222_133923-dhkmskss/files/checkpoints/final_model.ckpt')
@@ -55,7 +62,7 @@ logger = WandbLogger(
     )
 
 checkpoint_callback = ModelCheckpoint(
-    # monitor='accuracy3',
+    monitor='val_loss',
     dirpath='/home/jovyan/romashka/checkpoints/',
     filename='tqa-{epoch:02d}-{accuracy3:.2f}',
     save_weights_only=True,
@@ -76,11 +83,17 @@ model_transaction = TransactionsModel(cat_embedding_projections,
                          )
 model_transaction.load_state_dict(ckpt)
 model_transaction.to(device)
+if args.model_name == 'google/flan-t5-small':
+    linear_mapping = nn.Linear(384, 512).to(device)
 
-linear_mapping = nn.Linear(384, 512).to(device)
+elif args.model_name == 'google/flan-t5-xl':
+    linear_mapping = nn.Linear(384, 2048).to(device)
+    
+elif args.model_name == 'google/flan-t5-large':
+    linear_mapping = nn.Linear(384, 1024).to(device)
 
-tok = AutoTokenizer.from_pretrained('google/flan-t5-small')
-model = AutoModelForSeq2SeqLM.from_pretrained('google/flan-t5-small').to(device)
+tok = AutoTokenizer.from_pretrained(args.model_name)
+model = AutoModelForSeq2SeqLM.from_pretrained(args.model_name).to(device)
 
 tqa = TransactionQAModel(model, model_transaction, linear_mapping, tok)
 
