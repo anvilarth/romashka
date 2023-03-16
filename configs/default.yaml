@@ -3,7 +3,7 @@ task: 'default'
 head_type: 'linear'
 
 scheduler: True
-num_epochs: 15
+num_epochs: 20
 optimizer: 'adamw'
 lr: 0.0001
 batch_size: 4

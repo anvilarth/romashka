@@ -273,6 +273,9 @@ if args.checkpoint_path != '':
         
         
     model.load_state_dict(ckpt, strict=False)
+else:
+    print('FROM SCRATCH')
+    model.requires_grad_(True)
         
 if args.finetune is not None:
     for param in model.parameters():
