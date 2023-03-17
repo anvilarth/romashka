@@ -8,6 +8,7 @@ import random
 import pytorch_lightning as pl
 
 from torchmetrics.text.rouge import ROUGEScore
+from torchmetrics import AUROC
 from tools import make_time_batch
 from transformers import get_linear_schedule_with_warmup
 from data_generators import cat_features_names
@@ -24,15 +25,19 @@ class TransactionQAModel(pl.LightningModule):
         self.num_days = num_days
         self.warmup_steps = warmup_steps
         
-        self.qa_pool = [('next_mcc', '</trx> Will the next transactions have merchang category code 1? Yes or No?', '')]
+        self.qa_pool = [
+                        # ('next_mcc', '</trx> Will the next transactions have merchang category code 1? Yes or No?', ''),
+                        ('default', '</trx> Will the client have a credit default? Yes or No?', '')
+        ]
         
         # self.qa_pool = [('next7_num', 'how many transactions the client will make in the next 7 days', 'the client will make')]
         self.tok = tokenizer
         self.starting = self.tok.encode("This is the client's transaction history <trx>", return_tensors='pt').cuda()
         
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore=['language_model', 'trx_model', 'connector'])
             
-        self.rouge = ROUGEScore()
+        # self.rouge = ROUGEScore()
+        self.auc = AUROC(task='binary')
         self.lm_model = language_model
         self.trx_model = transaction_model
         self.connector = connector
@@ -66,14 +71,10 @@ class TransactionQAModel(pl.LightningModule):
         batch['task'] = task_name
         
         return batch
-
-    def get_predictions(self, batch, batch_idx=None):
-        ### Preparing input
-        task = batch['task']
-        batch_embedding_prefix, batch_embedding_question, batch_answer_ending = self.prepare_tokens(batch)
-        answer_mask = torch.ones(batch_answer_ending.shape[1]).cuda()
-        
     
+    def get_task_label(self, batch):
+        task = batch['task']
+
         if task == 'next_mcc':
             trx_index = max(1, batch['mask'].sum(1).min().item()) - 1
 
@@ -81,25 +82,51 @@ class TransactionQAModel(pl.LightningModule):
                 return None, None
 
             input_labels = batch['cat_features'][cat_features_names.index('mcc_category')][:, trx_index]
-            text_answer = list(map(lambda x: 'Yes' if x else 'No', (input_labels == 1).cpu()))
+            text_answer = list(map(lambda x: 'Yes' if x else 'No', (input_labels == 1)))
 
             target = self.tok.batch_encode_plus(text_answer, padding=True, return_tensors='pt')
-            
-        else:
+
+        elif task == 'default':
+            trx_index = batch['mask'].shape[1]
+            input_labels = batch['label']
+            text_answer = list(map(lambda x: 'Yes' if x else 'No', (input_labels == 1)))
+            target = self.tok.batch_encode_plus(text_answer, padding=True, return_tensors='pt')
+
+
+        elif task == 'next7_num':
             _, labels, _, padding_mask = make_time_batch(batch, number_days=number_of_days)
             trx_index = max(1, padding_mask.sum(1).min().item())
 
             input_labels = labels[:, trx_index - 1]
             target = self.tok.batch_encode_plus(list(map(lambda x: str(x.item()) + ' transactions', input_labels.int())), padding=True, return_tensors='pt')
-           
+
             if trx_index == 1:
                 return None, None
 
-            ### Passing input to text model
+        return target, trx_index
+
+    def get_predictions(self, batch, batch_idx=None):
+        ### Preparing input
+        device = batch['mask'].device
+        
+        task = batch['task']
+        batch_embedding_prefix, batch_embedding_question, batch_answer_ending = self.prepare_tokens(batch)
+        answer_mask = torch.ones(batch_answer_ending.shape[1], device=device)
+        
+        target, trx_index = self.get_task_label(batch)
+        
+        if target is None:
+            return None, None
         
         out = self.connector(self.trx_model.get_embs(batch)[0])
         encoder_input = out[:, :trx_index]
-
+        
+        # prefix_mask = torch.ones(batch_embedding_prefix.shape[:2], device=device)
+        # encoder_input_mask = batch['mask'][:, :trx_index]
+        # question_mask = torch.ones(batch_embedding_question.shape[:2], device=device)
+        
+        # encoder_attention_mask = torch.cat([prefix_mask, encoder_input_mask, question_mask], dim=1)
+        
         rly_encoder_input = torch.cat([batch_embedding_prefix, encoder_input, batch_embedding_question], dim=1)
         torch_labels = target.input_ids.cuda()
         attention_mask = target.attention_mask.cuda()
@@ -107,7 +134,11 @@ class TransactionQAModel(pl.LightningModule):
         answer = torch.cat([batch_answer_ending, torch_labels], dim=1)
         decoder_mask = torch.cat([answer_mask, attention_mask], dim=1)
 
-        outputs = self.lm_model(inputs_embeds=rly_encoder_input, labels=answer, decoder_attention_mask=decoder_mask)
+        outputs = self.lm_model(
+                                inputs_embeds=rly_encoder_input, 
+                                labels=answer, 
+                                # attention_mask=encoder_attention_mask, 
+                                decoder_attention_mask=decoder_mask)
 
         return outputs, answer
         
@@ -131,8 +162,9 @@ class TransactionQAModel(pl.LightningModule):
         if outputs is None:
             return None
         
-        text_output = self.tok.batch_decode(outputs.logits.argmax(2))
-        answer_output = self.tok.batch_decode(answer)
+        targets = (answer[:, -2] == 2163).long()
+        preds = torch.sigmoid(outputs.logits[:, 0, 465] - outputs.logits[:, 0, 2163])
+        self.log('val_auc', self.auc(preds,targets), batch_size=batch_size)
         
 #         new_tmp = [i.split(' ')[0] for i in text_output] 
 #         tensorized_output = torch.tensor(list(map(lambda x: transform_labels(x), new_tmp)), device='cuda')
@@ -151,11 +183,14 @@ class TransactionQAModel(pl.LightningModule):
 #         self.log('accuracy3', accuracy3, batch_size=batch_size)
 #         self.log('accuracy1', accuracy3, batch_size=batch_size)
 
-        wandb.log(self.rouge(text_output, answer_output))
+        # wandb.log(self.rouge(text_output, answer_output))
     
+        
         self.log('val_loss', outputs.loss, batch_size=batch_size)
         
         if batch_idx == 0:
+            text_output = self.tok.batch_decode(outputs.logits.argmax(2))
+            answer_output = self.tok.batch_decode(answer)
             self.logger.log_table("Comparison", columns=['Predicted', 'True'],  data=np.stack([np.array(text_output), np.array(answer_output)], axis=1))
 
         return outputs.loss #, accuracy1, accuracy5, accuracy3, 

@@ -26,6 +26,8 @@ from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--model_name', type=str, default='google/flan-t5-small')
+parser.add_argument('--max_seq_len', type=int, default=150)
+parser.add_argument('--min_seq_len', type=int, default=50)
 
 args = parser.parse_args()
 
@@ -64,11 +66,11 @@ logger = WandbLogger(
 checkpoint_callback = ModelCheckpoint(
     monitor='val_loss',
     dirpath='/home/jovyan/romashka/checkpoints/',
-    filename='tqa-{epoch:02d}-{accuracy3:.2f}',
+    filename='tqa-{epoch:02d}-{val_loss:.2f}',
     save_weights_only=True,
     every_n_epochs=1,
     save_last=True,
-    mode='max',
+    mode='min',
 )
 
 model_transaction = TransactionsModel(cat_embedding_projections,
@@ -99,10 +101,20 @@ tqa = TransactionQAModel(model, model_transaction, linear_mapping, tok)
 
 number_of_days = np.random.choice(train_days.numpy())
 
-train_dataloader = TransactionQADataset(dataset_train, batch_size=16)
-val_dataloader = TransactionQADataset(dataset_val, batch_size=16, shuffle=False)
+train_dataloader = TransactionQADataset(dataset_train, batch_size=16,
+                                        min_seq_len=args.min_seq_len,
+                                        max_seq_len=args.max_seq_len
+                                       )
 
-trainer = pl.Trainer(limit_train_batches=10000, max_epochs=20, gpus=1, logger=logger, callbacks=[checkpoint_callback])
+val_dataloader = TransactionQADataset(dataset_val, batch_size=16, shuffle=False,
+                                        min_seq_len=args.min_seq_len,
+                                        max_seq_len=args.max_seq_len
+                                     )
+
+trainer = pl.Trainer(limit_train_batches=10000, max_epochs=20, 
+                     gradient_clip_val=5,
+                     gpus=1, logger=logger, 
+                     callbacks=[checkpoint_callback])
 trainer.fit(model=tqa, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
 
 
