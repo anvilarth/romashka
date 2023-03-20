@@ -15,12 +15,12 @@ class TransactionQADataset(IterableDataset):
         self.data = dataset_train
         self.batch_size = batch_size
         self.device = device
-        self.foo = lambda: batches_generator(self.data, batch_size = self.batch_size, shuffle = shuffle,
-                                             device = self.device,
-                                             is_train = True,
-                                             output_format = 'torch',
-                                             min_seq_len = min_seq_len,
-                                             max_seq_len = max_seq_len)
+        self.foo = lambda: batches_generator(self.data, batch_size=self.batch_size, shuffle=shuffle,
+                                             device=self.device,
+                                             is_train=True,
+                                             output_format='torch',
+                                             min_seq_len=min_seq_len,
+                                             max_seq_len=max_seq_len)
 
     def __iter__(self):
         return self.foo()

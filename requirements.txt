@@ -10,3 +10,5 @@ einops
 timm
 pyspark
 wandb
+pytest
+nltk

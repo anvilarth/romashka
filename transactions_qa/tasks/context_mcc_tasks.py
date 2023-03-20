@@ -67,19 +67,19 @@ class MostFrequentMCCCodeTask(AbstractTask):
         device = batch['mask'].device
         batch_size = batch['mask'].shape[0]
 
-        mask_batch = batch['mask']
-        target_feature_batch = batch['cat_features'][self.target_feature_index]
+        mask_batch = batch['mask']  # bool Tensor [batch_size, seq_len]
+        target_feature_batch = batch['cat_features'][self.target_feature_index]  # Tensor [batch_size, seq_len]
 
         # Construct target values
         target_feature_value_batch = []
         for feature_, mask_ in zip(target_feature_batch, mask_batch):
-            feature_ = torch.masked_select(feature_, mask=mask_)
+            feature_ = torch.masked_select(feature_, mask=mask_)  # get feature without padding
             codes, cnt = torch.unique(feature_, return_counts=True)
-            most_freq_feature = codes[torch.argmax(cnt)]
+            most_freq_feature = codes[torch.argmax(cnt)]  # get a single Tensor value of a feature
             target_feature_value_batch.append(most_freq_feature)
 
         # Map to strings
-        target_feature_value_batch = list(map(lambda x: str(x), target_feature_value_batch))
+        target_feature_value_batch = list(map(lambda x: str(x.item()), target_feature_value_batch))
 
         # for binary task randomly sample True and False examples from batch
         # and construct target sequences
@@ -108,7 +108,7 @@ class MostFrequentMCCCodeTask(AbstractTask):
                     question_target_batch.append(question_end % rand_target)
 
         else:
-            target_batch_options = []
+            target_batch_options = []  # a list of str target options
             for gt_target in target_feature_value_batch:
                 target_options = {gt_target}
                 while len(target_options) < self.num_options:
@@ -132,29 +132,37 @@ class MostFrequentMCCCodeTask(AbstractTask):
         # target_batch -> feature values as str ('15')
 
         question_start_tokens = self.tokenizer.encode(question_start, return_tensors='pt').to(
-            device)  # single tensor + </s>
+            device)  # single tensor + </s> (EOS)
+        # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
         question_target_encoded_batch = self.tokenizer(question_target_batch,
                                                        padding=True,
                                                        truncation=True,
                                                        return_tensors='pt').to(device)
-        # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor)
 
-        target_encoded_batch = [self.tokenizer.encode(target,
-                                                      return_tensors='pt')[:, :-1].to(device)
-                                for target in target_batch]  # list of tensors, each token_ids (no eos token!)
+        # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
+        target_encoded_batch = self.tokenizer.batch_encode_plus(target_batch,
+                                                                padding=True,
+                                                                return_tensors='pt').to(device)
+        # target_encoded_batch = [self.tokenizer.encode(target,
+        #                                               return_tensors='pt')[:, :-1].to(device)
+        #                         for target in target_batch]
+        # list of 2d tensors [num_tokens, 1], each token_ids (no eos token!)
+
+        # Answer template encoding + strip </s> (EOS) token
+        answer_template_encoded = self.tokenizer.encode(self.answer_template,
+                                                        return_tensors='pt')[:, :-1].to(device)
+        batch_answer_template_encoded = answer_template_encoded.repeat(batch_size, 1)
+        batch_answer_mask = torch.ones(batch_size, answer_template_encoded.shape[1]).to(device)
+
         return dict(
             question_start_tokens=question_start_tokens,
             question_end_tokens=question_target_encoded_batch['input_ids'],
             question_end_attention_mask=question_target_encoded_batch['attention_mask'],
-            targets_encoded=target_encoded_batch
+            target_tokens=target_encoded_batch['input_ids'],
+            target_attention_mask=target_encoded_batch['attention_mask'],
+            answer_template_tokens=batch_answer_template_encoded,
+            answer_mask=batch_answer_mask
         )
-        # To embedding of LM
-        # question_start_embeddings = lm_model.encoder.embed_tokens(
-        #     question_start_tokens)  # call for (embed_tokens): Embedding(32128, 512)
-        # question_start_embeddings_batch = question_start_embeddings.repeat(batch_size, 1, 1)
-        #
-        # question_end_embeddings_batch = lm_model.encoder.embed_tokens(
-        #     question_target_encoded_batch['input_ids'])  # call for (embed_tokens): Embedding(32128, 512)
 
     def process_input_sample(self, sample: Any, **kwargs) -> Any:
         pass
