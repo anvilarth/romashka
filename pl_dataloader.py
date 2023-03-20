@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 
 from torch.utils.data import IterableDataset
-from data_generators import batches_generator
+from romashka.data_generators import batches_generator
 
 import pytorch_lightning as pl
 

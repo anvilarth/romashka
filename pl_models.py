@@ -8,9 +8,9 @@ import random
 import pytorch_lightning as pl
 
 from torchmetrics.text.rouge import ROUGEScore
-from tools import make_time_batch
+from romashka.tools import make_time_batch
 from transformers import get_linear_schedule_with_warmup
-from data_generators import cat_features_names
+from romashka.data_generators import cat_features_names
 
 def transform_labels(label):
     if label.isdigit():

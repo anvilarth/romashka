@@ -13,19 +13,19 @@ import transformers
 from torchmetrics.text.rouge import ROUGEScore
 from torchmetrics.classification.f_beta import F1Score
 
-from ...logging_handler import get_logger
+from romashka.logging_handler import get_logger
 
 logger = get_logger(
-    name = "Tasks",
-    logging_level = "INFO"
+    name="Tasks",
+    logging_level="INFO"
 )
 
-from ...data_generators import (transaction_features,
-                                num_features_names,
-                                cat_features_names,
-                                meta_features_names,
-                                num_features_indices,
-                                cat_features_indices)
+from romashka.data_generators import (transaction_features,
+                                      num_features_names,
+                                      cat_features_names,
+                                      meta_features_names,
+                                      num_features_indices,
+                                      cat_features_indices)
 
 
 @dataclass
@@ -40,7 +40,7 @@ class AbstractTask(ABC):
     metrics: specifies the metrics to evaluate the task based on them.
     ...
     """
-    name: str
+    task_name: str
     target_feature_name: str
     target_feature_index: Optional[int] = None
     task_specific_config: Optional[Dict[str, Any]] = None
@@ -71,16 +71,16 @@ class AbstractTask(ABC):
         self.task_specific_config = {
             "source_msx_seq_len": 512,
             "target_max_seq_len": 128
-        } if not len(self.task_specific_config) else self.task_specific_config
-        self.metrics = {"rouge": ROUGEScore()} if not len(self.metrics) else self.metrics
+        } if self.task_specific_config is None else self.task_specific_config
+        self.metrics = {"rouge": ROUGEScore()} if self.metrics is None else self.metrics
         self.question_templates = [
             ("This is the client's transaction history ",
              " Is the last MCC category code 1?")
-        ] if not len(self.question_templates) else self.question_templates
+        ] if self.question_templates is None else self.question_templates
         self.answer_template = [
             ""  # empty for default
-        ] if not len(self.answer_template) else self.answer_template
-        if not len(self.answers_options):
+        ] if self.answer_template is None else self.answer_template
+        if self.answers_options is None:
             if self.is_binary_task:
                 self.answers_options = [
                     "Yes", "No"
@@ -120,11 +120,11 @@ class AbstractTask(ABC):
         it with indices starting from length of the current vocabulary.
 
         """
-        num_added_toks = tokenizer.add_tokens(new_tokens, special = special)
-        logger(f"Added to tokenizer: {num_added_toks} tokens.")
+        num_added_toks = tokenizer.add_tokens(new_tokens, special_tokens=special)
+        logger.info(f"Added to tokenizer: {num_added_toks} tokens.")
         if model is not None:
             # Notice: resize_token_embeddings expect to receive the full size of the new vocabulary,
             # i.e., the length of the tokenizer.
             model.resize_token_embeddings(len(tokenizer))
         else:
-            logger.warning(f"Notice: resize_token_embeddings of a model to adapt to the size of the new vocabulary!")
+            logger.info(f"Notice: resize_token_embeddings of a model to adapt to the size of the new vocabulary!")

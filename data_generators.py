@@ -8,7 +8,6 @@ transaction_features = ['currency', 'operation_kind', 'card_type', 'operation_ty
                         'income_flag', 'mcc', 'country', 'city', 'mcc_category',
                         'day_of_week', 'hour', 'weekofyear', 'amnt', 'days_before', 'hour_diff']
 
-
 num_features_names = ['amnt', 'days_before', 'hour_diff']
 cat_features_names = [x for x in transaction_features if x not in num_features_names]
 meta_features_names = ['product']
@@ -17,8 +16,10 @@ num_features_indices = [transaction_features.index(x) for x in num_features_name
 cat_features_indices = [transaction_features.index(x) for x in cat_features_names]
 
 
-def batches_generator(list_of_paths, batch_size=32, shuffle=False, is_infinite=False, dry_run=False, skip_number_days=None,
-                      verbose=False, device=None, output_format='torch', is_train=True, min_seq_len=None, max_seq_len=None, reduce_size=1.):
+def batches_generator(list_of_paths, batch_size=32, shuffle=False, is_infinite=False, dry_run=False,
+                      skip_number_days=None,
+                      verbose=False, device=None, output_format='torch', is_train=True, min_seq_len=None,
+                      max_seq_len=None, reduce_size=1.):
     """
     функция для создания батчей на вход для нейронной сети для моделей на keras и pytorch.
     так же может использоваться как функция на стадии инференса
@@ -43,25 +44,24 @@ def batches_generator(list_of_paths, batch_size=32, shuffle=False, is_infinite=F
         for path in list_of_paths:
             if verbose:
                 print(f'reading {path}')
-            
+
             # Faster loading (probably)
             gc.disable()
             with open(path, 'rb') as f:
                 data = pickle.load(f)
-            
+
             gc.enable()
-            
+
             ind_list = []
             for elem in data['targets']:
                 size = elem.shape[0]
-                inds = np.arange(int(size*reduce_size))
+                inds = np.arange(int(size * reduce_size))
                 ind_list.append(inds)
 
             for key in data:
                 for ind in range(len(ind_list)):
                     data[key][ind] = data[key][ind][ind_list[ind]]
-            
-                
+
             padded_sequences, targets, products = data['padded_sequences'], data['targets'], data[
                 'products']
             app_ids = data['app_id']
@@ -77,34 +77,36 @@ def batches_generator(list_of_paths, batch_size=32, shuffle=False, is_infinite=F
             for idx in range(len(products)):
                 bucket, product = padded_sequences[idx], products[idx]
                 app_id = app_ids[idx]
-                
+
                 if is_train:
                     target = targets[idx]
-                
+
                 for jdx in range(0, len(bucket), batch_size):
                     if dry_run:
                         yield None
-                        
+
                     batch_sequences = bucket[jdx: jdx + batch_size]
                     if is_train:
                         batch_targets = target[jdx: jdx + batch_size]
-                    
+
                     batch_products = product[jdx: jdx + batch_size]
                     batch_app_ids = app_id[jdx: jdx + batch_size]
                     mask = batch_sequences[:, -6] != 0
-                    batch_sequences[:, num_features_indices[-2]] /= 365
-                    batch_sequences[:, num_features_indices[-1]] /= 95
-                    
+                    batch_sequences[:, num_features_indices[-2]] = batch_sequences[:, num_features_indices[-2]] / 365
+                    batch_sequences[:, num_features_indices[-1]] = batch_sequences[:, num_features_indices[-1]] / 95
+
                     if min_seq_len is not None:
                         if mask.shape[1] < min_seq_len:
                             continue
                     if max_seq_len is not None:
                         if mask.shape[1] > max_seq_len:
                             continue
-                    
+
                     if is_train:
-                        yield dict(num_features=[torch.FloatTensor(batch_sequences[:, i]).to(device) for i in num_features_indices],
-                                   cat_features=[torch.LongTensor(batch_sequences[:, i]).to(device) for i in cat_features_indices],
+                        yield dict(num_features=[torch.FloatTensor(batch_sequences[:, i]).to(device) for i in
+                                                 num_features_indices],
+                                   cat_features=[torch.LongTensor(batch_sequences[:, i]).to(device) for i in
+                                                 cat_features_indices],
                                    mask=torch.BoolTensor(mask).to(device),
                                    event_time=torch.arange(mask.shape[-1], device=device),
                                    meta_features=[torch.LongTensor(batch_products).to(device)],
