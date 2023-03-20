@@ -131,3 +131,8 @@ dmypy.json
 wandb/
 experiments/
 *.ipynb
+
+
+# IDE files & folders
+.idea/*
+.DS_Store
