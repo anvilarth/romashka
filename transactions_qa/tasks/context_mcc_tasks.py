@@ -21,7 +21,6 @@ class MostFrequentMCCCodeTask(AbstractTask):
     tokenizer: transformers.PreTrainedTokenizerBase = None
 
     def __post_init__(self):
-        super().__post_init__()
         self.task_name = "most_frequent_mcc_code"
         self.target_feature_name = 'mcc'  # 108 unique values
         self.is_binary_task = False  # for a default for this task
@@ -49,6 +48,8 @@ class MostFrequentMCCCodeTask(AbstractTask):
         self.answer_template = ""  # left empty for a first time
         self.add_tokens_to_tokenizer = True
         self.num_options = 6  # ground truth + 5 additional options
+
+        super().__post_init__()
 
         if self.tokenizer is None:
             raise AttributeError("This task requires tokenizer to be set!")

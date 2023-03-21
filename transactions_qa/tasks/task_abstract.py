@@ -40,8 +40,8 @@ class AbstractTask(ABC):
     metrics: specifies the metrics to evaluate the task based on them.
     ...
     """
-    task_name: str
-    target_feature_name: str
+    task_name: Optional[str] = None
+    target_feature_name: Optional[str] = None
     target_feature_index: Optional[int] = None
     task_specific_config: Optional[Dict[str, Any]] = None
     metrics: Optional[Dict[str, Any]] = None

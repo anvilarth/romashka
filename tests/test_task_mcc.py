@@ -21,14 +21,13 @@ class TestMostFrequentMCCCodeTask(unittest.TestCase):
         self.lm_model = AutoModelForSeq2SeqLM.from_pretrained(self.model_name).to(self.device)
 
     def test_task_creation(self):
-        task = MostFrequentMCCCodeTask(task_name="most_frequent_mcc_code",
-                                       target_feature_name="mcc",
-                                       tokenizer=self.tokenizer)
+        task = MostFrequentMCCCodeTask(
+            tokenizer=self.tokenizer
+        )
         print(f"Init vocab size: {len(self.tokenizer)}")
         self.lm_model.resize_token_embeddings(len(self.tokenizer))
         print(f"Extended vocab size: {len(self.tokenizer)}")
         print(task)
-
 
     def test_task_on_batch(self):
         task = MostFrequentMCCCodeTask(task_name="most_frequent_mcc_code",

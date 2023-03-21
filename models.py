@@ -128,7 +128,7 @@ class TransactionsModel(nn.Module):
                                         dropout=embedding_dropout)
         inp_size = self.embedding.get_embedding_size()
         config_name = None
-        output_size = None
+        self.output_size = None
 
         if encoder_type in config_names:
             config_name = config_names[encoder_type]
@@ -170,7 +170,7 @@ class TransactionsModel(nn.Module):
                 hidden_size = inp_size
 
             self.encoder = nn.GRU(inp_size, hidden_size, num_layers=num_layers, batch_first=True)
-            output_size = hidden_size
+            self.output_size = hidden_size
             hidden_size = None
 
         elif encoder_type == 'bert':
@@ -243,25 +243,25 @@ class TransactionsModel(nn.Module):
 
         self.cls_token = nn.Parameter(torch.randn(1, 1, hidden_size))
 
-        if output_size is None:
-            output_size = hidden_size
+        if self.output_size is None:
+            self.output_size = hidden_size
 
         if head_type == 'linear':
-            self.head = LinearHead(output_size)
+            self.head = LinearHead(self.output_size)
         elif head_type == 'rnn':
-            self.head = RNNClassificationHead(output_size)
+            self.head = RNNClassificationHead(self.output_size)
         elif head_type == 'mlp':
-            self.head = MLPHead(output_size)
+            self.head = MLPHead(self.output_size)
         elif head_type == 'transformer':
-            self.head = TransformerHead(output_size)
+            self.head = TransformerHead(self.output_size)
         elif head_type == 'id':
             self.head = IdentityHead()
         elif head_type == 'next':
-            self.head = NSPHead(output_size, cat_embedding_projections, num_embedding_projections)
+            self.head = NSPHead(self.output_size, cat_embedding_projections, num_embedding_projections)
         elif head_type == 'next_time':
-            self.head = NextActionsHead(output_size)
+            self.head = NextActionsHead(self.output_size)
         elif head_type == 'product':
-            self.head = ClassificationHead(output_size, 5)
+            self.head = ClassificationHead(self.output_size, 5)
         else:
             raise NotImplementedError
 

@@ -1,6 +1,9 @@
 from .task_abstract import AbstractTask
+from .task_auto import AutoTask, AUTO_TASKS
 from .context_mcc_tasks import MostFrequentMCCCodeTask
 
 __all__ = [
-    "AbstractTask"
+    "AbstractTask",
+    "AUTO_TASKS",
+    "AutoTask"
 ]

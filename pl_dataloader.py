@@ -15,7 +15,9 @@ class TransactionQADataset(IterableDataset):
         self.data = dataset_train
         self.batch_size = batch_size
         self.device = device
-        self.foo = lambda: batches_generator(self.data, batch_size=self.batch_size, shuffle=shuffle,
+        self.foo = lambda: batches_generator(self.data,
+                                             batch_size=self.batch_size,
+                                             shuffle=shuffle,
                                              device=self.device,
                                              is_train=True,
                                              output_format='torch',

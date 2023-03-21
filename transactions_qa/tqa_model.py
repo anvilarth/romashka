@@ -1,6 +1,6 @@
 import random
 import numpy as np
-from typing import List, Optional, Tuple, Any, Dict
+from typing import List, Optional, Tuple, Any, Dict, Union
 
 import wandb
 import torch
@@ -10,44 +10,109 @@ import transformers
 import pytorch_lightning as pl
 from pytorch_lightning.utilities import rank_zero_info
 
-from torchmetrics.text.rouge import ROUGEScore
-from torchmetrics.classification.f_beta import F1Score
-
 from tasks.task_abstract import AbstractTask
 from ..logging_handler import get_logger
+
+
+def make_linear_connector(output_size: Optional[int] = None,
+                          input_size: Optional[int] = None,
+                          embedding_model: Optional[nn.Module] = None,
+                          autoregressive_model: Optional[nn.Module] = None,
+                          device: Optional[Union[torch.device, str]] = 'cpu'):
+    required_output_size = None
+    if output_size is not None:
+        required_output_size = output_size
+    elif embedding_model is not None:
+        try:
+            # As it is custom model
+            required_output_size = embedding_model.head.output_size
+        except Exception as e0:
+            try:
+                # If it is HF model, then  take output dimensions from config
+                required_output_size = embedding_model.config.d_model
+            except Exception as e1:
+                raise AttributeError(f"Cannot get `output_size` from embeddings model:\n{e0}\n{e1}")
+    else:
+        raise AttributeError(f"Unable to define `output_size` from embeddings model"
+                             "as none of `output_size` or `embedding_model` is specified.")
+
+    required_input_size = None
+    if input_size is not None:
+        required_input_size = input_size
+    elif autoregressive_model is not None:
+        try:
+            # If it is HF model, then take inputs dimensions from config
+            required_input_size = autoregressive_model.config.d_model
+        except Exception as e:
+            raise AttributeError(f"Cannot get `input_size` from autoregressive model:\n{e}")
+    else:
+        raise AttributeError(f"Unable to define `input_size` from autoregressive model"
+                             "as none of `input_size` or `autoregressive_model` is specified.")
+
+    print(f"Output dimension of embedding model: {required_output_size}")
+    print(f"Input dimension of autoregressive model: {required_input_size}")
+    print(f"Creating linear connector from {required_output_size} to {required_input_size}"
+          f"and move to device: {device}.")
+
+    return nn.Linear(required_output_size, required_input_size).to(device)
 
 
 class TransactionQAModel(pl.LightningModule):
     def __init__(self,
                  language_model: nn.Module,
                  transaction_model: nn.Module,
-                 connector: nn.Module,
                  tokenizer: transformers.PreTrainedTokenizerBase,
                  tasks: List[AbstractTask],
+                 connector: Optional[nn.Module] = None,
+                 connector_input_size: Optional[int] = None,
+                 connector_output_size: Optional[int] = None,
                  do_freeze_tm: Optional[bool] = True,
                  do_freeze_lm: Optional[bool] = False,
+                 do_freeze_connector: Optional[bool] = False,
                  num_days: Optional[int] = 7,
+                 learning_rate: Optional[float] = 5e-5,
+                 adam_beta1: Optional[float] = 0.9,
+                 adam_beta2: Optional[float] = 0.999,
+                 adam_epsilon: Optional[float] = 1e-8,
                  warmup_steps: Optional[int] = 100,
                  training_steps: Optional[int] = 10_000):
         super().__init__()
         self._logger = get_logger(
             name=self.__class__.__name__,
-            logging_level="DEBUG" if self.verbose else "INFO"
+            logging_level="INFO"
         )
         self.tokenizer = tokenizer
         self.language_model = language_model
         self.transaction_model = transaction_model
-        self.connector = connector
+        self.connector = make_linear_connector(
+            input_size=connector_output_size,
+            output_size=connector_input_size,
+            embedding_model=self.transaction_model,
+            autoregressive_model=self.language_model) \
+            if connector is None else connector
         self.tasks = tasks
         self.warmup_steps: int = warmup_steps
         self.training_steps: int = training_steps
+        self.base_learning_rate = learning_rate
+        self.adam_beta1 = adam_beta1
+        self.adam_beta2 = adam_beta2
+        self.adam_epsilon = adam_epsilon
 
         self.do_freeze_tm: bool = do_freeze_tm
         self.do_freeze_lm: bool = do_freeze_lm
+        self.do_freeze_connector: bool = do_freeze_connector
         self._is_multitask: bool = False
         self._prepare_model()
 
-        self.save_hyperparameters(ignore=['tasks', '_logger'])
+        self.save_hyperparameters(ignore=['tasks', '_logger', 'columns',
+                                          'transaction_model', 'language_model', 'connector',
+                                          'log_eval_predictions_table', 'log_eval_steps_counter'])
+
+        # ✨ W&B: Create a Table to store predictions for each test step
+        self.columns = ["epoch", "step #", "task", "prediction", "truth"]
+        self.log_eval_predictions_table = wandb.Table(columns=self.columns)
+        self.log_eval_steps_counter = 0
+        self.num_eval_batches_to_log = 2
 
     def configure_optimizers(self):
         """
@@ -97,13 +162,17 @@ class TransactionQAModel(pl.LightningModule):
             for param in self.language_model.parameters():
                 param.requires_grad = False
 
+        if self.do_freeze_connector:
+            self._logger.info(f"Freezing connector layer's parameters...")
+            for param in self.connector.parameters():
+                param.requires_grad = False
 
     def _resize_text_embeddings(self):
-        init_embeddings = self.lm_model.encoder.get_input_embeddings()
+        init_embeddings = self.language_model.encoder.get_input_embeddings()
         self._logger.info(f"LM initial `num_embeddings`: {init_embeddings.num_embeddings}, "
                           f"`embedding_dim`: {init_embeddings.embedding_dim}")
-        self.lm_model.resize_token_embeddings(len(self.tokenizer))
-        resized_embedds = self.lm_model.encoder.get_input_embeddings()
+        self.language_model.resize_token_embeddings(len(self.tokenizer))
+        resized_embedds = self.language_model.encoder.get_input_embeddings()
         self._logger.info(f"LM resized `num_embeddings`: {resized_embedds.num_embeddings}, "
                           f"`embedding_dim`: {resized_embedds.embedding_dim}")
 
@@ -118,11 +187,11 @@ class TransactionQAModel(pl.LightningModule):
         batch_size = batch['mask'].size()[0]
 
         # Question template: to embedding of LM
-        question_start_embeddings = self.lm_model.encoder.embed_tokens(
+        question_start_embeddings = self.language_model.encoder.embed_tokens(
             qa_batch['question_start_tokens'])  # call for (embed_tokens): Embedding(32128, 512)
         question_start_embeddings_batch = question_start_embeddings.repeat(batch_size, 1, 1)
 
-        question_end_embeddings_batch = self.lm_model.encoder.embed_tokens(
+        question_end_embeddings_batch = self.language_model.encoder.embed_tokens(
             qa_batch['question_end_tokens'])  # call for (embed_tokens): Embedding(32128, 512)
 
         # Answer template: encode + strip </s> (EOS) token
@@ -156,9 +225,9 @@ class TransactionQAModel(pl.LightningModule):
         # Pass through LM
         # contains: ['loss', 'logits', 'past_key_values', 'encoder_last_hidden_state']
         # `logits` of size: [batch_size, max_pred_len, vocab_size]
-        lm_outputs = self.lm_model(inputs_embeds=encoder_input,
-                                   labels=batch_answers,
-                                   decoder_attention_mask=batch_answers_mask)
+        lm_outputs = self.language_model(inputs_embeds=encoder_input,
+                                         labels=batch_answers,
+                                         decoder_attention_mask=batch_answers_mask)
         return lm_outputs, batch_answers
 
     def training_step(self, batch, batch_idx: Optional[int] = None) -> Optional[Any]:
@@ -186,14 +255,14 @@ class TransactionQAModel(pl.LightningModule):
 
         loss = outputs.loss
 
-        self.log_dict(
-            {
-                'train_loss': loss,
-                f'{task_name}_train_loss': loss
-            }
-        )
+        logging_dict = {
+            'train_loss': loss,
+            f'{task_name}_train_loss': loss
+        }
+        self.log_dict(logging_dict)
+        wandb.log(logging_dict)
+        # self._logger.info(f"Train step results:\n{logging_dict}")
         return loss
-
 
     def validation_step(self, batch,
                         batch_idx: Optional[int],
@@ -208,27 +277,6 @@ class TransactionQAModel(pl.LightningModule):
 
         Return:
             - Any object or value
-
-        Examples:
-            def validation_step(self, batch, batch_idx):
-                x, y = batch
-
-                # implement your own
-                out = self(x)
-                loss = self.loss(out, y)
-
-                # log 6 example images
-                # or generated text... or whatever
-                sample_imgs = x[:6]
-                grid = torchvision.utils.make_grid(sample_imgs)
-                self.logger.experiment.add_image('example_images', grid, 0)
-
-                # calculate acc
-                labels_hat = torch.argmax(out, dim=1)
-                val_acc = torch.sum(y == labels_hat).item() / (len(y) * 1.0)
-
-                # log the outputs!
-                self.log_dict({'val_loss': loss, 'val_acc': val_acc})
         """
         # Sample a random single task
         task_idx = random.sample(list(range(len(self.tasks))), k=1)[0]
@@ -240,9 +288,11 @@ class TransactionQAModel(pl.LightningModule):
 
         loss = outputs.loss
 
-        predictions_decoded = self.tokenizer.batch_decode(outputs.logits.argmax(2))
-        batch_answers_decoded = self.tokenizer.batch_decode(batch_answers)
-
+        predictions_decoded = self.tokenizer.batch_decode(outputs.logits.argmax(2),
+                                                          skip_special_tokens=True)
+        batch_answers_decoded = self.tokenizer.batch_decode(batch_answers,
+                                                            skip_special_tokens=True)
+        # Calc metrics
         metrics_scores = {}
         for metric_name, metric in task.metrics.items():
             try:
@@ -252,12 +302,42 @@ class TransactionQAModel(pl.LightningModule):
                 self._logger.error(f"error occurred during task metric `{metric_name}` calculation:\n{e}")
 
         logging_dict = {
-                'val_loss': loss,
-                f'{task.task_name}_val_loss': loss
-            }
+            'val_loss': loss,
+            f'{task.task_name}_val_loss': loss
+        }
         logging_dict = dict(list(logging_dict.items()) + list(metrics_scores.items()))
+        # self._logger.info(f"Validation step results:\n{logging_dict}")
         self.log_dict(
             logging_dict,
             batch_size=batch_answers.size(0)
         )
+        wandb.log(logging_dict)
+
+        # Log predictions on validation set
+        if self.log_eval_steps_counter < self.num_eval_batches_to_log:
+            self.log_predictions(logits=outputs.logits.detach().cpu(),
+                                 answers=batch_answers.detach().cpu(),
+                                 predictions_table=self.log_eval_predictions_table,
+                                 log_counter=self.log_eval_steps_counter)
+            self.log_eval_steps_counter += 1
         return loss
+
+    def on_validation_epoch_start(self) -> None:
+        # Reset log counter
+        self.log_eval_steps_counter = 0
+
+    def log_predictions(self,
+                        logits: torch.Tensor,
+                        answers: torch.Tensor,
+                        predictions_table: wandb.Table, log_counter: int,
+                        task_name: Optional[str] = "default",
+                        epoch: Optional[int] = 0):
+        predictions_decoded = self.tokenizer.batch_decode(logits.argmax(2),
+                                                          skip_special_tokens=True)
+        answers_decoded = self.tokenizer.batch_decode(answers,
+                                                      skip_special_tokens=True)
+        self._logger.info(f"Validation predictions vs. answers, batch #{log_counter}:")
+        # columns = ["epoch", "step #", "task", "prediction", "truth"]
+        for i, (pred, answer) in enumerate(zip(predictions_decoded, answers_decoded)):
+            self._logger.info(f"\t#{i}\tpredicted: {pred}, answer: {answer}")
+            predictions_table.add_data(epoch, "_".join([str(log_counter), str(i)]), task_name, pred, answer)
