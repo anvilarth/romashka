@@ -109,10 +109,10 @@ class TransactionQAModel(pl.LightningModule):
                                           'log_eval_predictions_table', 'log_eval_steps_counter'])
 
         # ✨ W&B: Create a Table to store predictions for each test step
-        self.columns = ["epoch", "step #", "task", "prediction", "truth"]
+        self.columns = ["epoch", "step #", "task", "question", "prediction", "truth"]
         self.log_eval_predictions_table = wandb.Table(columns=self.columns)
         self.log_eval_steps_counter = 0
-        self.num_eval_batches_to_log = 2
+        self.num_eval_batches_to_log = 10
 
     def configure_optimizers(self):
         """
@@ -228,6 +228,11 @@ class TransactionQAModel(pl.LightningModule):
         lm_outputs = self.language_model(inputs_embeds=encoder_input,
                                          labels=batch_answers,
                                          decoder_attention_mask=batch_answers_mask)
+
+        # Return question as:
+        # Q_start_tokens + TRNS_embeddings + Q_end_tokens
+        lm_outputs['question_encoded'] = torch.cat([question_start_embeddings_batch,
+                                                    question_end_embeddings_batch], dim=1)
         return lm_outputs, batch_answers
 
     def training_step(self, batch, batch_idx: Optional[int] = None) -> Optional[Any]:
@@ -326,9 +331,16 @@ class TransactionQAModel(pl.LightningModule):
         # Reset log counter
         self.log_eval_steps_counter = 0
 
+    def on_fit_end(self) -> None:
+        # ✨ W&B: Log predictions table to wandb
+        wandb.log({"val_predictions": self.log_eval_predictions_table})
+        # ✨ W&B: Mark the run as complete (useful for multi-cell notebook)
+        wandb.finish()
+
     def log_predictions(self,
                         logits: torch.Tensor,
                         answers: torch.Tensor,
+                        questions: torch.Tensor,
                         predictions_table: wandb.Table, log_counter: int,
                         task_name: Optional[str] = "default",
                         epoch: Optional[int] = 0):
@@ -336,8 +348,10 @@ class TransactionQAModel(pl.LightningModule):
                                                           skip_special_tokens=True)
         answers_decoded = self.tokenizer.batch_decode(answers,
                                                       skip_special_tokens=True)
+        questions_decoded = self.tokenizer.batch_decode(questions,
+                                                      skip_special_tokens=True)
         self._logger.info(f"Validation predictions vs. answers, batch #{log_counter}:")
-        # columns = ["epoch", "step #", "task", "prediction", "truth"]
-        for i, (pred, answer) in enumerate(zip(predictions_decoded, answers_decoded)):
-            self._logger.info(f"\t#{i}\tpredicted: {pred}, answer: {answer}")
-            predictions_table.add_data(epoch, "_".join([str(log_counter), str(i)]), task_name, pred, answer)
+        # columns = ["epoch", "step #", "task", "question", "prediction", "truth"]
+        for i, (pred, answer, question) in enumerate(zip(predictions_decoded, answers_decoded, questions_decoded)):
+            self._logger.info(f"\t#{i}{question}:\tpredicted: {pred}, answer: {answer}")
+            predictions_table.add_data(epoch, "_".join([str(log_counter), str(i)]), task_name, question, pred, answer)

@@ -13,6 +13,7 @@ def preprocess_logits_for_metrics(logits: Any, labels: Any):
         logits = logits[0]
     return logits.argmax(dim=-1)
 
+
 def postprocess_text(predictions, labels):
     import nltk
 
@@ -24,6 +25,22 @@ def postprocess_text(predictions, labels):
     labels = ["\n".join(nltk.sent_tokenize(label)) for label in labels]
 
     return predictions, labels
+
+
+def compute_task_max_decoding_length(word_list, tokenizer):
+    """Computes the max decoding length for the given list of words
+    Args:
+      tokenizer ():
+      word_list: A list of stringss.
+    Returns:
+      maximum length after tokenization of the inputs.
+    """
+    max_len = 0
+    for word in word_list:
+        ids = tokenizer.encode(word)
+        max_len = max(max_len, len(ids))
+    return max_len
+
 
 def get_last_checkpoint(folder):
     content = os.listdir(folder)
