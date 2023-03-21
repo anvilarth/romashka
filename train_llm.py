@@ -57,7 +57,8 @@ val_days = torch.load('assets/val_days.pt')
 
 full_qa_pool = {
                 'next_mcc_2': ('</trx> Will the next transactions have merchant category code 2? Yes or No?', ''),
-                'default': ('</trx> Will the client have a credit default? Yes or No?', '')
+                'default': ('</trx> Will the client have a credit default? Yes or No?', ''),
+                'next_amnt': ('</trx> Will the next transactions have amount more than 0.41? Yes or No?', '')
 }
 
 if args.qa_pool != 'full':
@@ -139,5 +140,6 @@ trainer = pl.Trainer(limit_train_batches=10000, max_epochs=20,
                      callbacks=[checkpoint_callback])
 
 trainer.fit(model=tqa, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
+trainer.test(tqa, dataloaders=val_dataloader)
 
 

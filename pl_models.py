@@ -13,9 +13,10 @@ from torchmetrics.classification import BinaryAccuracy
 
 from tools import make_time_batch
 from transformers import get_linear_schedule_with_warmup
-from data_generators import cat_features_names, cat_features_indices
+from data_generators import cat_features_names, cat_features_indices, num_features_names, num_features_indices
 
-map_index = dict(zip(cat_features_names, cat_features_indices))
+cat_map_index = dict(zip(cat_features_names, range(len(cat_features_names))))
+num_map_index = dict(zip(num_features_names, range(len(num_features_names))))
 
 def transform_labels(label):
     if label.isdigit():
@@ -65,8 +66,13 @@ class TransactionQAModel(pl.LightningModule):
 
         return batch_embedding_prefix, batch_embedding_question, batch_answer_ending
     
-    def add_qa2transactions(self, batch):
-        task_name, (question, answer) = random.choice(list(self.qa_pool.items()))
+    def add_qa2transactions(self, batch, task_name=None):
+        if task_name is None:
+            task_name, (question, answer) = random.choice(list(self.qa_pool.items()))
+            
+        else:
+            question, answer = self.qa_pool[task_name]
+            
         batch['question'] = question
         batch['answer'] = answer
         batch['task'] = task_name
@@ -78,8 +84,15 @@ class TransactionQAModel(pl.LightningModule):
 
         if task == 'next_mcc_2':
             trx_index = batch['mask'].sum(1, keepdim=True) - 1
-            input_labels = torch.gather(batch['cat_features'][map_index['mcc_category']], 1, trx_index)
+            input_labels = torch.gather(batch['cat_features'][cat_map_index['mcc_category']], 1, trx_index)
             text_answer = list(map(lambda x: 'Yes' if x else 'No', (input_labels == 2)))
+
+            target = self.tok.batch_encode_plus(text_answer, padding=True, return_tensors='pt')
+            
+        elif task == 'next_amnt':
+            trx_index = batch['mask'].sum(1, keepdim=True) - 1
+            input_labels = torch.gather(batch['cat_features'][num_map_index['amnt']], 1, trx_index)
+            text_answer = list(map(lambda x: 'Yes' if x else 'No', (input_labels >= 0.41)))
 
             target = self.tok.batch_encode_plus(text_answer, padding=True, return_tensors='pt')
 
@@ -121,7 +134,7 @@ class TransactionQAModel(pl.LightningModule):
         encoder_input_mask = batch['mask']
         question_mask = torch.ones(batch_embedding_question.shape[:2], device=device)
         
-        if task == 'next_mcc_2':
+        if task == 'next_mcc_2' or task == 'next_amnt':
             encoder_input_mask[:, trx_index.flatten()] = 0
         
         encoder_attention_mask = torch.cat([prefix_mask, encoder_input_mask, question_mask], dim=1)
@@ -166,7 +179,7 @@ class TransactionQAModel(pl.LightningModule):
             preds = torch.sigmoid(outputs.logits[:, 0, 2163] - outputs.logits[:, 0, 465])
             self.log('val_auc', self.auc(preds,targets), batch_size=batch_size)
             
-        elif qa_batch['task'] == 'next_mcc_2':
+        elif qa_batch['task'] == 'next_mcc_2' or qa_batch['task'] == 'next_amnt':
             targets = (answer[:, -2] == 2163).long()
             preds = torch.sigmoid(outputs.logits[:, 0, 2163] - outputs.logits[:, 0, 465])
             self.log('val_auc', self.auc(preds,targets), batch_size=batch_size)
@@ -200,6 +213,31 @@ class TransactionQAModel(pl.LightningModule):
             self.logger.log_table("Comparison", columns=['Predicted', 'True'],  data=np.stack([np.array(text_output), np.array(answer_output)], axis=1))
 
         return outputs.loss #, accuracy1, accuracy5, accuracy3, 
+    
+    def test_step(self, batch, batch_idx=None):
+        batch_size = batch['mask'].shape[0]
+
+        for task_name in self.qa_pool:
+            qa_batch = self.add_qa2transactions(batch, task_name)
+            outputs, answer = self.get_predictions(qa_batch, batch_idx)
+
+            if task_name == 'default':
+                targets = (answer[:, -2] == 2163).long()
+                preds = torch.sigmoid(outputs.logits[:, 0, 2163] - outputs.logits[:, 0, 465])
+                self.log('default_test_auc', self.auc(preds,targets), batch_size=batch_size)
+
+            elif task_name == 'next_mcc_2':
+                targets = (answer[:, -2] == 2163).long()
+                preds = torch.sigmoid(outputs.logits[:, 0, 2163] - outputs.logits[:, 0, 465])
+                self.log('next_mcc_test_auc', self.auc(preds,targets), batch_size=batch_size)
+                self.log('next_mcc_test_accuracy', self.accuracy(preds,targets), batch_size=batch_size)
+
+            elif task_name == 'next_amnt':
+                targets = (answer[:, -2] == 2163).long()
+                preds = torch.sigmoid(outputs.logits[:, 0, 2163] - outputs.logits[:, 0, 465])
+                self.log('next_amnt_test_auc', self.auc(preds,targets), batch_size=batch_size)
+                self.log('next_amnt_test_accuracy', self.accuracy(preds,targets), batch_size=batch_size)
+
     
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=1e-4)
