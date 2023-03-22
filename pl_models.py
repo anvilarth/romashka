@@ -95,6 +95,13 @@ class TransactionQAModel(pl.LightningModule):
             text_answer = list(map(lambda x: 'Yes' if x else 'No', (input_labels >= 0.41)))
 
             target = self.tok.batch_encode_plus(text_answer, padding=True, return_tensors='pt')
+            
+        elif task == 'next_hour':
+            trx_index = batch['mask'].sum(1, keepdim=True) - 1
+            input_labels = torch.gather(batch['cat_features'][num_map_index['hour_diff']], 1, trx_index)
+            text_answer = list(map(lambda x: 'Yes' if x else 'No', (input_labels >= 36 / 95)))
+
+            target = self.tok.batch_encode_plus(text_answer, padding=True, return_tensors='pt')
 
         elif task == 'default':
             trx_index = batch['mask'].shape[1]
@@ -134,7 +141,7 @@ class TransactionQAModel(pl.LightningModule):
         encoder_input_mask = batch['mask']
         question_mask = torch.ones(batch_embedding_question.shape[:2], device=device)
         
-        if task == 'next_mcc_2' or task == 'next_amnt':
+        if task == 'next_mcc_2' or task == 'next_amnt' or task == 'next_hour':
             encoder_input_mask[:, trx_index.flatten()] = 0
         
         encoder_attention_mask = torch.cat([prefix_mask, encoder_input_mask, question_mask], dim=1)
@@ -177,32 +184,25 @@ class TransactionQAModel(pl.LightningModule):
         if qa_batch['task'] == 'default':
             targets = (answer[:, -2] == 2163).long()
             preds = torch.sigmoid(outputs.logits[:, 0, 2163] - outputs.logits[:, 0, 465])
-            self.log('val_auc', self.auc(preds,targets), batch_size=batch_size)
+            self.log('default_val_auc', self.auc(preds,targets), batch_size=batch_size)
             
-        elif qa_batch['task'] == 'next_mcc_2' or qa_batch['task'] == 'next_amnt':
+        elif qa_batch['task'] == 'next_mcc_2':
             targets = (answer[:, -2] == 2163).long()
             preds = torch.sigmoid(outputs.logits[:, 0, 2163] - outputs.logits[:, 0, 465])
-            self.log('val_auc', self.auc(preds,targets), batch_size=batch_size)
-            self.log('val_accuracy', self.accuracy(preds,targets), batch_size=batch_size)
-
-#         new_tmp = [i.split(' ')[0] for i in text_output] 
-#         tensorized_output = torch.tensor(list(map(lambda x: transform_labels(x), new_tmp)), device='cuda')
+            self.log('next_mcc_2_val_auc', self.auc(preds,targets), batch_size=batch_size)
+            self.log('next_mcc_2_val_accuracy', self.accuracy(preds,targets), batch_size=batch_size)
+            
+        elif qa_batch['task'] ==  'next_amnt':
+            targets = (answer[:, -2] == 2163).long()
+            preds = torch.sigmoid(outputs.logits[:, 0, 2163] - outputs.logits[:, 0, 465])
+            self.log('next_amnt_val_auc', self.auc(preds,targets), batch_size=batch_size)
+            self.log('next_amnt_val_accuracy', self.accuracy(preds,targets), batch_size=batch_size)
         
-        
-#         accuracy5 = (abs(tensorized_output - input_labels) < 5).float().mean()
-#         accuracy3 = (abs(tensorized_output - input_labels) < 3).float().mean()
-#         accuracy1 = (abs(tensorized_output - input_labels) < 1).float().mean()
-        
-#         baseline0 = (abs(0 - input_labels) < 3).float().mean()
-#         baseline1 = (abs(1 - input_labels) < 3).float().mean()
-#         baseline2 = (abs(2 - input_labels) < 3).float().mean()
-#         baseline3 = (abs(3 - input_labels) < 3).float().mean()
-        
-#         self.log('accuracy5', accuracy5, batch_size=batch_size)
-#         self.log('accuracy3', accuracy3, batch_size=batch_size)
-#         self.log('accuracy1', accuracy3, batch_size=batch_size)
-
-        # wandb.log(self.rouge(text_output, answer_output))
+        elif qa_batch['task'] ==  'next_hour':
+            targets = (answer[:, -2] == 2163).long()
+            preds = torch.sigmoid(outputs.logits[:, 0, 2163] - outputs.logits[:, 0, 465])
+            self.log('next_hour_val_auc', self.auc(preds,targets), batch_size=batch_size)
+            self.log('next_hour_val_accuracy', self.accuracy(preds,targets), batch_size=batch_size)
     
         
         self.log('val_loss', outputs.loss, batch_size=batch_size)
@@ -237,6 +237,12 @@ class TransactionQAModel(pl.LightningModule):
                 preds = torch.sigmoid(outputs.logits[:, 0, 2163] - outputs.logits[:, 0, 465])
                 self.log('next_amnt_test_auc', self.auc(preds,targets), batch_size=batch_size)
                 self.log('next_amnt_test_accuracy', self.accuracy(preds,targets), batch_size=batch_size)
+                
+            elif qa_batch['task'] ==  'next_hour':
+                targets = (answer[:, -2] == 2163).long()
+                preds = torch.sigmoid(outputs.logits[:, 0, 2163] - outputs.logits[:, 0, 465])
+                self.log('next_hour_test_auc', self.auc(preds,targets), batch_size=batch_size)
+                self.log('next_hour_test_accuracy', self.accuracy(preds,targets), batch_size=batch_size)
 
     
     def configure_optimizers(self):

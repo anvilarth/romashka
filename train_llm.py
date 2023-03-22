@@ -59,6 +59,9 @@ full_qa_pool = {
                 'next_mcc_2': ('</trx> Will the next transactions have merchant category code 2? Yes or No?', ''),
                 'default': ('</trx> Will the client have a credit default? Yes or No?', ''),
                 'next_amnt': ('</trx> Will the next transactions have amount more than 0.41? Yes or No?', '')
+                'next_hour': ('</trx> will the next transaction be made in the next 36 hours? Yes or No?', '')
+                # 'next_num_7_days': ('</trx> Will there be more than M transactions in the next N hours? Yes or No?', ''),
+                # 'next_amnt_7_days': ('</trx> Will there be more transactions of more than 1,000 in the next 100 hours? Yes or No?', ''), 
 }
 
 if args.qa_pool != 'full':
@@ -70,7 +73,7 @@ for elem in full_qa_pool:
     print(f'\t -{elem}')
     task_names += f'{elem}-'
 
-ckpt = torch.load('/home/jovyan/romashka/wandb/run-20230222_133923-dhkmskss/files/checkpoints/final_model.ckpt')
+ckpt = torch.load('/home/jovyan/final_model.ckpt')
 
 logger = WandbLogger(
         project='romashka',
