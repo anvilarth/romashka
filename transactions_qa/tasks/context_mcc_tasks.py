@@ -11,7 +11,6 @@ from typing import (Dict, Tuple, List,
 
 import transformers
 from torchmetrics.text.rouge import ROUGEScore
-from torchmetrics.classification.f_beta import F1Score
 
 from .task_abstract import AbstractTask
 
@@ -67,17 +66,24 @@ class MostFrequentMCCCodeTask(AbstractTask):
 
         device = batch['mask'].device
         batch_size = batch['mask'].shape[0]
+        # print(f"Task.process_input_batch():\ton device: {device}, with batch_size: {batch_size}")
 
         mask_batch = batch['mask']  # bool Tensor [batch_size, seq_len]
         target_feature_batch = batch['cat_features'][self.target_feature_index]  # Tensor [batch_size, seq_len]
+        # print(f"Task.process_input_batch():\ttarget_feature_batch size: {target_feature_batch.size()}")
+        # print(f"Task.process_input_batch():\tmask_batch size: {mask_batch.size()}")
+        # print(f"Task.process_input_batch():\ttarget_feature_batch: {target_feature_batch}")
 
         # Construct target values
         target_feature_value_batch = []
-        for feature_, mask_ in zip(target_feature_batch, mask_batch):
-            feature_ = torch.masked_select(feature_, mask=mask_)  # get feature without padding
-            codes, cnt = torch.unique(feature_, return_counts=True)
-            most_freq_feature = codes[torch.argmax(cnt)]  # get a single Tensor value of a feature
-            target_feature_value_batch.append(most_freq_feature)
+        for i, (feature_, mask_) in enumerate(zip(target_feature_batch, mask_batch)):
+            # print(f"\nTask.process_input_batch() #{i} before:\tfeature_: {feature_}, mask: {mask_}")
+            feature_masked = torch.masked_select(feature_.to("cpu"), mask=mask_.to("cpu")).long()  # get feature without padding
+            # print(f"\nTask.process_input_batch() #{i} after:\tfeature_masked: {feature_masked}, mask: {mask_}")
+            codes, cnt = torch.unique(feature_masked, return_counts=True)
+            # print(f"\nTask.process_input_batch():\tcodes: {codes}, cnt: {cnt}")
+            most_freq_feature = codes[torch.argmax(cnt)].long()  # get a single Tensor value of a feature
+            target_feature_value_batch.append(most_freq_feature.to(device))
 
         # Map to strings
         target_feature_value_batch = list(map(lambda x: str(x.item()), target_feature_value_batch))

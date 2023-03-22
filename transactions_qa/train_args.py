@@ -284,10 +284,10 @@ class TrainingArguments:
         default="cpu", metadata={"help": "The device to train on: GPU/TPU/core/CPU."}
     )
     per_device_train_batch_size: Optional[int] = field(
-        default=2, metadata={"help": "Batch size per GPU/TPU core/CPU for training."}
+        default=8, metadata={"help": "Batch size per GPU/TPU core/CPU for training."}
     )
     per_device_eval_batch_size: int = field(
-        default=2, metadata={"help": "Batch size per GPU/TPU core/CPU for evaluation."}
+        default=8, metadata={"help": "Batch size per GPU/TPU core/CPU for evaluation."}
     )
     # -----------------
     do_freeze_language_model: Optional[bool] = field(

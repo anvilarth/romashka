@@ -11,9 +11,9 @@ from torchmetrics.text.rouge import ROUGEScore
 from torchmetrics import AUROC
 from torchmetrics.classification import BinaryAccuracy
 
-from tools import make_time_batch
+from romashka.tools import make_time_batch
 from transformers import get_linear_schedule_with_warmup
-from data_generators import cat_features_names, cat_features_indices, num_features_names, num_features_indices
+from romashka.data_generators import cat_features_names, cat_features_indices, num_features_names, num_features_indices
 
 cat_map_index = dict(zip(cat_features_names, range(len(cat_features_names))))
 num_map_index = dict(zip(num_features_names, range(len(num_features_names))))

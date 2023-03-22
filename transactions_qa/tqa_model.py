@@ -10,7 +10,7 @@ import transformers
 import pytorch_lightning as pl
 from pytorch_lightning.utilities import rank_zero_info
 
-from tasks.task_abstract import AbstractTask
+from romashka.transactions_qa.tasks.task_abstract import AbstractTask
 from ..logging_handler import get_logger
 
 
@@ -187,10 +187,11 @@ class TransactionQAModel(pl.LightningModule):
         batch_size = batch['mask'].size()[0]
 
         # Question template: to embedding of LM
+        # torch.Size([1, len(question_start_tokens))
         question_start_embeddings = self.language_model.encoder.embed_tokens(
             qa_batch['question_start_tokens'])  # call for (embed_tokens): Embedding(32128, 512)
         question_start_embeddings_batch = question_start_embeddings.repeat(batch_size, 1, 1)
-
+        # question_end_tokens: torch.Size([batch_size, len(max_question_end_tokens)])
         question_end_embeddings_batch = self.language_model.encoder.embed_tokens(
             qa_batch['question_end_tokens'])  # call for (embed_tokens): Embedding(32128, 512)
 
@@ -231,8 +232,9 @@ class TransactionQAModel(pl.LightningModule):
 
         # Return question as:
         # Q_start_tokens + TRNS_embeddings + Q_end_tokens
-        lm_outputs['question_encoded'] = torch.cat([question_start_embeddings_batch,
-                                                    question_end_embeddings_batch], dim=1)
+        question_start_tokens_batch = qa_batch['question_start_tokens'].repeat(batch_size, 1)
+        lm_outputs['question_encoded'] = torch.cat([question_start_tokens_batch,
+                                                    qa_batch['question_end_tokens']], dim=1)
         return lm_outputs, batch_answers
 
     def training_step(self, batch, batch_idx: Optional[int] = None) -> Optional[Any]:
@@ -322,6 +324,7 @@ class TransactionQAModel(pl.LightningModule):
         if self.log_eval_steps_counter < self.num_eval_batches_to_log:
             self.log_predictions(logits=outputs.logits.detach().cpu(),
                                  answers=batch_answers.detach().cpu(),
+                                 questions=outputs.question_encoded.detach().cpu(),
                                  predictions_table=self.log_eval_predictions_table,
                                  log_counter=self.log_eval_steps_counter)
             self.log_eval_steps_counter += 1

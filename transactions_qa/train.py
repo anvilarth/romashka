@@ -265,7 +265,7 @@ def main():
         log_every_n_steps=1,
         # log_gpu_memory
         # track_grad_norm
-        val_check_interval=2,
+        val_check_interval=training_args.val_check_interval,
         accumulate_grad_batches=training_args.gradient_accumulation_steps,
         logger=wb_logger,  #[tb_logger, wb_logger],
         callbacks=[checkpoint_callback, lr_monitor_callback])
@@ -276,7 +276,7 @@ if __name__ == '__main__':
     import os
     # os.environ['HF_DATASETS_OFFLINE'] = '1'  # offline mode for HF datasets
     # os.environ['TRANSFORMERS_OFFLINE'] = '1'  # offline mode for HF Transformers
-    # os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # disable DataParallel for test
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # disable DataParallel for test
 
     # Pretrained models are downloaded and locally cached at: ~/.cache/huggingface/transformers/.
     # This is the default directory given by the shell environment variable TRANSFORMERS_CACHE.
