@@ -306,6 +306,12 @@ class TransactionQAModel(pl.LightningModule):
                                                           skip_special_tokens=True)
         batch_answers_decoded = self.tokenizer.batch_decode(batch_answers,
                                                             skip_special_tokens=True)
+
+        batch_questions_decoded = self.tokenizer.batch_decode(outputs.question_encoded.detach().cpu(),
+                                                              skip_special_tokens=True)
+        for i, (pred, answer, question) in enumerate(zip(predictions_decoded, batch_answers_decoded, batch_questions_decoded)):
+            print(f"\t#{i}{question}:\tpredicted: {pred}, answer: {answer}")
+
         # Calc metrics
         metrics_scores = {}
         for metric_name, metric in task.metrics.items():
