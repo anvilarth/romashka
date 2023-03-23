@@ -2,7 +2,8 @@ from collections import OrderedDict
 from typing import Optional
 
 from romashka.transactions_qa.tasks.task_abstract import AbstractTask
-from romashka.transactions_qa.tasks.context_mcc_tasks import MostFrequentMCCCodeTask
+from romashka.transactions_qa.tasks.context_mcc_tasks import (MostFrequentMCCCodeTaskMulti,
+                                                              MostFrequentMCCCodeTaskBinary)
 
 from romashka.logging_handler import get_logger
 
@@ -17,7 +18,8 @@ logger = get_logger(
 
 
 AUTO_TASKS = [
-        ("most_frequent_mcc_code", MostFrequentMCCCodeTask)
+        ("most_frequent_mcc_code_multi", MostFrequentMCCCodeTaskMulti),
+        ("most_frequent_mcc_code_binary", MostFrequentMCCCodeTaskBinary),
     ]
 AUTO_TASKS = OrderedDict(AUTO_TASKS)
 
