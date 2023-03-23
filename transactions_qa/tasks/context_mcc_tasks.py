@@ -17,6 +17,7 @@ from .task_abstract import AbstractTask
 
 @dataclass
 class MostFrequentMCCCodeTask(AbstractTask):
+
     tokenizer: transformers.PreTrainedTokenizerBase = None
 
     def __post_init__(self):
@@ -36,11 +37,11 @@ class MostFrequentMCCCodeTask(AbstractTask):
         else:
             self.question_templates = [
                 ("This is the client's transaction history ",
-                 " Which MCC code is the most frequent?"),
+                 ". Which MCC code is the most frequent?"),
                 ("This is the client's transaction history ",
-                 " Select the most frequent MCC code."),
+                 ". Select the most frequent MCC code."),
                 ("You are given the client's transaction history ",
-                 " Choose the most frequent MCC code."),
+                 ". Choose the most frequent MCC code."),
             ]
         # all options, for a sample can be reduced to [true_mcc_code + 4 other codes]
         self.answers_options = [str(i) for i in range(108)]
@@ -88,10 +89,10 @@ class MostFrequentMCCCodeTask(AbstractTask):
         question_target_batch = []  # as strings
 
         if self.is_binary_task:
-            # Mask
+            # Mask [0/1]
             pos_neg_target_mask = torch.randint(0, 2, (len(target_feature_value_batch),), dtype=torch.int).bool()
 
-            # Target's questions binary
+            # Target's questions binary [No/Yes]
             target_batch = list(map(lambda x: "Yes" if x else "No", pos_neg_target_mask))
 
             # ground truth target (int/str), mask (bool)
@@ -118,12 +119,13 @@ class MostFrequentMCCCodeTask(AbstractTask):
                 # shuffle
                 target_options = random.sample(list(target_options), k=len(target_options))
                 # connect with separator
-                target_options = self.multichoice_separator.join(target_options)
+                target_options = "".join([self.multichoice_separator % target for target in target_options])
+                print(f"Multichoice target_options: {target_options} with true option: {gt_target}")
                 target_batch_options.append(target_options)
 
-            question_target_batch = [question_end + " OPTIONS: " + target_options for target_options in
+            question_target_batch = [question_end + " OPTIONS:" + target_options for target_options in
                                      target_batch_options]
-
+            print(f"question_target_batch: {question_target_batch}")
             # Target's questions numeric/categorical answers as str
             target_batch = target_feature_value_batch
 
@@ -132,36 +134,51 @@ class MostFrequentMCCCodeTask(AbstractTask):
         # question_target_bin/question_target_batch  -> '</trx> + end str + OPTIONS:... / Yes or No'
         # target_batch -> feature values as str ('15')
 
-        question_start_tokens = self.tokenizer.encode(question_start, return_tensors='pt').to(
-            device)  # single tensor + </s> (EOS)
+        # single tensor without </s> (EOS) !!!
+        question_start_tokens = self.tokenizer.encode(question_start,
+                                                      return_tensors='pt')[:, :-1].to(device)
+
         # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
         question_target_encoded_batch = self.tokenizer(question_target_batch,
                                                        padding=True,
                                                        truncation=True,
                                                        return_tensors='pt').to(device)
+        # Attention masks
+        # already for full batch
+        question_start_tokens_mask = torch.ones(question_start_tokens.size()).repeat(batch_size, 1)
+        question_end_tokens_mask = question_target_encoded_batch['attention_mask']
+        transactions_embedding_mask = batch['mask']
+
+        encoder_input_mask = torch.cat(
+            [question_start_tokens_mask, transactions_embedding_mask, question_end_tokens_mask],
+            dim=1)
 
         # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
+        # add [:, :-1] for no EOS tokens - ?
         target_encoded_batch = self.tokenizer.batch_encode_plus(target_batch,
                                                                 padding=True,
                                                                 return_tensors='pt').to(device)
-        # target_encoded_batch = [self.tokenizer.encode(target,
-        #                                               return_tensors='pt')[:, :-1].to(device)
-        #                         for target in target_batch]
-        # list of 2d tensors [num_tokens, 1], each token_ids (no eos token!)
-
         # Answer template encoding + strip </s> (EOS) token
         answer_template_encoded = self.tokenizer.encode(self.answer_template,
                                                         return_tensors='pt')[:, :-1].to(device)
         batch_answer_template_encoded = answer_template_encoded.repeat(batch_size, 1)
-        batch_answer_mask = torch.ones(batch_size, answer_template_encoded.shape[1]).to(device)
+        # Answer template encoding + target tokens + EOS token
+        batch_answer_encoded = torch.cat([batch_answer_template_encoded,
+                                          target_encoded_batch['input_ids']], dim=1).to(device)
+        # Answer masks
+        batch_answer_template_mask = torch.ones(batch_size, answer_template_encoded.shape[1])
+        batch_answer_mask = torch.cat([batch_answer_template_mask,
+                                       target_encoded_batch['attention_mask']], dim=1).to(device)
 
         return dict(
             question_start_tokens=question_start_tokens,
+            question_start_attention_mask=question_start_tokens_mask,
             question_end_tokens=question_target_encoded_batch['input_ids'],
             question_end_attention_mask=question_target_encoded_batch['attention_mask'],
             target_tokens=target_encoded_batch['input_ids'],
             target_attention_mask=target_encoded_batch['attention_mask'],
-            answer_template_tokens=batch_answer_template_encoded,
+            # answer_template_tokens=batch_answer_template_encoded,
+            answer_tokens=batch_answer_encoded,  # template + targets
             answer_mask=batch_answer_mask
         )
 

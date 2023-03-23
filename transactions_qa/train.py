@@ -263,8 +263,6 @@ def main():
         gpus=len(available_gpus),
         auto_select_gpus=True,
         log_every_n_steps=1,
-        # log_gpu_memory
-        # track_grad_norm
         val_check_interval=training_args.val_check_interval,
         accumulate_grad_batches=training_args.gradient_accumulation_steps,
         logger=wb_logger,  #[tb_logger, wb_logger],

@@ -51,11 +51,11 @@ class AbstractTask(ABC):
 
     seed: Optional[int] = 11
     verbose: Optional[bool] = False
-    transactions_embeddings_start_token: Optional[str] = r"<trx>"
-    transactions_embeddings_end_token: Optional[str] = r"</trx>"
+    transactions_embeddings_start_token: Optional[str] = r"[trx]"
+    transactions_embeddings_end_token: Optional[str] = r"[/trx]"
     add_tokens_to_tokenizer: Optional[bool] = False
     is_binary_task: Optional[bool] = True  # whether the answer is binary: yes/no, true/false, or multichoice
-    multichoice_separator: Optional[str] = "; - "
+    multichoice_separator: Optional[str] = " - %s;"
     num_options: Optional[int] = 6  # ground truth + 5 additional options
     is_few_shot: Optional[bool] = False  # whether to provide few examples before question
     n_shot: Optional[int] = 1

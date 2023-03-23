@@ -51,7 +51,7 @@ def make_linear_connector(output_size: Optional[int] = None,
 
     print(f"Output dimension of embedding model: {required_output_size}")
     print(f"Input dimension of autoregressive model: {required_input_size}")
-    print(f"Creating linear connector from {required_output_size} to {required_input_size}"
+    print(f"Creating linear connector from {required_output_size} to {required_input_size} "
           f"and move to device: {device}.")
 
     return nn.Linear(required_output_size, required_input_size).to(device)
@@ -69,7 +69,6 @@ class TransactionQAModel(pl.LightningModule):
                  do_freeze_tm: Optional[bool] = True,
                  do_freeze_lm: Optional[bool] = False,
                  do_freeze_connector: Optional[bool] = False,
-                 num_days: Optional[int] = 7,
                  learning_rate: Optional[float] = 5e-5,
                  adam_beta1: Optional[float] = 0.9,
                  adam_beta2: Optional[float] = 0.999,
@@ -196,10 +195,10 @@ class TransactionQAModel(pl.LightningModule):
             qa_batch['question_end_tokens'])  # call for (embed_tokens): Embedding(32128, 512)
 
         # Answer template: encode + strip </s> (EOS) token
-        answer_template_encoded = self.tokenizer.encode(task.answer_template,
-                                                        return_tensors='pt')[:-1].to(self.device)
-        batch_answer_template_encoded = answer_template_encoded.repeat(batch_size, 1)
-        batch_answer_mask = torch.ones(batch_size, answer_template_encoded.shape[1]).to(self.device)
+        # answer_template_encoded = self.tokenizer.encode(task.answer_template,
+        #                                                 return_tensors='pt')[:-1].to(self.device)
+        # batch_answer_template_encoded = answer_template_encoded.repeat(batch_size, 1)
+        # batch_answer_mask = torch.ones(batch_size, answer_template_encoded.shape[1]).to(self.device)
 
         # Get transactions embeddings for initial batch
         # transactions model requires: ['mask', 'cat_features', 'num_features', 'meta_features']
@@ -218,15 +217,23 @@ class TransactionQAModel(pl.LightningModule):
         encoder_input = torch.cat([question_start_embeddings_batch,
                                    transactions_embeddings,
                                    question_end_embeddings_batch], dim=1)
+        encoder_input_mask = torch.cat(
+            [qa_batch['question_start_attention_mask'],
+             batch['mask'],
+             qa_batch['question_end_attention_mask']],
+            dim=1)
 
         # Create answers + masks for LM's decoder inputs
-        batch_answers = torch.cat([qa_batch['answer_template_tokens'], qa_batch['target_tokens']], dim=1)
-        batch_answers_mask = torch.cat([qa_batch['answer_mask'], qa_batch['target_attention_mask']], dim=1)
+        batch_answers = qa_batch['answer_tokens']
+        # was: torch.cat([qa_batch['answer_template_tokens'], qa_batch['target_tokens']], dim=1)
+        batch_answers_mask = qa_batch['answer_mask']
+        # torch.cat([qa_batch['answer_mask'], qa_batch['target_attention_mask']], dim=1)
 
         # Pass through LM
         # contains: ['loss', 'logits', 'past_key_values', 'encoder_last_hidden_state']
         # `logits` of size: [batch_size, max_pred_len, vocab_size]
         lm_outputs = self.language_model(inputs_embeds=encoder_input,
+                                         attention_mask=encoder_input_mask,
                                          labels=batch_answers,
                                          decoder_attention_mask=batch_answers_mask)
 
