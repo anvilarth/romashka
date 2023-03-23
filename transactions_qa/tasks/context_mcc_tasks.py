@@ -70,18 +70,12 @@ class MostFrequentMCCCodeTask(AbstractTask):
 
         mask_batch = batch['mask']  # bool Tensor [batch_size, seq_len]
         target_feature_batch = batch['cat_features'][self.target_feature_index]  # Tensor [batch_size, seq_len]
-        # print(f"Task.process_input_batch():\ttarget_feature_batch size: {target_feature_batch.size()}")
-        # print(f"Task.process_input_batch():\tmask_batch size: {mask_batch.size()}")
-        # print(f"Task.process_input_batch():\ttarget_feature_batch: {target_feature_batch}")
 
         # Construct target values
         target_feature_value_batch = []
         for i, (feature_, mask_) in enumerate(zip(target_feature_batch, mask_batch)):
-            # print(f"\nTask.process_input_batch() #{i} before:\tfeature_: {feature_}, mask: {mask_}")
             feature_masked = torch.masked_select(feature_.to("cpu"), mask=mask_.to("cpu")).long()  # get feature without padding
-            # print(f"\nTask.process_input_batch() #{i} after:\tfeature_masked: {feature_masked}, mask: {mask_}")
             codes, cnt = torch.unique(feature_masked, return_counts=True)
-            # print(f"\nTask.process_input_batch():\tcodes: {codes}, cnt: {cnt}")
             most_freq_feature = codes[torch.argmax(cnt)].long()  # get a single Tensor value of a feature
             target_feature_value_batch.append(most_freq_feature.to(device))
 
