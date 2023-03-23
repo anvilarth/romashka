@@ -292,7 +292,6 @@ class TransactionQAModel(pl.LightningModule):
         Return:
             - Any object or value
         """
-
         # Sample a random single task
         task_idx = random.sample(list(range(len(self.tasks))), k=1)[0]
         task = self.tasks[task_idx]
@@ -310,7 +309,6 @@ class TransactionQAModel(pl.LightningModule):
 
         batch_questions_decoded = self.tokenizer.batch_decode(outputs.question_encoded.detach().cpu(),
                                                               skip_special_tokens=True)
-
 
         # for i, (pred, answer, question) in enumerate(zip(predictions_decoded, batch_answers_decoded, batch_questions_decoded)):
         #     print(f"\t#{i}{question}:\tpredicted: {pred}, answer: {answer}")
@@ -346,15 +344,106 @@ class TransactionQAModel(pl.LightningModule):
             self.log_eval_steps_counter += 1
         return loss
 
-    def on_validation_epoch_start(self) -> None:
-        print(f"\n----------- Validation end ----------\n")
+    def predict_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0) -> Any:
+        """
+        Step function called during Trainer.predict().
 
-        # ✨ W&B: Log predictions table to wandb
-        wandb.log({"val_predictions": self.log_eval_predictions_table})
+        TODO: to use pytorch_lightning.callbacks.BasePredictionWriter callback
+        to write the predictions to disk or database after each batch or on epoch end.
+
+        Args:
+            batch: Current batch.
+            batch_idx: Index of current batch.
+            dataloader_idx: Index of the current dataloader.
+        Return:
+            Predicted output
+        """
+        # Predict for each task !!!
+
+        # Select a task prompt
+        task_idx = random.sample(list(range(len(self.tasks))), k=1)[0]
+        task = self.tasks[task_idx]
+
+        outputs, batch_answers = self.model_step(batch, task_idx=task_idx)
+        if outputs is None:
+            return None
+
+        # as list of strings
+        predictions_decoded = self.tokenizer.batch_decode(outputs.logits.argmax(2),
+                                                          skip_special_tokens=True)
+        batch_answers_decoded = self.tokenizer.batch_decode(batch_answers,
+                                                            skip_special_tokens=True)
+        batch_questions_decoded = self.tokenizer.batch_decode(outputs.question_encoded.detach().cpu(),
+                                                              skip_special_tokens=True)
+
+        # for i, (pred, answer, question) in enumerate(zip(predictions_decoded, batch_answers_decoded, batch_questions_decoded)):
+        #     print(f"\t#{i}{question}:\tpredicted: {pred}, answer: {answer}")
+
+        # Calc metrics
+        metrics_scores = {}
+        for metric_name, metric in task.metrics.items():
+            try:
+                metrics_scores[metric_name] = metric(predictions_decoded,
+                                                     batch_answers_decoded)
+            except Exception as e:
+                self._logger.error(f"error occurred during task metric `{metric_name}` calculation:\n{e}")
+
+        return dict(
+        )
+
+    def _predict_step_task(self, batch: Any, task_idx: int,
+                           calculate_metrics: Optional[bool] = False,
+                           verbose: Optional[bool] = False,
+                           batch_idx: Optional[int] = 0) -> Dict[str, Any]:
+        """
+        Predict for single task.
+        Args:
+            batch: Current batch;
+            task_idx: selected task index;
+            batch_idx: Index of current batch.
+
+        Returns:
+            results: as dictionary, where:
+                keys are - metrics / predictions / answers / questions.
+        """
+        task = self.tasks[task_idx]
+        outputs, batch_answers = self.model_step(batch, task_idx=task_idx)
+        if outputs is None:
+            return dict()
+
+        # as list of strings
+        predictions_decoded = self.tokenizer.batch_decode(outputs.logits.argmax(2),
+                                                          skip_special_tokens=True)
+        batch_answers_decoded = self.tokenizer.batch_decode(batch_answers,
+                                                            skip_special_tokens=True)
+        batch_questions_decoded = self.tokenizer.batch_decode(outputs.question_encoded.detach().cpu(),
+                                                              skip_special_tokens=True)
+
+        if verbose:
+            print("----- Prediction step -----")
+            for i, (pred, answer, question) in enumerate(
+                    zip(predictions_decoded, batch_answers_decoded, batch_questions_decoded)):
+                print(f"\t#{i}{question}:\tpredicted: {pred}, answer: {answer}")
+
+        # Calc metrics
+        metrics_scores = {}
+        if calculate_metrics:
+            for metric_name, metric in task.metrics.items():
+                try:
+                    metrics_scores[metric_name] = metric(predictions_decoded,
+                                                         batch_answers_decoded)
+                except Exception as e:
+                    self._logger.error(f"error occurred during task metric `{metric_name}` calculation:\n{e}")
+
+        return dict(
+            predictions=predictions_decoded,
+            answers=batch_answers_decoded,
+            questions=batch_questions_decoded,
+            metrics=metrics_scores
+        )
 
     def on_validation_epoch_start(self) -> None:
         print(f"\n----------- Validation start ----------\n")
-
         # Reset log counter
         self.log_eval_steps_counter = 0
 
@@ -376,7 +465,7 @@ class TransactionQAModel(pl.LightningModule):
         answers_decoded = self.tokenizer.batch_decode(answers,
                                                       skip_special_tokens=True)
         questions_decoded = self.tokenizer.batch_decode(questions,
-                                                      skip_special_tokens=True)
+                                                        skip_special_tokens=True)
 
         print(f"Validation predictions vs. answers, batch #{log_counter}:")
 
