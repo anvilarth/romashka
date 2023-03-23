@@ -14,6 +14,7 @@ from torchmetrics.classification import BinaryAccuracy
 from tools import make_time_batch
 from transformers import get_linear_schedule_with_warmup
 from data_generators import cat_features_names, cat_features_indices, num_features_names, num_features_indices
+from sklearn.metrics import roc_auc_score, accuracy_score
 
 cat_map_index = dict(zip(cat_features_names, range(len(cat_features_names))))
 num_map_index = dict(zip(num_features_names, range(len(num_features_names))))
@@ -37,8 +38,15 @@ class TransactionQAModel(pl.LightningModule):
         self.save_hyperparameters(ignore=['lm_model', 'trx_model', 'connector'])
             
         # self.rouge = ROUGEScore()
-        self.auc = AUROC(task='binary')
-        self.accuracy = BinaryAccuracy()
+        self.auc = nn.ModuleDict()
+        self.accuracy = nn.ModuleDict()
+
+        for task in qa_pool:
+            self.auc[task] = AUROC(task='binary')
+            self.accuracy[task] = BinaryAccuracy()
+
+        # self.auc = AUROC(task='binary')
+        # self.accuracy = BinaryAccuracy()
 
         self.lm_model = lm_model
         self.trx_model = trx_model
@@ -109,8 +117,8 @@ class TransactionQAModel(pl.LightningModule):
             text_answer = list(map(lambda x: 'Yes' if x else 'No', (input_labels == 1)))
             target = self.tok.batch_encode_plus(text_answer, padding=True, return_tensors='pt')
 
-        elif task == 'next7_num':
-            _, labels, _, padding_mask = make_time_batch(batch, number_days=number_of_days)
+        elif task == 'next_num_7_days':
+            _, labels, _, padding_mask = make_time_batch(batch, number_days=7)
             trx_index = max(1, padding_mask.sum(1).min().item())
 
             input_labels = labels[:, trx_index - 1]
@@ -118,6 +126,17 @@ class TransactionQAModel(pl.LightningModule):
 
             if trx_index == 1:
                 return None, None
+
+        elif task == 'next_amnt_7_days':
+            _, labels, _, padding_mask = make_time_batch(batch, number_days=7)
+            trx_index = max(1, padding_mask.sum(1).min().item())
+
+            input_labels = labels[:, trx_index - 1]
+            target = self.tok.batch_encode_plus(list(map(lambda x: str(x.item()) + ' transactions', input_labels.int())), padding=True, return_tensors='pt')
+
+            if trx_index == 1:
+                return None, None
+
 
         return target, trx_index
 
@@ -181,29 +200,15 @@ class TransactionQAModel(pl.LightningModule):
         if outputs is None:
             return None
         
-        if qa_batch['task'] == 'default':
-            targets = (answer[:, -2] == 2163).long()
-            preds = torch.sigmoid(outputs.logits[:, 0, 2163] - outputs.logits[:, 0, 465])
-            self.log('default_val_auc', self.auc(preds,targets), batch_size=batch_size)
-            
-        elif qa_batch['task'] == 'next_mcc_2':
-            targets = (answer[:, -2] == 2163).long()
-            preds = torch.sigmoid(outputs.logits[:, 0, 2163] - outputs.logits[:, 0, 465])
-            self.log('next_mcc_2_val_auc', self.auc(preds,targets), batch_size=batch_size)
-            self.log('next_mcc_2_val_accuracy', self.accuracy(preds,targets), batch_size=batch_size)
-            
-        elif qa_batch['task'] ==  'next_amnt':
-            targets = (answer[:, -2] == 2163).long()
-            preds = torch.sigmoid(outputs.logits[:, 0, 2163] - outputs.logits[:, 0, 465])
-            self.log('next_amnt_val_auc', self.auc(preds,targets), batch_size=batch_size)
-            self.log('next_amnt_val_accuracy', self.accuracy(preds,targets), batch_size=batch_size)
-        
-        elif qa_batch['task'] ==  'next_hour':
-            targets = (answer[:, -2] == 2163).long()
-            preds = torch.sigmoid(outputs.logits[:, 0, 2163] - outputs.logits[:, 0, 465])
-            self.log('next_hour_val_auc', self.auc(preds,targets), batch_size=batch_size)
-            self.log('next_hour_val_accuracy', self.accuracy(preds,targets), batch_size=batch_size)
+        targets = (answer[:, -2] == 2163).long()
+        preds = torch.sigmoid(outputs.logits[:, 0, 2163] - outputs.logits[:, 0, 465])
     
+        self.auc[qa_batch['task']](preds, targets)
+        self.accuracy[qa_batch['task']](preds, targets)
+
+        self.log(qa_batch['task'] + '_val_auc', self.auc[qa_batch['task']] , batch_size=batch_size)
+        self.log(qa_batch['task'] + '_val_accuracy', self.accuracy[qa_batch['task']] , batch_size=batch_size)
+        # self.log(f'{qa_batch['task']}_val_accuracy', self.accuracy[qa_batch['task']], batch_size=batch_size)
         
         self.log('val_loss', outputs.loss, batch_size=batch_size)
         
@@ -221,30 +226,15 @@ class TransactionQAModel(pl.LightningModule):
             qa_batch = self.add_qa2transactions(batch, task_name)
             outputs, answer = self.get_predictions(qa_batch, batch_idx)
 
-            if task_name == 'default':
-                targets = (answer[:, -2] == 2163).long()
-                preds = torch.sigmoid(outputs.logits[:, 0, 2163] - outputs.logits[:, 0, 465])
-                self.log('default_test_auc', self.auc(preds,targets), batch_size=batch_size)
-
-            elif task_name == 'next_mcc_2':
-                targets = (answer[:, -2] == 2163).long()
-                preds = torch.sigmoid(outputs.logits[:, 0, 2163] - outputs.logits[:, 0, 465])
-                self.log('next_mcc_test_auc', self.auc(preds,targets), batch_size=batch_size)
-                self.log('next_mcc_test_accuracy', self.accuracy(preds,targets), batch_size=batch_size)
-
-            elif task_name == 'next_amnt':
-                targets = (answer[:, -2] == 2163).long()
-                preds = torch.sigmoid(outputs.logits[:, 0, 2163] - outputs.logits[:, 0, 465])
-                self.log('next_amnt_test_auc', self.auc(preds,targets), batch_size=batch_size)
-                self.log('next_amnt_test_accuracy', self.accuracy(preds,targets), batch_size=batch_size)
-                
-            elif qa_batch['task'] ==  'next_hour':
-                targets = (answer[:, -2] == 2163).long()
-                preds = torch.sigmoid(outputs.logits[:, 0, 2163] - outputs.logits[:, 0, 465])
-                self.log('next_hour_test_auc', self.auc(preds,targets), batch_size=batch_size)
-                self.log('next_hour_test_accuracy', self.accuracy(preds,targets), batch_size=batch_size)
-
-    
+            targets = (answer[:, -2] == 2163).long()
+            preds = torch.sigmoid(outputs.logits[:, 0, 2163] - outputs.logits[:, 0, 465])
+        
+            self.auc[qa_batch['task']](preds, targets)
+            self.accuracy[qa_batch['task']](preds, targets)
+            
+            self.log(qa_batch['task'] + '_test_auc', self.auc[qa_batch['task']] , batch_size=batch_size)
+            self.log(qa_batch['task'] + '_test_accuracy', self.accuracy[qa_batch['task']] , batch_size=batch_size)
+ 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=1e-4)
         scheduler = get_linear_schedule_with_warmup(optimizer, self.warmup_steps, 10000*20)

@@ -29,6 +29,7 @@ parser.add_argument('--model_name', type=str, default='google/flan-t5-small')
 parser.add_argument('--max_seq_len', type=int, default=250)
 parser.add_argument('--min_seq_len', type=int, default=0)
 parser.add_argument('--qa_pool', nargs='+', type=str, default='full')
+parser.add_argument('--add_task_tokens', type=int, default=False)
 
 args = parser.parse_args()
 
@@ -56,10 +57,10 @@ train_days = torch.load('assets/train_days.pt')
 val_days = torch.load('assets/val_days.pt')
 
 full_qa_pool = {
-                'next_mcc_2': ('</trx> Will the next transactions have merchant category code 2? Yes or No?', ''),
-                'default': ('</trx> Will the client have a credit default? Yes or No?', ''),
-                'next_amnt': ('</trx> Will the next transactions have amount more than 0.41? Yes or No?', '')
-                'next_hour': ('</trx> will the next transaction be made in the next 36 hours? Yes or No?', '')
+                'next_mcc_2': ['</trx> Will the next transactions have merchant category code 2? Yes or No?', ''],
+                'default': ['</trx> Will the client have a credit default? Yes or No?', ''],
+                'next_amnt': ['</trx> Will the next transactions have amount more than 0.41? Yes or No?', ''],
+                'next_hour': ['</trx> will the next transaction be made in the next 36 hours? Yes or No?', ''],
                 # 'next_num_7_days': ('</trx> Will there be more than M transactions in the next N hours? Yes or No?', ''),
                 # 'next_amnt_7_days': ('</trx> Will there be more transactions of more than 1,000 in the next 100 hours? Yes or No?', ''), 
 }
@@ -103,10 +104,14 @@ model_transaction = TransactionsModel(cat_embedding_projections,
                           head_type='next',
                           embedding_dropout=0.1
                          )
+
 model_transaction.load_state_dict(ckpt)
 model_transaction.to(device)
 if args.model_name == 'google/flan-t5-small':
     linear_mapping = nn.Linear(384, 512).to(device)
+
+elif args.model_name == 'google/flan-t5-base':
+    linear_mapping = nn.Linear(384, 768).to(device)
 
 elif args.model_name == 'google/flan-t5-xl':
     linear_mapping = nn.Linear(384, 2048).to(device)
@@ -118,6 +123,12 @@ tok = AutoTokenizer.from_pretrained(args.model_name)
 model = AutoModelForSeq2SeqLM.from_pretrained(args.model_name).to(device)
 
 new_tokens = ['<trx>', '</trx>']
+
+if args.add_task_tokens:
+    for task in qa_pool:
+    new_tokens.append('<' + task + '>')
+    qa_pool[task][0] += ' <' + task + '>'
+
 tok.add_tokens(new_tokens)
 model.resize_token_embeddings(len(tok));
 
