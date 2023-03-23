@@ -120,12 +120,12 @@ class MostFrequentMCCCodeTask(AbstractTask):
                 target_options = random.sample(list(target_options), k=len(target_options))
                 # connect with separator
                 target_options = "".join([self.multichoice_separator % target for target in target_options])
-                print(f"Multichoice target_options: {target_options} with true option: {gt_target}")
+                # print(f"Multichoice target_options: {target_options} with true option: {gt_target}")
                 target_batch_options.append(target_options)
 
             question_target_batch = [question_end + " OPTIONS:" + target_options for target_options in
                                      target_batch_options]
-            print(f"question_target_batch: {question_target_batch}")
+            # print(f"question_target_batch: {question_target_batch}")
             # Target's questions numeric/categorical answers as str
             target_batch = target_feature_value_batch
 
@@ -145,7 +145,7 @@ class MostFrequentMCCCodeTask(AbstractTask):
                                                        return_tensors='pt').to(device)
         # Attention masks
         # already for full batch
-        question_start_tokens_mask = torch.ones(question_start_tokens.size()).repeat(batch_size, 1)
+        question_start_tokens_mask = torch.ones(question_start_tokens.size()).repeat(batch_size, 1).to(device)
         question_end_tokens_mask = question_target_encoded_batch['attention_mask']
         transactions_embedding_mask = batch['mask']
 
@@ -166,9 +166,9 @@ class MostFrequentMCCCodeTask(AbstractTask):
         batch_answer_encoded = torch.cat([batch_answer_template_encoded,
                                           target_encoded_batch['input_ids']], dim=1).to(device)
         # Answer masks
-        batch_answer_template_mask = torch.ones(batch_size, answer_template_encoded.shape[1])
+        batch_answer_template_mask = torch.ones(batch_size, answer_template_encoded.shape[1]).to(device)
         batch_answer_mask = torch.cat([batch_answer_template_mask,
-                                       target_encoded_batch['attention_mask']], dim=1).to(device)
+                                       target_encoded_batch['attention_mask']], dim=1)
 
         return dict(
             question_start_tokens=question_start_tokens,

@@ -292,6 +292,7 @@ class TransactionQAModel(pl.LightningModule):
         Return:
             - Any object or value
         """
+
         # Sample a random single task
         task_idx = random.sample(list(range(len(self.tasks))), k=1)[0]
         task = self.tasks[task_idx]
@@ -309,17 +310,19 @@ class TransactionQAModel(pl.LightningModule):
 
         batch_questions_decoded = self.tokenizer.batch_decode(outputs.question_encoded.detach().cpu(),
                                                               skip_special_tokens=True)
-        for i, (pred, answer, question) in enumerate(zip(predictions_decoded, batch_answers_decoded, batch_questions_decoded)):
-            print(f"\t#{i}{question}:\tpredicted: {pred}, answer: {answer}")
+
+
+        # for i, (pred, answer, question) in enumerate(zip(predictions_decoded, batch_answers_decoded, batch_questions_decoded)):
+        #     print(f"\t#{i}{question}:\tpredicted: {pred}, answer: {answer}")
 
         # Calc metrics
         metrics_scores = {}
-        for metric_name, metric in task.metrics.items():
-            try:
-                metrics_scores[metric_name] = metric(predictions_decoded,
-                                                     batch_answers_decoded)
-            except Exception as e:
-                self._logger.error(f"error occurred during task metric `{metric_name}` calculation:\n{e}")
+        # for metric_name, metric in task.metrics.items():
+        #     try:
+        #         metrics_scores[metric_name] = metric(predictions_decoded,
+        #                                              batch_answers_decoded)
+        #     except Exception as e:
+        #         self._logger.error(f"error occurred during task metric `{metric_name}` calculation:\n{e}")
 
         logging_dict = {
             'val_loss': loss,
@@ -344,6 +347,14 @@ class TransactionQAModel(pl.LightningModule):
         return loss
 
     def on_validation_epoch_start(self) -> None:
+        print(f"\n----------- Validation end ----------\n")
+
+        # ✨ W&B: Log predictions table to wandb
+        wandb.log({"val_predictions": self.log_eval_predictions_table})
+
+    def on_validation_epoch_start(self) -> None:
+        print(f"\n----------- Validation start ----------\n")
+
         # Reset log counter
         self.log_eval_steps_counter = 0
 
@@ -366,8 +377,10 @@ class TransactionQAModel(pl.LightningModule):
                                                       skip_special_tokens=True)
         questions_decoded = self.tokenizer.batch_decode(questions,
                                                       skip_special_tokens=True)
-        self._logger.info(f"Validation predictions vs. answers, batch #{log_counter}:")
+
+        print(f"Validation predictions vs. answers, batch #{log_counter}:")
+
         # columns = ["epoch", "step #", "task", "question", "prediction", "truth"]
         for i, (pred, answer, question) in enumerate(zip(predictions_decoded, answers_decoded, questions_decoded)):
-            self._logger.info(f"\t#{i}{question}:\tpredicted: {pred}, answer: {answer}")
+            print(f"\t#{i}:\tpredicted: {pred}, answer: {answer}")
             predictions_table.add_data(epoch, "_".join([str(log_counter), str(i)]), task_name, question, pred, answer)

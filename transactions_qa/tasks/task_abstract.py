@@ -4,14 +4,12 @@ import pandas as pd
 from abc import ABC, abstractmethod
 
 # DTO
-import dataclasses
 from dataclasses import dataclass
 from typing import (Dict, Tuple, List,
                     Any, Optional)
 
 import transformers
 from torchmetrics.text.rouge import ROUGEScore
-from torchmetrics.classification.f_beta import F1Score
 
 from romashka.logging_handler import get_logger
 
@@ -20,12 +18,7 @@ logger = get_logger(
     logging_level="INFO"
 )
 
-from romashka.data_generators import (transaction_features,
-                                      num_features_names,
-                                      cat_features_names,
-                                      meta_features_names,
-                                      num_features_indices,
-                                      cat_features_indices)
+from romashka.data_generators import (transaction_features)
 
 
 @dataclass
