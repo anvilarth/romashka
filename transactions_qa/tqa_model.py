@@ -359,37 +359,21 @@ class TransactionQAModel(pl.LightningModule):
             Predicted output
         """
         # Predict for each task !!!
-
-        # Select a task prompt
-        task_idx = random.sample(list(range(len(self.tasks))), k=1)[0]
-        task = self.tasks[task_idx]
-
-        outputs, batch_answers = self.model_step(batch, task_idx=task_idx)
-        if outputs is None:
-            return None
-
-        # as list of strings
-        predictions_decoded = self.tokenizer.batch_decode(outputs.logits.argmax(2),
-                                                          skip_special_tokens=True)
-        batch_answers_decoded = self.tokenizer.batch_decode(batch_answers,
-                                                            skip_special_tokens=True)
-        batch_questions_decoded = self.tokenizer.batch_decode(outputs.question_encoded.detach().cpu(),
-                                                              skip_special_tokens=True)
-
-        # for i, (pred, answer, question) in enumerate(zip(predictions_decoded, batch_answers_decoded, batch_questions_decoded)):
-        #     print(f"\t#{i}{question}:\tpredicted: {pred}, answer: {answer}")
-
         # Calc metrics
-        metrics_scores = {}
-        for metric_name, metric in task.metrics.items():
+        tasks_predictions = {}
+        for task_idx, task in enumerate(self.tasks):
             try:
-                metrics_scores[metric_name] = metric(predictions_decoded,
-                                                     batch_answers_decoded)
-            except Exception as e:
-                self._logger.error(f"error occurred during task metric `{metric_name}` calculation:\n{e}")
+                predictions = self._predict_step_task(batch,
+                                                      batch_idx=batch_idx,
+                                                      task_idx=task_idx,
+                                                      verbose=True,
+                                                      calculate_metrics=False)
 
-        return dict(
-        )
+                tasks_predictions[task.task_name] = predictions
+            except Exception as e:
+                self._logger.error(f"Error occurred during task `{task.task_name}` evaluation:\n{e}")
+
+        return tasks_predictions
 
     def _predict_step_task(self, batch: Any, task_idx: int,
                            calculate_metrics: Optional[bool] = False,
@@ -439,7 +423,8 @@ class TransactionQAModel(pl.LightningModule):
             predictions=predictions_decoded,
             answers=batch_answers_decoded,
             questions=batch_questions_decoded,
-            metrics=metrics_scores
+            metrics=metrics_scores,
+            batch_idx=batch_idx
         )
 
     def on_validation_epoch_start(self) -> None:
@@ -458,8 +443,7 @@ class TransactionQAModel(pl.LightningModule):
                         answers: torch.Tensor,
                         questions: torch.Tensor,
                         predictions_table: wandb.Table, log_counter: int,
-                        task_name: Optional[str] = "default",
-                        epoch: Optional[int] = 0):
+                        task_name: Optional[str] = "default"):
         predictions_decoded = self.tokenizer.batch_decode(logits.argmax(2),
                                                           skip_special_tokens=True)
         answers_decoded = self.tokenizer.batch_decode(answers,
@@ -472,4 +456,9 @@ class TransactionQAModel(pl.LightningModule):
         # columns = ["epoch", "step #", "task", "question", "prediction", "truth"]
         for i, (pred, answer, question) in enumerate(zip(predictions_decoded, answers_decoded, questions_decoded)):
             print(f"\t#{i}:\tpredicted: {pred}, answer: {answer}")
-            predictions_table.add_data(epoch, "_".join([str(log_counter), str(i)]), task_name, question, pred, answer)
+            predictions_table.add_data(self.current_epoch,
+                                       "_".join([str(log_counter), str(i)]),
+                                       task_name,
+                                       question,
+                                       pred,
+                                       answer)

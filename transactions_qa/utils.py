@@ -6,6 +6,7 @@ from typing import Dict, Any, Optional
 PREFIX_CHECKPOINT_DIR = "checkpoint"
 _re_checkpoint = re.compile(r"^" + PREFIX_CHECKPOINT_DIR + r"\-(\d+)$")
 
+
 def preprocess_logits_for_metrics(logits: Any, labels: Any):
     if isinstance(logits, tuple):
         # Depending on the model and config, logits may contain extra tensors,
@@ -42,6 +43,21 @@ def compute_task_max_decoding_length(word_list, tokenizer):
     return max_len
 
 
+def transform_labels(label: str, default_value: Optional[int] = -100) -> int:
+    """
+    Checks whether it is possible to transform label to integer and return corresponding value (if it is possible).
+    Otherwise, set it as default value (-100).
+    Args:
+        label: a string representation of a label;
+        default_value: a default value to return (-100).
+    Returns:
+        integer label or default value (if label is not a digit or a number).
+    """
+    if label.isdigit():
+        return int(label)
+    return default_value
+
+
 def get_last_checkpoint(folder):
     content = os.listdir(folder)
     checkpoints = [
@@ -52,6 +68,7 @@ def get_last_checkpoint(folder):
     if len(checkpoints) == 0:
         return
     return os.path.join(folder, max(checkpoints, key=lambda x: int(_re_checkpoint.search(x).groups()[0])))
+
 
 def get_projections_maps(num_embedding_projections_fn: str = './assets/num_embedding_projections.pkl',
                          cat_embedding_projections_fn: str = './assets/cat_embedding_projections.pkl',
