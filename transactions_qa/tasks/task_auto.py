@@ -3,7 +3,8 @@ from typing import Optional
 
 from romashka.transactions_qa.tasks.task_abstract import AbstractTask
 from romashka.transactions_qa.tasks.context_mcc_tasks import (MostFrequentMCCCodeTaskMulti,
-                                                              MostFrequentMCCCodeTaskBinary)
+                                                              MostFrequentMCCCodeTaskBinary,
+                                                              MostFrequentMCCCodeTaskOpenEnded)
 
 from romashka.logging_handler import get_logger
 
@@ -16,12 +17,14 @@ logger = get_logger(
     logging_level="INFO"
 )
 
-
 AUTO_TASKS = [
         ("most_frequent_mcc_code_multi", MostFrequentMCCCodeTaskMulti),
         ("most_frequent_mcc_code_binary", MostFrequentMCCCodeTaskBinary),
+        ("most_frequent_mcc_code_open-ended", MostFrequentMCCCodeTaskOpenEnded)
     ]
 AUTO_TASKS = OrderedDict(AUTO_TASKS)
+ALL_TASKS_NAMES = list(AUTO_TASKS.keys())
+
 
 class AutoTask:
 
@@ -32,3 +35,10 @@ class AutoTask:
         except Exception as e:
             logger.error(f"Error during AutoTask creation with `task_name`-`{task_name}`\n:{e}")
             raise ValueError(f"Error during AutoTask creation with `task_name`-`{task_name}`\n:{e}")
+
+
+def help_task_selection():
+    s = f"To create AutoTask select one from implemented tasks by it's name."
+    for task_name in ALL_TASKS_NAMES:
+        s += "\n\t" + task_name
+    print(s)

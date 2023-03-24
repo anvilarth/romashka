@@ -44,10 +44,13 @@ class AbstractTask(ABC):
 
     seed: Optional[int] = 11
     verbose: Optional[bool] = False
+    task_special_token: Optional[str] = None
     transactions_embeddings_start_token: Optional[str] = r"[trx]"
     transactions_embeddings_end_token: Optional[str] = r"[/trx]"
     add_tokens_to_tokenizer: Optional[bool] = False
-    is_binary_task: Optional[bool] = True  # whether the answer is binary: yes/no, true/false, or multichoice
+    # This option is set to `False` if the answer is binary: yes/no, true/false, or multichoice
+    # Otherwise, it is set to `True` to not require any information about available options/targets
+    is_open_ended_task: Optional[bool] = True
     multichoice_separator: Optional[str] = " - %s;"
     num_options: Optional[int] = 6  # ground truth + 5 additional options
     is_few_shot: Optional[bool] = False  # whether to provide few examples before question
@@ -74,12 +77,8 @@ class AbstractTask(ABC):
             ""  # empty for default
         ] if self.answer_template is None else self.answer_template
         if self.answers_options is None:
-            if self.is_binary_task:
-                self.answers_options = [
-                    "Yes", "No"
-                ]
-            else:
-                raise ValueError(f"The task is marked as multichoice, but no choices for answers provided!")
+            if not self.is_open_ended_task:
+                raise ValueError(f"The task is marked as multi choice, but no choices for answers provided!")
 
     @abstractmethod
     def process_input_batch(self, batch: Dict[str, Any], **kwargs):
@@ -88,14 +87,14 @@ class AbstractTask(ABC):
         """
         raise NotImplementedError
 
-    @abstractmethod
+    # @abstractmethod  todo: later add this for muli-task inside a single batch
     def process_input_sample(self, sample: Any, **kwargs) -> Any:
         """
         Apply task-specific processing for a single data sample.
         """
         raise NotImplementedError
 
-    @abstractmethod
+    # @abstractmethod  todo: later add this to separate functionality of target generation
     def generate_target(self, sample: Any, **kwargs) -> Any:
         """
         Generated question/answer-specific target sequence.
