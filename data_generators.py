@@ -70,7 +70,7 @@ def batches_generator(list_of_paths, batch_size=32, shuffle=False, is_infinite=F
             if shuffle:
                 np.random.shuffle(indices)
                 padded_sequences = padded_sequences[indices]
-                targets = targets[indices]
+                targets = targets[indices] if len(targets) else targets
                 products = products[indices]
                 app_ids = app_ids[indices]
 
@@ -102,16 +102,19 @@ def batches_generator(list_of_paths, batch_size=32, shuffle=False, is_infinite=F
                         if mask.shape[1] > max_seq_len:
                             continue
 
+                    ret = dict(num_features=[torch.FloatTensor(batch_sequences[:, i]).to(device) for i in
+                                             num_features_indices],
+                               cat_features=[torch.LongTensor(batch_sequences[:, i]).to(device) for i in
+                                             cat_features_indices],
+                               mask=torch.BoolTensor(mask).to(device),
+                               event_time=torch.arange(mask.shape[-1], device=device),
+                               meta_features=[torch.LongTensor(batch_products).to(device)],
+
+                               app_id=batch_app_ids)
+
                     if is_train:
-                        yield dict(num_features=[torch.FloatTensor(batch_sequences[:, i]).to(device) for i in
-                                                 num_features_indices],
-                                   cat_features=[torch.LongTensor(batch_sequences[:, i]).to(device) for i in
-                                                 cat_features_indices],
-                                   mask=torch.BoolTensor(mask).to(device),
-                                   event_time=torch.arange(mask.shape[-1], device=device),
-                                   meta_features=[torch.LongTensor(batch_products).to(device)],
-                                   label=torch.LongTensor(batch_targets).to(device),
-                                   app_id=batch_app_ids)
+                        ret['label'] = torch.LongTensor(batch_targets).to(device)
+                    yield ret
 
         if not is_infinite:
             break

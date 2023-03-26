@@ -120,3 +120,15 @@ class AbstractTask(ABC):
             model.resize_token_embeddings(len(tokenizer))
         else:
             logger.info(f"Notice: resize_token_embeddings of a model to adapt to the size of the new vocabulary!")
+
+    def update(self, new_attr: Dict[str, Any]):
+        """
+        Updates the parameters of class with provided {key: value} pair(-s)
+        Args:
+            new_attr (): a dictionary, where a key is attribute's name, value - a new attribute's value;
+        Returns:
+
+        """
+        for key, value in new_attr.items():
+            if hasattr(self, key):
+                setattr(self, key, value)

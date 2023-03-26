@@ -10,7 +10,7 @@ import pytorch_lightning as pl
 
 
 class TransactionQADataset(IterableDataset):
-    def __init__(self, dataset_train, shuffle=True, batch_size=64, device='cuda', min_seq_len=50, max_seq_len=150,
+    def __init__(self, dataset_train, is_train=True, shuffle=True, batch_size=64, device='cuda', min_seq_len=50, max_seq_len=150,
                  wrap_with_question=None):
         self.data = dataset_train
         self.batch_size = batch_size
@@ -19,7 +19,7 @@ class TransactionQADataset(IterableDataset):
                                              batch_size=self.batch_size,
                                              shuffle=shuffle,
                                              device=self.device,
-                                             is_train=True,
+                                             is_train=is_train,
                                              output_format='torch',
                                              min_seq_len=min_seq_len,
                                              max_seq_len=max_seq_len)
