@@ -29,7 +29,7 @@ parser.add_argument('--model_name', type=str, default='google/flan-t5-small')
 parser.add_argument('--max_seq_len', type=int, default=250)
 parser.add_argument('--min_seq_len', type=int, default=0)
 parser.add_argument('--qa_pool', nargs='+', type=str, default='full')
-parser.add_argument('--add_task_tokens', type=int, default=False)
+parser.add_argument('--add_task_tokens', action='store_true', default=False)
 
 args = parser.parse_args()
 
@@ -60,9 +60,9 @@ full_qa_pool = {
                 'next_mcc_2': ['</trx> Will the next transactions have merchant category code 2? Yes or No?', ''],
                 'default': ['</trx> Will the client have a credit default? Yes or No?', ''],
                 'next_amnt': ['</trx> Will the next transactions have amount more than 0.41? Yes or No?', ''],
-                'next_hour': ['</trx> will the next transaction be made in the next 36 hours? Yes or No?', ''],
-                # 'next_num_7_days': ('</trx> Will there be more than M transactions in the next N hours? Yes or No?', ''),
-                # 'next_amnt_7_days': ('</trx> Will there be more transactions of more than 1,000 in the next 100 hours? Yes or No?', ''), 
+                'next_hour': ['</trx> Will the next transaction be made in the next 36 hours? Yes or No?', ''],
+                'next_num_30_days': ['</trx> Will there be more than 9 transactions in the next 30 days? Yes or No?', ''],
+                'next_amnt_30_days': ['</trx> Will there be more transactions of more than 2.66 in the next 30 days? Yes or No?', ''], 
 }
 
 if args.qa_pool != 'full':
@@ -126,8 +126,8 @@ new_tokens = ['<trx>', '</trx>']
 
 if args.add_task_tokens:
     for task in qa_pool:
-    new_tokens.append('<' + task + '>')
-    qa_pool[task][0] += ' <' + task + '>'
+        new_tokens.append('<' + task + '>')
+        qa_pool[task][0] += ' <' + task + '>'
 
 tok.add_tokens(new_tokens)
 model.resize_token_embeddings(len(tok));

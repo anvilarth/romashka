@@ -39,7 +39,7 @@ def batches_generator(list_of_paths, batch_size=32, shuffle=False, is_infinite=F
     while True:
         if shuffle:
             np.random.shuffle(list_of_paths)
-
+            
         for path in list_of_paths:
             if verbose:
                 print(f'reading {path}')
@@ -103,6 +103,7 @@ def batches_generator(list_of_paths, batch_size=32, shuffle=False, is_infinite=F
                             continue
                     
                     if is_train:
+                        
                         yield dict(num_features=[torch.FloatTensor(batch_sequences[:, i]).to(device) for i in num_features_indices],
                                    cat_features=[torch.LongTensor(batch_sequences[:, i]).to(device) for i in cat_features_indices],
                                    mask=torch.BoolTensor(mask).to(device),
