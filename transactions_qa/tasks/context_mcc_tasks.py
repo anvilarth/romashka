@@ -18,7 +18,7 @@ class MostFrequentMCCCodeTaskMulti(AbstractTask):
     tokenizer: transformers.PreTrainedTokenizerBase = None
 
     def __post_init__(self):
-        self.task_name = "most_frequent_mcc_code"
+        self.task_name = "most_frequent_mcc_code_multi"
         self.target_feature_name = 'mcc'  # 108 unique values
         self.is_open_ended_task = False  # for a default for this task
         self.metrics = {
@@ -151,7 +151,7 @@ class MostFrequentMCCCodeTaskBinary(AbstractTask):
     tokenizer: transformers.PreTrainedTokenizerBase = None
 
     def __post_init__(self):
-        self.task_name = "most_frequent_mcc_code"
+        self.task_name = "most_frequent_mcc_code_binary"
         self.target_feature_name = 'mcc'  # 108 unique values
         self.is_open_ended_task = False  # for a default for this task
         self.metrics = {
@@ -165,8 +165,9 @@ class MostFrequentMCCCodeTaskBinary(AbstractTask):
             ]
 
         # all options for a target feature
-        self.answers_options = [str(i) for i in range(108)]
-        self.answer_template = ""  # left empty for a first time
+        self.answers_options: List[str] = [str(i) for i in range(108)]
+        self.binary_answer_options: Dict[str, str] = {"positive": "Yes", "negative": "No"}
+        self.answer_template: str = ""  # left empty for a first time
         self.add_tokens_to_tokenizer = True
 
         super().__post_init__()
@@ -215,7 +216,10 @@ class MostFrequentMCCCodeTaskBinary(AbstractTask):
         pos_neg_target_mask = torch.randint(0, 2, (len(target_feature_value_batch),), dtype=torch.int).bool()
 
         # Target's questions binary [No/Yes]
-        target_batch = list(map(lambda x: "Yes" if x else "No", pos_neg_target_mask))
+        target_batch = list(map(lambda x:
+                                self.binary_answer_options['positive'] if x
+                                else self.binary_answer_options['negative'],
+                                pos_neg_target_mask))
 
         # ground truth target (int/str), mask (bool)
         for target, pos_neg_mask in zip(target_feature_value_batch, pos_neg_target_mask):
@@ -396,3 +400,79 @@ class MostFrequentMCCCodeTaskOpenEnded(AbstractTask):
             answer_tokens=batch_answer_encoded,  # template + targets
             answer_mask=batch_answer_mask
         )
+
+
+@dataclass
+class ruMostFrequentMCCCodeTaskMulti(MostFrequentMCCCodeTaskMulti):
+
+    tokenizer: transformers.PreTrainedTokenizerBase = None
+
+    def __post_init__(self):
+        self.task_name = "ru_most_frequent_mcc_code_multi"
+        self.question_templates = [
+            ("Это история транзакций клиента: ",
+             ". На ее основе скажи, какой MCC самый частый?"),
+            ("Это история транзакций клиента: ",
+             ". Выбери на ее основе самый частый MCC код транзакции."),
+            ("Дана история транзакций клиента: ",
+             ". Исходя из нее, определи, какой был самый частый MCC код транзакции?"),
+        ]
+        # all options, for a sample can be reduced to [true_mcc_code + 4 other codes]
+        self.answers_options = [str(i) for i in range(108)]
+        self.answer_template = ""  # left empty for a first time
+        self.add_tokens_to_tokenizer = True
+        self.num_options = 6  # ground truth + 5 additional options
+        # self.task_special_tokens = []
+
+        super().__post_init__()
+
+
+
+@dataclass
+class ruMostFrequentMCCCodeTaskBinary(MostFrequentMCCCodeTaskBinary):
+
+    tokenizer: transformers.PreTrainedTokenizerBase = None
+
+    def __post_init__(self):
+        self.task_name = "ru_most_frequent_mcc_code_binary"
+        self.question_templates = [
+            ("Это история транзакций клиента: ",
+             ". Правда ли, что %s MCC код транзакции самый частый в истории? Да или Нет?"),
+            ("Это история транзакций клиента: ",
+             ". Верно ли утверждение, что самый частый в истории MCC код транзакции это - %s? Да или Нет?"),
+            ("Дана история транзакций клиента: ",
+             ". Исходя из нее, скажи, правда ли что MCC код транзакции - %s самый частый в истории? Да или Нет?"),
+        ]
+        # all options
+        self.answers_options = [str(i) for i in range(108)]
+        self.binary_answer_options: Dict[str, str] = {"positive": "Да", "negative": "Нет"}
+        self.answer_template = ""  # left empty for a first time
+        self.add_tokens_to_tokenizer = True
+        # self.task_special_tokens = []
+
+        super().__post_init__()
+
+
+@dataclass
+class ruMostFrequentMCCCodeTaskOpenEnded(MostFrequentMCCCodeTaskOpenEnded):
+
+    tokenizer: transformers.PreTrainedTokenizerBase = None
+
+    def __post_init__(self):
+        self.task_name = "ru_most_frequent_mcc_code_open-ended"
+        self.question_templates = [
+                ("Это история транзакций клиента: ",
+                 ". Какой был самый частый MCC код транзакции?"),
+                ("Дана история транзакций клиента: ",
+                 ". Исходя из нее, скажи, какой был самый частый MCC код транзакции?"),
+                ("Это история транзакций клиента: ",
+                 ". На ее основе скажи, какой был самый частый MCC код транзакции?"),
+                ("Дана история транзакций клиента: ",
+                 ". На ее основе определи самый частый MCC код транзакции."),
+            ]
+
+        # all options for a target feature - it is not actually required here, but still
+        self.answers_options = [str(i) for i in range(108)]
+        self.answer_template = ""  # left empty for a first time
+
+        super().__post_init__()

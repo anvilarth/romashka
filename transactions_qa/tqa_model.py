@@ -94,7 +94,7 @@ class TransactionQAModel(pl.LightningModule):
         self.training_steps: int = training_steps
         self.base_learning_rate = learning_rate
         self.adam_beta1: float = adam_beta1
-        self.adam_beta2 = adam_beta2
+        self.adam_beta2: float = adam_beta2
         self.adam_epsilon = adam_epsilon
 
         self.do_freeze_tm: bool = do_freeze_tm
