@@ -145,7 +145,6 @@ class MostFrequentMCCCodeTaskMulti(AbstractTask):
         )
 
 
-
 @dataclass
 class MostFrequentMCCCodeTaskBinary(AbstractTask):
 

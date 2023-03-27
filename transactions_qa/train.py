@@ -7,6 +7,7 @@ import pickle
 import argparse
 import numpy as np
 from typing import Dict, Optional
+from pathlib import Path
 
 import wandb
 
@@ -233,22 +234,32 @@ def main():
                                               batch_size=training_args.per_device_eval_batch_size,
                                               shuffle=False)
         logger.info(f"Created validation dataloader.")
-    if (not training_args.do_train) and (not training_args.do_eval) :
+    if (not training_args.do_train) and (not training_args.do_eval):
         logger.error("There is nothing to do. Please pass `do_train` and/or `do_eval`.")
         return 1
 
     # Training & Callbacks
     wb_logger = WandbLogger(
         project=training_args.project_name,
-        group=training_args.group_name
+        group=training_args.group_name,
+        name=training_args.run_name
     )
     tb_logger = TensorBoardLogger(name=training_args.run_name,
                                   save_dir="./tb_logs",
                                   default_hp_metric=False)
     lr_monitor_callback = LearningRateMonitor(logging_interval='step')
+
+    # Create separate checkpoints directory for each run
+    save_checkpoints_dir = f"{training_args.save_checkpoints_dir}/{training_args.run_name}"
+    if not Path(save_checkpoints_dir).resolve().exists():
+        logger.info(f"Checkpoints path do not exists: {Path(save_checkpoints_dir).resolve()}")
+        logger.info("Creating...")
+        Path(save_checkpoints_dir).resolve().mkdir()
+        logger.info(f"Checkpoints path created at: {Path(save_checkpoints_dir).resolve()}")
+
     checkpoint_callback = ModelCheckpoint(
         monitor=training_args.save_strategy_metric,  # default: 'val_loss'
-        dirpath=training_args.save_checkpoints_dir,  # default: './checkpoints/'
+        dirpath=save_checkpoints_dir,  # default: './checkpoints/'
         filename=training_args.save_filename_format,  # default: 'checkpoint-{epoch:02d}-{loss3:.2f}'
         save_weights_only=training_args.save_only_weights,  # default: 'True'
         every_n_epochs=training_args.save_epochs,  # default: '1'
@@ -262,8 +273,8 @@ def main():
         max_epochs=training_args.max_epochs,
         gpus=len(available_gpus),
         auto_select_gpus=True,
-        log_every_n_steps=1,
-        val_check_interval=training_args.val_check_interval,
+        log_every_n_steps=100,
+        # val_check_interval=training_args.val_check_interval,
         accumulate_grad_batches=training_args.gradient_accumulation_steps,
         logger=wb_logger,  #[tb_logger, wb_logger],
         callbacks=[checkpoint_callback, lr_monitor_callback])

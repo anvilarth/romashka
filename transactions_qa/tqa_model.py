@@ -93,7 +93,7 @@ class TransactionQAModel(pl.LightningModule):
         self.warmup_steps: int = warmup_steps
         self.training_steps: int = training_steps
         self.base_learning_rate = learning_rate
-        self.adam_beta1 = adam_beta1
+        self.adam_beta1: float = adam_beta1
         self.adam_beta2 = adam_beta2
         self.adam_epsilon = adam_epsilon
 
@@ -108,7 +108,9 @@ class TransactionQAModel(pl.LightningModule):
                                           'log_eval_predictions_table', 'log_eval_steps_counter'])
 
         # ✨ W&B: Create a Table to store predictions for each test step
-        self.columns = ["epoch", "step #", "task", "question", "prediction", "truth"]
+        self.columns = ["epoch", "step #", "task",
+                        "question", "prediction", "truth",
+                        "transactions_history_lengths"]
         self.log_eval_predictions_table = wandb.Table(columns=self.columns)
         self.log_eval_steps_counter = 0
         self.num_eval_batches_to_log = 10
@@ -126,7 +128,9 @@ class TransactionQAModel(pl.LightningModule):
             f"The model will start training with only {len(trainable_parameters)} "
             f"trainable parameters out of {len(parameters)}."
         )
-        optimizer = torch.optim.AdamW(self.parameters(), lr=5e-5)
+        optimizer = torch.optim.AdamW(self.parameters(),
+                                      betas=(self.adam_beta1, self.adam_beta2),
+                                      lr=self.base_learning_rate)
         scheduler = transformers.get_linear_schedule_with_warmup(optimizer,
                                                                  num_warmup_steps=self.warmup_steps,
                                                                  num_training_steps=self.training_steps
@@ -184,6 +188,7 @@ class TransactionQAModel(pl.LightningModule):
         qa_batch = task.process_input_batch(batch)
 
         batch_size = batch['mask'].size()[0]
+        transactions_history_lengths = batch['mask'].sum(1)
 
         # Question template: to embedding of LM
         # torch.Size([1, len(question_start_tokens))
@@ -242,6 +247,8 @@ class TransactionQAModel(pl.LightningModule):
         question_start_tokens_batch = qa_batch['question_start_tokens'].repeat(batch_size, 1)
         lm_outputs['question_encoded'] = torch.cat([question_start_tokens_batch,
                                                     qa_batch['question_end_tokens']], dim=1)
+        # Experimental !
+        lm_outputs['transactions_history_lengths'] = transactions_history_lengths
         return lm_outputs, batch_answers
 
     def training_step(self, batch, batch_idx: Optional[int] = None) -> Optional[Any]:
@@ -339,6 +346,7 @@ class TransactionQAModel(pl.LightningModule):
             self.log_predictions(logits=outputs.logits.detach().cpu(),
                                  answers=batch_answers.detach().cpu(),
                                  questions=outputs.question_encoded.detach().cpu(),
+                                 transactions_history_lengths=outputs['transactions_history_lengths'].detach().cpu(),
                                  predictions_table=self.log_eval_predictions_table,
                                  log_counter=self.log_eval_steps_counter)
             self.log_eval_steps_counter += 1
@@ -442,7 +450,9 @@ class TransactionQAModel(pl.LightningModule):
                         logits: torch.Tensor,
                         answers: torch.Tensor,
                         questions: torch.Tensor,
-                        predictions_table: wandb.Table, log_counter: int,
+                        predictions_table: wandb.Table,
+                        log_counter: int,
+                        transactions_history_lengths: Optional[torch.Tensor] = [],
                         task_name: Optional[str] = "default"):
         predictions_decoded = self.tokenizer.batch_decode(logits.argmax(2),
                                                           skip_special_tokens=True)
@@ -453,7 +463,7 @@ class TransactionQAModel(pl.LightningModule):
 
         print(f"Validation predictions vs. answers, batch #{log_counter}:")
 
-        # columns = ["epoch", "step #", "task", "question", "prediction", "truth"]
+        # columns = ["epoch", "step #", "task", "question", "prediction", "truth", "transactions_history_lengths"]
         for i, (pred, answer, question) in enumerate(zip(predictions_decoded, answers_decoded, questions_decoded)):
             print(f"\t#{i}:\tpredicted: {pred}, answer: {answer}")
             predictions_table.add_data(self.current_epoch,
@@ -461,4 +471,5 @@ class TransactionQAModel(pl.LightningModule):
                                        task_name,
                                        question,
                                        pred,
-                                       answer)
+                                       answer,
+                                       transactions_history_lengths[i] if len(transactions_history_lengths) else 0)
