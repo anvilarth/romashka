@@ -89,6 +89,11 @@ class DataTrainingArguments:
     """
     Arguments pertaining to what data we are going to input our model for training and eval.
     """
+    local_config: Optional[str] = field(
+        default="romashka/configs/local_config.yaml",
+        metadata={"help": "A path to yaml file with unique configs for local setting"},
+    )
+
     data_path: Optional[str] = field(default="data", metadata={"help": "The input data files base path."})
     projections_mappings_path: Optional[str] = field(default=None,
                                                      metadata={"help": "The mappings files base path."})

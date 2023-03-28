@@ -1,7 +1,10 @@
 from .task_abstract import AbstractTask
 from .task_auto import AutoTask, AUTO_TASKS, help_task_selection
 from .context_mcc_tasks import (MostFrequentMCCCodeTaskMulti,
-                                MostFrequentMCCCodeTaskBinary)
+                                MostFrequentMCCCodeTaskBinary
+                                )
+                                
+from .default_task import DefaultTask
 
 __all__ = [
     "AbstractTask",
@@ -10,4 +13,5 @@ __all__ = [
     "help_task_selection",
     "MostFrequentMCCCodeTaskMulti",
     "MostFrequentMCCCodeTaskBinary"
+    "DefaultTask"
 ]

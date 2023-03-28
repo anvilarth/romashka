@@ -3,10 +3,7 @@ import torch.nn as nn
 import sys
 
 from copy import deepcopy
-
-sys.path.append('./perceiver-pytorch')
-
-from perceiver_pytorch import Perceiver
+from .perceiver_pytorch import Perceiver
 
 class IdentityMapping(nn.Module):
     def __init__(self):

@@ -6,12 +6,12 @@ import tqdm
 import pickle
 import argparse
 import numpy as np
+import yaml
+
 from typing import Dict, Optional
 from pathlib import Path
 
 import wandb
-
-os.environ["WANDB_API_KEY"] = "de71b243e187c02735ee3d741c05d2d906905d2b"
 os.environ["WANDB_MODE"] = "online"
 
 import torch
@@ -60,11 +60,21 @@ def main():
     else:
         model_args, data_args, training_args, tasks_args = parser.parse_args_into_dataclasses()
 
+    
+
+
+
     # Set up logging
     logger = get_logger(
         name="train",
         logging_level=training_args.log_level
     )
+
+    with open(data_args.local_config, 'r') as f:
+        logger.info("READING LOCAL CONFIG")
+        cfg = yaml.safe_load(f)
+
+    os.environ["WANDB_API_KEY"] = cfg['wandb_key']
 
     # Detecting last checkpoint.
     last_checkpoint = None

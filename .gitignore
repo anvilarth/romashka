@@ -131,6 +131,7 @@ dmypy.json
 wandb/
 experiments/
 *.ipynb
+checkpoints/
 
 
 # IDE files & folders
