@@ -408,6 +408,8 @@ class ruMostFrequentMCCCodeTaskMulti(MostFrequentMCCCodeTaskMulti):
     tokenizer: transformers.PreTrainedTokenizerBase = None
 
     def __post_init__(self):
+        super().__post_init__()
+
         self.task_name = "ru_most_frequent_mcc_code_multi"
         self.question_templates = [
             ("Это история транзакций клиента: ",
@@ -424,7 +426,7 @@ class ruMostFrequentMCCCodeTaskMulti(MostFrequentMCCCodeTaskMulti):
         self.num_options = 6  # ground truth + 5 additional options
         # self.task_special_tokens = []
 
-        super().__post_init__()
+
 
 
 
@@ -434,6 +436,8 @@ class ruMostFrequentMCCCodeTaskBinary(MostFrequentMCCCodeTaskBinary):
     tokenizer: transformers.PreTrainedTokenizerBase = None
 
     def __post_init__(self):
+        super().__post_init__()
+
         self.task_name = "ru_most_frequent_mcc_code_binary"
         self.question_templates = [
             ("Это история транзакций клиента: ",
@@ -450,7 +454,7 @@ class ruMostFrequentMCCCodeTaskBinary(MostFrequentMCCCodeTaskBinary):
         self.add_tokens_to_tokenizer = True
         # self.task_special_tokens = []
 
-        super().__post_init__()
+
 
 
 @dataclass
@@ -459,6 +463,8 @@ class ruMostFrequentMCCCodeTaskOpenEnded(MostFrequentMCCCodeTaskOpenEnded):
     tokenizer: transformers.PreTrainedTokenizerBase = None
 
     def __post_init__(self):
+        super().__post_init__()
+
         self.task_name = "ru_most_frequent_mcc_code_open-ended"
         self.question_templates = [
                 ("Это история транзакций клиента: ",
@@ -475,4 +481,4 @@ class ruMostFrequentMCCCodeTaskOpenEnded(MostFrequentMCCCodeTaskOpenEnded):
         self.answers_options = [str(i) for i in range(108)]
         self.answer_template = ""  # left empty for a first time
 
-        super().__post_init__()
+

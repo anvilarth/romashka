@@ -24,6 +24,7 @@ from romashka.data_generators import (transaction_features)
 @dataclass
 class AbstractTask(ABC):
     """
+    todo: https://github.com/google-research/xtreme/blob/master/third_party/utils_lareqa.py
     Defines the abstract class for all the tasks.
     name: the name of the task.
     task_specific_config: specifies the special configuration needs
