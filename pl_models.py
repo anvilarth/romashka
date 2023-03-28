@@ -98,14 +98,14 @@ class TransactionQAModel(pl.LightningModule):
             
         elif task == 'next_amnt':
             trx_index = batch['mask'].sum(1, keepdim=True) - 1
-            input_labels = torch.gather(batch['cat_features'][num_map_index['amnt']], 1, trx_index)
+            input_labels = torch.gather(batch['num_features'][num_map_index['amnt']], 1, trx_index)
             text_answer = list(map(lambda x: 'Yes' if x else 'No', (input_labels >= 0.41)))
 
             target = self.tok.batch_encode_plus(text_answer, padding=True, return_tensors='pt')
             
         elif task == 'next_hour':
             trx_index = batch['mask'].sum(1, keepdim=True) - 1
-            input_labels = torch.gather(batch['cat_features'][num_map_index['hour_diff']], 1, trx_index)
+            input_labels = torch.gather(batch['num_features'][num_map_index['hour_diff']], 1, trx_index)
             text_answer = list(map(lambda x: 'Yes' if x else 'No', (input_labels >= 36 / 95)))
 
             target = self.tok.batch_encode_plus(text_answer, padding=True, return_tensors='pt')
@@ -116,25 +116,28 @@ class TransactionQAModel(pl.LightningModule):
             text_answer = list(map(lambda x: 'Yes' if x else 'No', (input_labels == 1)))
             target = self.tok.batch_encode_plus(text_answer, padding=True, return_tensors='pt')
 
-        elif task == 'next_num_7_days':
-            _, labels, _, padding_mask = make_time_batch(batch, number_days=7)
-            trx_index = max(1, padding_mask.sum(1).min().item())
-
-            input_labels = labels[:, trx_index - 1]
-            target = self.tok.batch_encode_plus(list(map(lambda x: str(x.item()) + ' transactions', input_labels.int())), padding=True, return_tensors='pt')
-
-            if trx_index == 1:
+        elif task == 'next_num_30_days':
+            labels, _, _, padding_mask = make_time_batch(batch, number_days=30)
+            trx_index = padding_mask.sum(1, keepdim=True) - 1
+            
+            if any(trx_index == -1):
                 return None, None
 
-        elif task == 'next_amnt_7_days':
-            _, labels, _, padding_mask = make_time_batch(batch, number_days=7)
-            trx_index = max(1, padding_mask.sum(1).min().item())
+            input_labels = torch.gather(labels, 1, trx_index)
+            text_answer = list(map(lambda x: 'Yes' if x else 'No', (input_labels > 9.0)))
+            target = self.tok.batch_encode_plus(text_answer, padding=True, return_tensors='pt')
+            
 
-            input_labels = labels[:, trx_index - 1]
-            target = self.tok.batch_encode_plus(list(map(lambda x: str(x.item()) + ' transactions', input_labels.int())), padding=True, return_tensors='pt')
-
-            if trx_index == 1:
+        elif task == 'next_amnt_30_days':
+            _, labels, _, padding_mask = make_time_batch(batch, number_days=30)
+            trx_index = padding_mask.sum(1, keepdim=True) - 1
+            
+            if any(trx_index == -1):
                 return None, None
+
+            input_labels = torch.gather(labels, 1, trx_index)
+            text_answer = list(map(lambda x: 'Yes' if x else 'No', (input_labels > 2.66)))
+            target = self.tok.batch_encode_plus(text_answer, padding=True, return_tensors='pt')
 
 
         return target, trx_index

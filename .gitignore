@@ -136,3 +136,4 @@ experiments/
 # IDE files & folders
 .idea/*
 .DS_Store
+checkpoints/
