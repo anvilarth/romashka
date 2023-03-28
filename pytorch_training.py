@@ -134,8 +134,11 @@ def eval_model(model, dataloader, epoch, task='default', data='vtb', batch_size=
             
         
     elif task == 'next_time':
-        log_dict = {start + 'amnt': 0.0, start + 'num': 0.0, start + 'num_accuracy': 0.0,
-                    start + 'code_f1': 0.0, start + 'code_recall': 0.0, start + 'code_precision': 0.0}
+        log_dict = {start + 'amnt': 0.0, start + 'num': 0.0, start + 'num_accuracy': 0.0}
+        for i in range(28): # alpha_num_mcc_cat
+            log_dict[start + 'mcc_cat_' + str(i) + '_code_f1'] = 0.0
+            log_dict[start + 'mcc_cat_' + str(i) + '_code_recall'] = 0.0
+            log_dict[start + 'mcc_cat_' + str(i) + '_code_precision'] = 0.0
 
     with torch.no_grad():
         for batch in tqdm(dataloader, desc='Evaluating model'):
@@ -215,10 +218,11 @@ def eval_model(model, dataloader, epoch, task='default', data='vtb', batch_size=
                     f1s.append(f1_score(code_preds[i][indices].cpu().numpy(), all_code_transactions[i][indices].cpu().numpy(), average=None, zero_division=1))
                     prs.append(precision_score(code_preds[i][indices].cpu().numpy(), all_code_transactions[i][indices].cpu().numpy(), average=None, zero_division=1))
                     recalls.append(recall_score(code_preds[i][indices].cpu().numpy(), all_code_transactions[i][indices].cpu().numpy(), average=None, zero_division=1))
-                
-                log_dict[start + 'code_f1'] +=  np.sum(f1s, axis=0)
-                log_dict[start + 'code_precision'] += np.sum(prs, axis=0)
-                log_dict[start + 'code_recall'] += np.sum(recalls, axis=0)
+                    
+                for i in range(28):
+                    log_dict[start + 'mcc_cat_' + str(i) + '_code_f1'] +=  np.sum(f1s, axis=0)[i]
+                    log_dict[start + 'mcc_cat_' + str(i) + '_code_precision'] += np.sum(prs, axis=0)[i]
+                    log_dict[start + 'mcc_cat_' + str(i) + '_code_recall'] += np.sum(recalls, axis=0)[i]
                 
                 masked_amnt = masked_mean(abs(output[0].squeeze(2) - all_amnt_transactions), padding_mask)
                 masked_num = masked_mean(abs(output[1].squeeze(2) - all_num_transactions), padding_mask)
@@ -265,7 +269,7 @@ def eval_model(model, dataloader, epoch, task='default', data='vtb', batch_size=
                        
     else:
         raise NotImplementedError
-    
+        
     log_dict['epoch'] = epoch
     wandb.log(log_dict)
     
