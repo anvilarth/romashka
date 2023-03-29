@@ -13,6 +13,7 @@ from pytorch_lightning.utilities import rank_zero_info
 from romashka.transactions_qa.tasks.task_abstract import AbstractTask
 from ..logging_handler import get_logger
 
+from transformers import T5ForConditionalGeneration
 
 def make_linear_connector(output_size: Optional[int] = None,
                           input_size: Optional[int] = None,
@@ -74,7 +75,8 @@ class TransactionQAModel(pl.LightningModule):
                  adam_beta2: Optional[float] = 0.999,
                  adam_epsilon: Optional[float] = 1e-8,
                  warmup_steps: Optional[int] = 100,
-                 training_steps: Optional[int] = 10_000):
+                 training_steps: Optional[int] = 10_000,
+                 verbose_for_debug: Optional[bool] = False):
         super().__init__()
         self._logger = get_logger(
             name=self.__class__.__name__,
@@ -101,6 +103,9 @@ class TransactionQAModel(pl.LightningModule):
         self.do_freeze_lm: bool = do_freeze_lm
         self.do_freeze_connector: bool = do_freeze_connector
         self._is_multitask: bool = False
+        self._is_encoder_decoder = False
+
+        self._verbose_for_debug: bool = verbose_for_debug
         self._prepare_model()
 
         self.save_hyperparameters(ignore=['tasks', '_logger', 'columns',
@@ -151,6 +156,9 @@ class TransactionQAModel(pl.LightningModule):
             self._logger.info(f"Running in `single task` setting"
                               f"with a single task: {self.tasks[0].task_name} provided.")
 
+        # Figure out what the model type passed% encoder-decoder / decoder-only
+        self._set_model_type()
+
         # In case any of tasks extends initial tokenizer vocab with additional tokens
         self._resize_text_embeddings()
 
@@ -170,12 +178,38 @@ class TransactionQAModel(pl.LightningModule):
             for param in self.connector.parameters():
                 param.requires_grad = False
 
+    def _set_model_type(self):
+        # For encoder-decoder models
+        if hasattr(self.language_model, "encoder"):
+            self._is_encoder_decoder = True
+        # For decoder-only
+        elif hasattr(self.language_model, "transformer"):
+            self._is_encoder_decoder = False
+        else:
+            raise NotImplementedError(f"Unknown model type: {type(self.language_model)}")
+
+        self._logger.info(f"Language model type: `{'encoder-decoder' if self._is_encoder_decoder else 'decoder'}`")
+
     def _resize_text_embeddings(self):
-        init_embeddings = self.language_model.encoder.get_input_embeddings()
+        # For encoder-decoder models
+        if self._is_encoder_decoder:
+            init_embeddings = self.language_model.encoder.get_input_embeddings()
+        # For decoder-only
+        else:
+            init_embeddings = self.language_model.transformer.get_input_embeddings()
+
         self._logger.info(f"LM initial `num_embeddings`: {init_embeddings.num_embeddings}, "
                           f"`embedding_dim`: {init_embeddings.embedding_dim}")
+
         self.language_model.resize_token_embeddings(len(self.tokenizer))
-        resized_embedds = self.language_model.encoder.get_input_embeddings()
+
+        # For encoder-decoder models
+        if self._is_encoder_decoder:
+            resized_embedds = self.language_model.encoder.get_input_embeddings()
+            # For decoder-only
+        else:
+            resized_embedds = self.language_model.transformer.get_input_embeddings()
+
         self._logger.info(f"LM resized `num_embeddings`: {resized_embedds.num_embeddings}, "
                           f"`embedding_dim`: {resized_embedds.embedding_dim}")
 
@@ -249,6 +283,11 @@ class TransactionQAModel(pl.LightningModule):
                                                     qa_batch['question_end_tokens']], dim=1)
         # Experimental !
         lm_outputs['transactions_history_lengths'] = transactions_history_lengths
+
+        lm_outputs['question_start_input_size'] = question_start_embeddings_batch.size(1)
+        lm_outputs['question_end_input_size'] = question_end_embeddings_batch.size(1)
+        lm_outputs['transactions_input_size'] = transactions_embeddings.size(1)
+        lm_outputs['total_input_size'] = encoder_input.size(1)
         return lm_outputs, batch_answers
 
     def training_step(self, batch, batch_idx: Optional[int] = None) -> Optional[Any]:
@@ -278,12 +317,46 @@ class TransactionQAModel(pl.LightningModule):
 
         logging_dict = {
             'train_loss': loss,
-            f'{task_name}_train_loss': loss
+            f'{task_name}_train_loss': loss,
         }
+        if self._verbose_for_debug:
+            additional_logging_dict = self._collect_additional_info(outputs)
+            if additional_logging_dict is not None and len(additional_logging_dict):
+                logging_dict = dict(list(logging_dict.items()) + list(additional_logging_dict.items()))
+
         self.log_dict(logging_dict)
         wandb.log(logging_dict)
         # self._logger.info(f"Train step results:\n{logging_dict}")
         return loss
+
+    def _collect_additional_info(self, outputs: Any) -> Dict[str, Any]:
+        """
+        Collect additional information from model's outputs for debugging.
+        Calling this function is optional - it can be removed without ane troubles.
+        Args:
+            outputs: model's step outputs;
+        Returns:
+            a collected dictionary with information about a step.
+        """
+        logging_dict = {}
+        if 'question_start_input_size' in outputs:
+            logging_dict['question_start_input_size'] = outputs['question_start_input_size']
+
+        if 'question_end_input_size' in outputs:
+            logging_dict['question_end_input_size'] = outputs['question_end_input_size']
+
+        if 'transactions_input_size' in outputs:
+            logging_dict['transactions_input_size'] = outputs['transactions_input_size']
+
+        if 'total_input_size' in outputs:
+            logging_dict['total_input_size'] = outputs['total_input_size']
+
+        # if 'transactions_history_lengths' in outputs:
+        #     logging_dict['transactions_history_lengths'] = outputs['transactions_history_lengths'].detach()
+
+        print(f"Additional info from a step:")
+        print(logging_dict)
+        return logging_dict
 
     def validation_step(self, batch,
                         batch_idx: Optional[int],
@@ -333,6 +406,11 @@ class TransactionQAModel(pl.LightningModule):
             'val_loss': loss,
             f'{task.task_name}_val_loss': loss
         }
+        if self._verbose_for_debug:
+            additional_logging_dict = self._collect_additional_info(outputs)
+            if additional_logging_dict is not None and len(additional_logging_dict):
+                logging_dict = dict(list(logging_dict.items()) + list(additional_logging_dict.items()))
+
         logging_dict = dict(list(logging_dict.items()) + list(metrics_scores.items()))
         # self._logger.info(f"Validation step results:\n{logging_dict}")
         self.log_dict(
