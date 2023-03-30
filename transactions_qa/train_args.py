@@ -198,7 +198,7 @@ class DataTrainingArguments:
         },
     )
 
-    min_seq_len: Optional[int] = field(
+    min_trx_seq_len: Optional[int] = field(
         default=0,
         metadata={
             "help": (
@@ -207,11 +207,20 @@ class DataTrainingArguments:
         },
     )
 
-    max_seq_len: Optional[int] = field(
+    max_trx_seq_len: Optional[int] = field(
         default=250,
         metadata={
             "help": (
             "Restrict samples to have length less than `max_seq_len`. Other samples are dropped"
+            )
+        },
+    )
+
+    shuffle_buffer_size: Optional[int] = field(
+        default=10_000,
+        metadata={
+            "help": (
+            "Size of buffer which is used for shuffling."
             )
         },
     )
@@ -416,6 +425,10 @@ class TrainingArguments:
     )
     run_name: Optional[str] = field(
         default=None, metadata={"help": "An optional descriptor for the run. Notably used for wandb logging."}
+    )
+
+    seed: Optional[int] = field(
+        default=11, metadata={"help": "Number for seed"}
     )
 
     # -----------------
