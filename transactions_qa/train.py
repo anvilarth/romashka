@@ -16,6 +16,7 @@ os.environ["WANDB_MODE"] = "online"
 
 import torch
 import torch.nn as nn
+from torch.utils.data import DataLoader
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
@@ -59,10 +60,6 @@ def main():
             json_file=os.path.abspath(sys.argv[1]))
     else:
         model_args, data_args, training_args, tasks_args = parser.parse_args_into_dataclasses()
-
-    
-
-
 
     # Set up logging
     logger = get_logger(
@@ -234,15 +231,29 @@ def main():
 
     # Datasets & Dataloader & Other utils
     if training_args.do_train and "train" in data_files:
-        train_dataloader = TransactionQADataset(data_files.get('train'),
-                                                device=device,
-                                                batch_size=training_args.per_device_train_batch_size)
+        train_ds = TransactionQADataset(data_files.get('train'),
+                                        min_seq_len=data_args.min_seq_len,
+                                        max_seq_len=data_args.max_seq_len).build_dataset()
+
+        train_dataloader = DataLoader(train_ds, 
+                                      batch_size=training_args.per_device_train_batch_size,
+                                      num_workers=data_args.preprocessing_num_workers,
+                                      collate_fn=TransactionQADataset.collate_fn,
+                                      )
+
         logger.info(f"Created train dataloader.")
     if training_args.do_eval and "validation" in data_files:
-        val_dataloader = TransactionQADataset(data_files.get('validation'),
-                                              device=device,
-                                              batch_size=training_args.per_device_eval_batch_size,
-                                              shuffle=False)
+        val_ds = TransactionQADataset(data_files.get('validation'),
+                                        min_seq_len=data_args.min_seq_len,
+                                        max_seq_len=data_args.max_seq_len,
+                                    ).build_dataset(buffer_size=None)
+
+        val_dataloader = DataLoader(val_ds, 
+                                        batch_size=training_args.per_device_eval_batch_size,
+                                        num_workers=data_args.preprocessing_num_workers, 
+                                        collate_fn=TransactionQADataset.collate_fn,
+                            )
+
         logger.info(f"Created validation dataloader.")
     if (not training_args.do_train) and (not training_args.do_eval):
         logger.error("There is nothing to do. Please pass `do_train` and/or `do_eval`.")

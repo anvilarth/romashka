@@ -198,6 +198,24 @@ class DataTrainingArguments:
         },
     )
 
+    min_seq_len: Optional[int] = field(
+        default=0,
+        metadata={
+            "help": (
+            "Restrict samples to have length more than `min_seq_len`. Other samples are dropped"
+            )
+        },
+    )
+
+    max_seq_len: Optional[int] = field(
+        default=250,
+        metadata={
+            "help": (
+            "Restrict samples to have length less than `max_seq_len`. Other samples are dropped"
+            )
+        },
+    )
+
     ignore_pad_token_for_loss: bool = field(
         default=True,
         metadata={
