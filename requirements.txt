@@ -12,3 +12,4 @@ pyspark
 wandb
 pytest
 nltk
+datasets

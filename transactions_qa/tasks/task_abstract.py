@@ -58,7 +58,7 @@ class AbstractTask(ABC):
     n_shot: Optional[int] = 1
 
     def __post_init__(self):
-        # Fill in empty parameters with deafults
+        # Fill in empty parameters with defaults
         if self.target_feature_name not in transaction_features:
             raise AttributeError(f"Provided feature name not in available"
                                  f"transactions feature names:\n{transaction_features}")

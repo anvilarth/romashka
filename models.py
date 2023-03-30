@@ -16,7 +16,7 @@ from romashka.augmentations import mixup_data
 
 from romashka.head import LinearHead, RNNClassificationHead, NSPHead, MLPHead, TransformerHead, IdentityHead, NextActionsHead, \
     ClassificationHead
-from romashka.tools import LambdaLayer, calculate_embedding_size
+from romashka.tools import LambdaLayer, calculate_embedding_size, zero_function
 
 # sys.path.append('/home/jovyan/romashka/adapter_transformers')
 # from adapter_transformers import AutoAdapterModel
@@ -175,19 +175,19 @@ class TransactionsModel(nn.Module):
 
         elif encoder_type == 'bert':
             self.encoder = model
-            self.encoder.wpe = LambdaLayer(lambda x: 0)
+            self.encoder.wpe = LambdaLayer(zero_function)
 
         elif encoder_type == 't5':
             self.encoder = model
-            self.encoder.wpe = LambdaLayer(lambda x: 0)
+            self.encoder.wpe = LambdaLayer(zero_function)
 
         elif encoder_type == 'gpt2':
             self.encoder = model
-            self.encoder.wpe = LambdaLayer(lambda x: 0)
+            self.encoder.wpe = LambdaLayer(zero_function)
 
         elif encoder_type == 'decision-transformer':
             self.encoder = model.encoder
-            self.encoder.wpe = LambdaLayer(lambda x: 0)
+            self.encoder.wpe = LambdaLayer(zero_function)
 
         elif encoder_type == 'wav2vec2':
             self.encoder = model.encoder
@@ -199,7 +199,7 @@ class TransactionsModel(nn.Module):
 
         elif encoder_type == 'data2vec-text':
             self.encoder = model
-            self.encoder.wpe = LambdaLayer(lambda x: 0)
+            self.encoder.wpe = LambdaLayer(zero_function)
 
         elif encoder_type == 'hubert':
             self.encoder = model.hubert.encoder
@@ -212,8 +212,7 @@ class TransactionsModel(nn.Module):
             self.encoder = PerceiverModel.from_pretrained("deepmind/vision-perceiver-fourier")
         elif encoder_type in ['whisper', 's2t']:
             self.encoder = model.decoder
-            self.encoder.embed_positions = LambdaLayer(lambda x: 0)
-
+            self.encoder.embed_positions = LambdaLayer(zero_function)
         else:
             raise NotImplementedError("Incorrect model name")
 

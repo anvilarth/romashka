@@ -9,6 +9,7 @@ from romashka.transactions_qa.tasks.context_mcc_tasks import (MostFrequentMCCCod
                                                               ruMostFrequentMCCCodeTaskMulti,
                                                               ruMostFrequentMCCCodeTaskOpenEnded)
 
+from romashka.transactions_qa.tasks.default_task import DefaultTask
 from romashka.logging_handler import get_logger
 
 """
@@ -26,7 +27,8 @@ AUTO_TASKS = [
         ("most_frequent_mcc_code_open-ended", MostFrequentMCCCodeTaskOpenEnded),
         ("ru_most_frequent_mcc_code_binary", ruMostFrequentMCCCodeTaskBinary),
         ("ru_most_frequent_mcc_code_multi", ruMostFrequentMCCCodeTaskMulti),
-        ("ru_most_frequent_mcc_code_open-ended", ruMostFrequentMCCCodeTaskOpenEnded)
+        ("ru_most_frequent_mcc_code_open-ended", ruMostFrequentMCCCodeTaskOpenEnded),
+        ("default", DefaultTask)
     ]
 AUTO_TASKS = OrderedDict(AUTO_TASKS)
 ALL_TASKS_NAMES = list(AUTO_TASKS.keys())

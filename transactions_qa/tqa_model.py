@@ -129,6 +129,7 @@ class TransactionQAModel(pl.LightningModule):
         """
         parameters = list(self.parameters())
         trainable_parameters = list(filter(lambda p: p.requires_grad, parameters))
+        # trainable_parameters = parameters
         rank_zero_info(
             f"The model will start training with only {len(trainable_parameters)} "
             f"trainable parameters out of {len(parameters)}."
@@ -325,7 +326,6 @@ class TransactionQAModel(pl.LightningModule):
                 logging_dict = dict(list(logging_dict.items()) + list(additional_logging_dict.items()))
 
         self.log_dict(logging_dict)
-        wandb.log(logging_dict)
         # self._logger.info(f"Train step results:\n{logging_dict}")
         return loss
 
@@ -417,7 +417,6 @@ class TransactionQAModel(pl.LightningModule):
             logging_dict,
             batch_size=batch_answers.size(0)
         )
-        wandb.log(logging_dict)
 
         # Log predictions on validation set
         if self.log_eval_steps_counter < self.num_eval_batches_to_log:
@@ -520,9 +519,8 @@ class TransactionQAModel(pl.LightningModule):
 
     def on_fit_end(self) -> None:
         # ✨ W&B: Log predictions table to wandb
-        wandb.log({"val_predictions": self.log_eval_predictions_table})
+        self.log({"val_predictions": self.log_eval_predictions_table})
         # ✨ W&B: Mark the run as complete (useful for multi-cell notebook)
-        wandb.finish()
 
     def log_predictions(self,
                         logits: torch.Tensor,
