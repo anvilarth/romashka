@@ -103,7 +103,7 @@ class TransactionQAModel(pl.LightningModule):
         self.do_freeze_lm: bool = do_freeze_lm
         self.do_freeze_connector: bool = do_freeze_connector
         self._is_multitask: bool = False
-        self._is_encoder_decoder = False
+        self._is_encoder_decoder: bool = False
 
         self._verbose_for_debug: bool = verbose_for_debug
         self._prepare_model()
@@ -129,7 +129,7 @@ class TransactionQAModel(pl.LightningModule):
         """
         parameters = list(self.parameters())
         trainable_parameters = list(filter(lambda p: p.requires_grad, parameters))
-        # trainable_parameters = parameters
+
         rank_zero_info(
             f"The model will start training with only {len(trainable_parameters)} "
             f"trainable parameters out of {len(parameters)}."
@@ -354,8 +354,9 @@ class TransactionQAModel(pl.LightningModule):
         # if 'transactions_history_lengths' in outputs:
         #     logging_dict['transactions_history_lengths'] = outputs['transactions_history_lengths'].detach()
 
-        print(f"Additional info from a step:")
-        print(logging_dict)
+        if self._verbose_for_debug:
+            print(f"Additional info from a step:")
+            print(logging_dict)
         return logging_dict
 
     def validation_step(self, batch,
@@ -520,7 +521,9 @@ class TransactionQAModel(pl.LightningModule):
     def on_fit_end(self) -> None:
         # ✨ W&B: Log predictions table to wandb
         self.log({"val_predictions": self.log_eval_predictions_table})
+        # was directly to W&B: wandb.log({"val_predictions": self.log_eval_predictions_table})
         # ✨ W&B: Mark the run as complete (useful for multi-cell notebook)
+        wandb.finish()
 
     def log_predictions(self,
                         logits: torch.Tensor,
