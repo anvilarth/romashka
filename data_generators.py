@@ -16,7 +16,7 @@ num_features_indices = [transaction_features.index(x) for x in num_features_name
 cat_features_indices = [transaction_features.index(x) for x in cat_features_names]
 
 
-def batches_generator(list_of_paths, batch_size=1, min_seq_len=None, max_seq_len=None):
+def batches_generator(list_of_paths, batch_size=1, min_seq_len=None, max_seq_len=None, is_train=True, verbose=False):
     """
     функция для создания батчей на вход для нейронной сети для моделей на keras и pytorch.
     так же может использоваться как функция на стадии инференса
@@ -37,30 +37,41 @@ def batches_generator(list_of_paths, batch_size=1, min_seq_len=None, max_seq_len
 
     for path in list_of_paths:
         # Faster loading (probably)
+
+        if verbose:
+            print(f'reading {path}')
+        
         gc.disable()
         with open(path, 'rb') as f:
             data = pickle.load(f)
 
         gc.enable()
 
-        padded_sequences, targets, products = data['padded_sequences'], data['targets'], data[
-            'products']
+        padded_sequences, products = data['padded_sequences'], data['products']
         app_ids = data['app_id']
+        
+        if is_train:
+            targets = data['targets']
+
+        
 
         for idx in range(len(products)):
             bucket, product = padded_sequences[idx], products[idx]
             app_id = app_ids[idx]
 
-            target = targets[idx]
+            if is_train:
+                target = targets[idx]
 
-            bucket[:, num_features_indices[-2]] /= 365
-            bucket[:, num_features_indices[-1]] /= 95
+            bucket[:, num_features_indices[-2]] = bucket[:, num_features_indices[-2]] / 365
+            bucket[:, num_features_indices[-1]] = bucket[:, num_features_indices[-1]] / 95
             mask = bucket[:, -6] != 0
 
             for jdx in range(0, len(bucket), batch_size):
 
                 batch_sequences = bucket[jdx: jdx + batch_size]
-                batch_targets = target[jdx: jdx + batch_size]
+
+                if is_train:
+                    batch_targets = target[jdx: jdx + batch_size]
 
                 batch_products = product[jdx: jdx + batch_size]
                 batch_app_ids = app_id[jdx: jdx + batch_size]
@@ -80,7 +91,8 @@ def batches_generator(list_of_paths, batch_size=1, min_seq_len=None, max_seq_len
                             meta_features=torch.LongTensor(batch_products).unsqueeze(0),
                             app_id=torch.LongTensor(batch_app_ids)
                 )
-    
-                ret['label'] = torch.LongTensor(batch_targets)
+
+                if is_train:
+                    ret['label'] = torch.LongTensor(batch_targets)
 
                 yield ret
