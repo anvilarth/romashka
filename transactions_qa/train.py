@@ -49,8 +49,6 @@ from romashka.transactions_qa.utils import (get_last_checkpoint, get_projections
 
 
 def main():
-    pl.seed_everything(11)
-
     parser = HfArgumentParser((ModelArguments, DataTrainingArguments, TrainingArguments, TasksArguments))
 
     if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
@@ -61,6 +59,7 @@ def main():
     else:
         model_args, data_args, training_args, tasks_args = parser.parse_args_into_dataclasses()
 
+    pl.seed_everything(training_args.seed)
     # Set up logging
     logger = get_logger(
         name="train",
@@ -72,6 +71,7 @@ def main():
         cfg = yaml.safe_load(f)
 
     os.environ["WANDB_API_KEY"] = cfg['wandb_key']
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
     # Detecting last checkpoint.
     last_checkpoint = None
@@ -231,9 +231,15 @@ def main():
 
     # Datasets & Dataloader & Other utils
     if training_args.do_train and "train" in data_files:
-        train_ds = TransactionQADataset(data_files.get('train'),
-                                        min_seq_len=data_args.min_seq_len,
-                                        max_seq_len=data_args.max_seq_len).build_dataset()
+        train_dataset_config = {
+            'dataset': data_files['train'],
+            'min_seq_len': data_args.min_trx_seq_len,
+            'max_seq_len': data_args.max_trx_seq_len,
+            'seed': training_args.seed, 
+            'buffer_size': data_args.shuffle_buffer_size
+        }
+
+        train_ds = TransactionQADataset(**train_dataset_config).build_dataset()                                      
 
         train_dataloader = DataLoader(train_ds, 
                                       batch_size=training_args.per_device_train_batch_size,
@@ -243,10 +249,15 @@ def main():
 
         logger.info(f"Created train dataloader.")
     if training_args.do_eval and "validation" in data_files:
-        val_ds = TransactionQADataset(data_files.get('validation'),
-                                        min_seq_len=data_args.min_seq_len,
-                                        max_seq_len=data_args.max_seq_len,
-                                    ).build_dataset(buffer_size=None)
+        val_dataset_config = {
+            'dataset': data_files['validation'],
+            'min_seq_len': data_args.min_trx_seq_len,
+            'max_seq_len': data_args.max_trx_seq_len,
+            'seed': training_args.seed, 
+            'buffer_size': 0,
+        }
+
+        val_ds = TransactionQADataset(**val_dataset_config).build_dataset()
 
         val_dataloader = DataLoader(val_ds, 
                                         batch_size=training_args.per_device_eval_batch_size,
@@ -306,7 +317,7 @@ if __name__ == '__main__':
     import os
     # os.environ['HF_DATASETS_OFFLINE'] = '1'  # offline mode for HF datasets
     # os.environ['TRANSFORMERS_OFFLINE'] = '1'  # offline mode for HF Transformers
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # disable DataParallel for test
+    # os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # disable DataParallel for test
 
     # Pretrained models are downloaded and locally cached at: ~/.cache/huggingface/transformers/.
     # This is the default directory given by the shell environment variable TRANSFORMERS_CACHE.
