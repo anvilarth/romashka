@@ -16,8 +16,9 @@ class TransactionQADataset():
         self.dataset = dataset
         self.min_seq_len = min_seq_len
         self.max_seq_len = max_seq_len
-
-        self.create_generator = lambda dataset: batches_generator(dataset, min_seq_len=self.min_seq_len, max_seq_len=self.max_seq_len)
+    
+    def create_generator(self, dataset):
+        return batches_generator(dataset, min_seq_len=self.min_seq_len, max_seq_len=self.max_seq_len)
 
     def build_dataset(self, seed=42, buffer_size=10_000):
         # Somehow it is important to pass dataset using gen_kwargs, because sharding is done using it

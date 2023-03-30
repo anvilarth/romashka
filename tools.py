@@ -22,7 +22,9 @@ def set_seeds(seed):
     torch.cuda.manual_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
-    
+
+def zero_function(x):
+    return 0
     
 def freeze_model(model):
     pass
