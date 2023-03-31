@@ -10,53 +10,12 @@ import transformers
 import pytorch_lightning as pl
 from pytorch_lightning.utilities import rank_zero_info
 
+from romashka.transactions_qa.layers.connector import (make_linear_connector,
+                                                       make_recurrent_connector)
 from romashka.transactions_qa.tasks.task_abstract import AbstractTask
 from ..logging_handler import get_logger
 
 from transformers import T5ForConditionalGeneration
-
-def make_linear_connector(output_size: Optional[int] = None,
-                          input_size: Optional[int] = None,
-                          embedding_model: Optional[nn.Module] = None,
-                          autoregressive_model: Optional[nn.Module] = None,
-                          device: Optional[Union[torch.device, str]] = 'cpu'):
-    required_output_size = None
-    if output_size is not None:
-        required_output_size = output_size
-    elif embedding_model is not None:
-        try:
-            # As it is custom model
-            required_output_size = embedding_model.head.output_size
-        except Exception as e0:
-            try:
-                # If it is HF model, then  take output dimensions from config
-                required_output_size = embedding_model.config.d_model
-            except Exception as e1:
-                raise AttributeError(f"Cannot get `output_size` from embeddings model:\n{e0}\n{e1}")
-    else:
-        raise AttributeError(f"Unable to define `output_size` from embeddings model"
-                             "as none of `output_size` or `embedding_model` is specified.")
-
-    required_input_size = None
-    if input_size is not None:
-        required_input_size = input_size
-    elif autoregressive_model is not None:
-        try:
-            # If it is HF model, then take inputs dimensions from config
-            required_input_size = autoregressive_model.config.d_model
-        except Exception as e:
-            raise AttributeError(f"Cannot get `input_size` from autoregressive model:\n{e}")
-    else:
-        raise AttributeError(f"Unable to define `input_size` from autoregressive model"
-                             "as none of `input_size` or `autoregressive_model` is specified.")
-
-    print(f"Output dimension of embedding model: {required_output_size}")
-    print(f"Input dimension of autoregressive model: {required_input_size}")
-    print(f"Creating linear connector from {required_output_size} to {required_input_size} "
-          f"and move to device: {device}.")
-
-    return nn.Linear(required_output_size, required_input_size).to(device)
-
 
 class TransactionQAModel(pl.LightningModule):
     def __init__(self,

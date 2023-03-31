@@ -105,3 +105,16 @@ def get_projections_maps(num_embedding_projections_fn: str = './assets/num_embed
         "cat_embedding_projections": cat_embedding_projections,
         "meta_embedding_projections": meta_embedding_projections
     }
+
+def init_layers(module: nn.Module):
+    """
+    Initialize weights for Linear and RNN layers.
+    """
+    if isinstance(module, nn.Linear):
+         nn.init.xavier_uniform_(module.weight)
+    elif isinstance(module, nn.RNN) or isinstance(module, nn.GRU):
+        for param in module._flat_weights_names:
+            if "weight" in param:
+                nn.init.xavier_uniform_(module._parameters[param])
+    else:
+        pass
