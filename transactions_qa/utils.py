@@ -3,6 +3,9 @@ import re
 import pickle
 from typing import Dict, Any, Optional
 
+import torch
+import torch.nn as nn
+
 PREFIX_CHECKPOINT_DIR = "checkpoint"
 _re_checkpoint = re.compile(r"^" + PREFIX_CHECKPOINT_DIR + r"\-(\d+)$")
 

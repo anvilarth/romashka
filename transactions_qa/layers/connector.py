@@ -71,7 +71,7 @@ class LinearConnector(nn.Module):
             print(f"Error occurred during connector creation:\n{e}")
             raise AttributeError(f"Error occurred during connector creation:\n{e}")
 
-    def forward(self, x: torch.Tensor, **kwargs) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, *args, **kwargs) -> torch.Tensor:
         return self.layer(x)
 
 

@@ -30,7 +30,8 @@ cat_features_indices = [transaction_features.index(x) for x in cat_features_name
     :return: бачт из последовательностей и таргетов (или app_id)
     """
 
-def batches_generator(list_of_paths: List[str], batch_size: Optional[int] = 1,
+def batches_generator(list_of_paths: List[str],
+                      batch_size: Optional[int] = 1,
                       min_seq_len: Optional[int] = None, max_seq_len: Optional[int] = None,
                       is_train: Optional[bool] = True, verbose: Optional[bool] = False):
     """
@@ -50,7 +51,6 @@ def batches_generator(list_of_paths: List[str], batch_size: Optional[int] = 1,
     """
     for path in list_of_paths:
         # Faster loading (probably)
-
         if verbose:
             print(f'reading {path}')
         
