@@ -101,6 +101,12 @@ class AbstractTask(ABC):
         Generated question/answer-specific target sequence.
         """
         raise NotImplementedError
+    
+    def calculate_metrics(self, outputs:  Any, answers: torch.Tensor, **kwargs) -> dict:
+        """
+        Calculate task metrics
+        """
+        raise NotImplementedError
 
     @staticmethod
     def extend_vocabulary(

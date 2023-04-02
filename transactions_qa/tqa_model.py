@@ -13,7 +13,7 @@ from pytorch_lightning.utilities import rank_zero_info
 from romashka.transactions_qa.layers.connector import (make_linear_connector,
                                                        make_recurrent_connector)
 from romashka.transactions_qa.tasks.task_abstract import AbstractTask
-from ..logging_handler import get_logger
+from romashka.logging_handler import get_logger
 
 from transformers import T5ForConditionalGeneration
 
@@ -216,11 +216,7 @@ class TransactionQAModel(pl.LightningModule):
         encoder_input = torch.cat([question_start_embeddings_batch,
                                    transactions_embeddings,
                                    question_end_embeddings_batch], dim=1)
-        encoder_input_mask = torch.cat(
-            [qa_batch['question_start_attention_mask'],
-             batch['mask'],
-             qa_batch['question_end_attention_mask']],
-            dim=1)
+        encoder_input_mask = qa_batch['encoder_input_mask']
 
         # Create answers + masks for LM's decoder inputs
         batch_answers = qa_batch['answer_tokens']
@@ -354,13 +350,10 @@ class TransactionQAModel(pl.LightningModule):
         #     print(f"\t#{i}{question}:\tpredicted: {pred}, answer: {answer}")
 
         # Calc metrics
-        metrics_scores = {}
-        # for metric_name, metric in task.metrics.items():
-        #     try:
-        #         metrics_scores[metric_name] = metric(predictions_decoded,
-        #                                              batch_answers_decoded)
-        #     except Exception as e:
-        #         self._logger.error(f"error occurred during task metric `{metric_name}` calculation:\n{e}")
+        try: 
+            metrics_scores = task.calculate_metrics(outputs, batch_answers)
+        except Exception as e:
+            self._logger.error(f"error occurred during task metric calculation:\n{e}")
 
         logging_dict = {
             'val_loss': loss,
@@ -437,6 +430,7 @@ class TransactionQAModel(pl.LightningModule):
         """
         task = self.tasks[task_idx]
         outputs, batch_answers = self.model_step(batch, task_idx=task_idx)
+        
         if outputs is None:
             return dict()
 
@@ -479,7 +473,7 @@ class TransactionQAModel(pl.LightningModule):
 
     def on_fit_end(self) -> None:
         # ✨ W&B: Log predictions table to wandb
-        self.log({"val_predictions": self.log_eval_predictions_table})
+        self.logger.experiment.log({"val_predictions": self.log_eval_predictions_table})
         # was directly to W&B: wandb.log({"val_predictions": self.log_eval_predictions_table})
         # ✨ W&B: Mark the run as complete (useful for multi-cell notebook)
         wandb.finish()

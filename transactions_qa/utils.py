@@ -1,6 +1,8 @@
 import os
 import re
-import pickle
+import pickle 
+import torch.nn as nn
+
 from typing import Dict, Any, Optional
 
 PREFIX_CHECKPOINT_DIR = "checkpoint"

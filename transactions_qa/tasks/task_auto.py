@@ -8,7 +8,7 @@ from romashka.transactions_qa.tasks.context_mcc_tasks import (MostFrequentMCCCod
                                                               ruMostFrequentMCCCodeTaskBinary,
                                                               ruMostFrequentMCCCodeTaskMulti,
                                                               ruMostFrequentMCCCodeTaskOpenEnded)
-
+                                                              
 from romashka.transactions_qa.tasks.default_task import DefaultTask
 from romashka.logging_handler import get_logger
 

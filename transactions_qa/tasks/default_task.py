@@ -8,6 +8,8 @@ from typing import (Dict, Tuple, List,
 
 import transformers
 from torchmetrics.text.rouge import ROUGEScore
+from torchmetrics import AUROC
+from torchmetrics.classification import BinaryAccuracy
 
 from .task_abstract import AbstractTask
 
@@ -17,12 +19,13 @@ class DefaultTask(AbstractTask):
     tokenizer: transformers.PreTrainedTokenizerBase = None
 
     def __post_init__(self):
-        self.task_name = "default"
+        self.task_name = 'default'
         self.target_feature_name = 'amnt'
         self.is_open_ended_task = False  # for a default for this task
         
         self.metrics = {
-            "rouge": ROUGEScore()
+            "auc": AUROC(task='binary'),
+            "accuracy": BinaryAccuracy()
         }
         self.question_templates = [
             ("This is the client's transaction history ",
@@ -33,7 +36,6 @@ class DefaultTask(AbstractTask):
         self.answers_options = ["Yes", "No"]
         self.answer_template = ""  # left empty for a first time
         self.add_tokens_to_tokenizer = True
-
 
         super().__post_init__()
 
@@ -61,7 +63,7 @@ class DefaultTask(AbstractTask):
         device = batch['mask'].device
         batch_size = batch['mask'].shape[0]
 
-        mask_batch = batch['mask']  # bool Tensor [batch_size, seq_len]
+        transactions_embedding_mask = batch['mask']  # bool Tensor [batch_size, seq_len]
         target_feature_batch = batch['label']  # Tensor [batch_size]
 
         # Construct target values 
@@ -90,7 +92,12 @@ class DefaultTask(AbstractTask):
         # already for full batch
         question_start_tokens_mask = torch.ones(question_start_tokens.size()).repeat(batch_size, 1).to(device)
         question_end_tokens_mask = question_target_encoded_batch['attention_mask']
-        transactions_embedding_mask = batch['mask']
+
+        encoder_input_mask = torch.cat(
+                                        [question_start_tokens_mask, 
+                                        transactions_embedding_mask, 
+                                        question_end_tokens_mask], dim=1
+        )
 
         # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
         target_encoded_batch = self.tokenizer.batch_encode_plus(target_batch,
@@ -117,17 +124,25 @@ class DefaultTask(AbstractTask):
 
         return dict(
             question_start_tokens=question_start_tokens,
-            question_start_attention_mask=question_start_tokens_mask,
             question_end_tokens=question_target_encoded_batch['input_ids'],
-            question_end_attention_mask=question_target_encoded_batch['attention_mask'],
             target_tokens=target_encoded_batch['input_ids'],
-            target_attention_mask=target_encoded_batch['attention_mask'],
             answer_tokens=batch_answer_encoded,  # template + targets
-            answer_mask=batch_answer_mask
+            answer_mask=batch_answer_mask,
+            encoder_input_mask=encoder_input_mask,
         )
 
-    def process_input_sample(self, sample: Any, **kwargs) -> Any:
-        pass
+    def calculate_metrics(self, outputs, answers):
+        metrics = {}
+        ind_pos = self.tokenizer("Yes").input_ids[0]
+        ind_neg = self.tokenizer("No").input_ids[0]
 
-    def generate_target(self, sample: Any, **kwargs) -> Any:
-        pass
+        targets = (answers[:, -2] == ind_pos).long()
+        preds = torch.sigmoid(outputs.logits[:, 0, ind_pos] - outputs.logits[:, 0, ind_neg])
+
+        metrics = {
+            'auc': self.metrics['auc'](preds, targets),
+            'accuracy': self.metrics['accuracy'](preds, targets)
+        }
+
+        return metrics 
+
