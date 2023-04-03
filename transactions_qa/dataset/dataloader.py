@@ -1,9 +1,6 @@
-import os
-import numpy as np
 from typing import Optional
 
 import torch
-import torch.nn as nn
 
 from torch.utils.data import IterableDataset
 from romashka.data_generators import batches_generator
@@ -48,7 +45,7 @@ class TransactionQADataset:
         # num_features shape 1 x num_features x seq_len
         # meta_feature shape 1 x meta_features
         # mask shape 1 x seq_len
-        # label shape 1  
+        # label shape 1
 
         # checking batch_size correctness
         assert batch[0]['num_features'].shape[1] == 1, "Incorrect output of dataloader"

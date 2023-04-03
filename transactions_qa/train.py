@@ -1,14 +1,7 @@
 import os
-import re
 import sys
 import shutil
-import tqdm
-import pickle
-import argparse
-import numpy as np
 import yaml
-
-from typing import Dict, Optional
 from pathlib import Path
 
 import wandb
@@ -33,18 +26,20 @@ sys.path.insert(1, '/Users/abdullaeva/Documents/Projects/TransactionsQA')
 print(sys.path)
 
 from romashka.logging_handler import get_logger
-from romashka.data_generators import (batches_generator,
-                                      cat_features_names,
+from romashka.data_generators import (cat_features_names,
                                       num_features_names,
                                       meta_features_names)
 from romashka.transactions_qa.train_args import (ModelArguments,
                                                  DataTrainingArguments,
                                                  TrainingArguments,
                                                  TasksArguments)
-from romashka.transactions_qa.tasks import AutoTask, AUTO_TASKS
-from romashka.pl_dataloader import TransactionQADataset
+from romashka.transactions_qa.tasks import AutoTask
+from romashka.transactions_qa.dataset.dataloader import TransactionQADataset
+
 from romashka.models import TransactionsModel
 from romashka.transactions_qa.tqa_model import TransactionQAModel
+from romashka.transactions_qa.layers.connector import (make_linear_connector,
+                                                       make_recurrent_connector)
 from romashka.transactions_qa.utils import (get_last_checkpoint, get_projections_maps)
 
 

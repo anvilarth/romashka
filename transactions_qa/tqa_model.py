@@ -479,7 +479,7 @@ class TransactionQAModel(pl.LightningModule):
 
     def on_fit_end(self) -> None:
         # ✨ W&B: Log predictions table to wandb
-        self.log({"val_predictions": self.log_eval_predictions_table})
+        wandb.log({"val_predictions": self.log_eval_predictions_table})
         # was directly to W&B: wandb.log({"val_predictions": self.log_eval_predictions_table})
         # ✨ W&B: Mark the run as complete (useful for multi-cell notebook)
         wandb.finish()
