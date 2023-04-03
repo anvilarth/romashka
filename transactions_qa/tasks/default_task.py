@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import random
 
 # DTO
@@ -13,31 +14,35 @@ from torchmetrics.classification import BinaryAccuracy
 
 from .task_abstract import AbstractTask
 
-
 @dataclass
 class DefaultTask(AbstractTask):
     tokenizer: transformers.PreTrainedTokenizerBase = None
 
     def __post_init__(self):
+        
         self.task_name = 'default'
         self.target_feature_name = 'amnt'
         self.is_open_ended_task = False  # for a default for this task
         
-        self.metrics = {
+        self.metrics = nn.ModuleDict({
             "auc": AUROC(task='binary'),
             "accuracy": BinaryAccuracy()
-        }
+        })
+
+
         self.question_templates = [
             ("This is the client's transaction history ",
              "Will the client have a credit default? Yes or No?"),
         ]
 
         # all options, for a sample can be reduced to [true_mcc_code + 4 other codes]
-        self.answers_options = ["Yes", "No"]
+        self.positive_answer_word = "Yes"
+        self.negative_answer_word = "No"
         self.answer_template = ""  # left empty for a first time
         self.add_tokens_to_tokenizer = True
 
         super().__post_init__()
+
 
         if self.tokenizer is None:
             raise AttributeError("This task requires tokenizer to be set!")
@@ -49,6 +54,19 @@ class DefaultTask(AbstractTask):
             self.extend_vocabulary(tokenizer=self.tokenizer,
                                    new_tokens=new_tokens,
                                    special=False)
+
+        self.positive_token = self.tokenizer(self.positive_answer_word).input_ids[0]
+        self.negative_token = self.tokenizer(self.negative_answer_word).input_ids[0]
+
+    def generate_target(self, batch: Any, **kwargs) -> Any:
+        target_feature_batch = batch['label']  # Tensor [batch_size]
+
+        # Construct target values 
+        # Target's questions numeric/categorical answers as str
+
+        target_batch = list(map(lambda x: self.positive_answer_word if x else self.negative_answer_word, (target_feature_batch == 1)))
+
+        return target_batch
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         # Construct templates
@@ -64,12 +82,10 @@ class DefaultTask(AbstractTask):
         batch_size = batch['mask'].shape[0]
 
         transactions_embedding_mask = batch['mask']  # bool Tensor [batch_size, seq_len]
-        target_feature_batch = batch['label']  # Tensor [batch_size]
-
         # Construct target values 
         # Target's questions numeric/categorical answers as str
 
-        target_batch = list(map(lambda x: 'Yes' if x else 'No', (target_feature_batch == 1)))
+        target_batch = self.generate_target(batch)
 
         # Construct target sequences
         question_target_batch = [question_end for _ in range(batch_size)]  # as strings
@@ -131,18 +147,24 @@ class DefaultTask(AbstractTask):
             encoder_input_mask=encoder_input_mask,
         )
 
-    def calculate_metrics(self, outputs, answers):
+    def process_outputs(self, outputs, answers: torch.Tensor):
+        targets = (answers[:, -2] == self.positive_token).long()
+        preds = torch.sigmoid(outputs.logits[:, 0, self.positive_token] - outputs.logits[:, 0, self.negative_token])
+
+        return targets, preds
+
+    def calculate_metrics(self, outputs, answers, task_metrics):
         metrics = {}
-        ind_pos = self.tokenizer("Yes").input_ids[0]
-        ind_neg = self.tokenizer("No").input_ids[0]
 
-        targets = (answers[:, -2] == ind_pos).long()
-        preds = torch.sigmoid(outputs.logits[:, 0, ind_pos] - outputs.logits[:, 0, ind_neg])
+        targets, preds = self.process_outputs(outputs, answers)
 
-        metrics = {
-            'auc': self.metrics['auc'](preds, targets),
-            'accuracy': self.metrics['accuracy'](preds, targets)
-        }
+        if 'auc' in task_metrics:
+            task_metrics['auc'](preds, targets)
+            metrics['auc'] = task_metrics['auc']
+        
+        if 'accuracy' in task_metrics:
+            task_metrics['accuracy'](preds, targets)
+            metrics['accuracy'] = task_metrics['accuracy']
 
         return metrics 
 

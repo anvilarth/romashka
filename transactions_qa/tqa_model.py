@@ -16,6 +16,7 @@ from romashka.transactions_qa.tasks.task_abstract import AbstractTask
 from romashka.logging_handler import get_logger
 
 from transformers import T5ForConditionalGeneration
+from copy import deepcopy
 
 class TransactionQAModel(pl.LightningModule):
     def __init__(self,
@@ -51,6 +52,9 @@ class TransactionQAModel(pl.LightningModule):
             autoregressive_model=self.language_model) \
             if connector is None else connector
         self.tasks = tasks
+        
+        self.metrics = nn.ModuleDict({task.task_name: deepcopy(task.metrics) for task in self.tasks})
+
         self.warmup_steps: int = warmup_steps
         self.training_steps: int = training_steps
         self.base_learning_rate = learning_rate
@@ -333,6 +337,7 @@ class TransactionQAModel(pl.LightningModule):
         task = self.tasks[task_idx]
 
         outputs, batch_answers = self.model_step(batch, task_idx=task_idx)
+        
         if outputs is None:
             return None
 
@@ -351,7 +356,7 @@ class TransactionQAModel(pl.LightningModule):
 
         # Calc metrics
         try: 
-            metrics_scores = task.calculate_metrics(outputs, batch_answers)
+            metrics_scores = task.calculate_metrics(outputs, batch_answers, self.metrics[task.task_name])
         except Exception as e:
             self._logger.error(f"error occurred during task metric calculation:\n{e}")
 
