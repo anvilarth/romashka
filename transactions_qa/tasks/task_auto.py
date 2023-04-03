@@ -50,3 +50,5 @@ def help_task_selection():
     for task_name in ALL_TASKS_NAMES:
         s += "\n\t" + task_name
     print(s)
+
+

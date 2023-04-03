@@ -1,7 +1,8 @@
 import os
 import re
+import json
 import pickle
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 import torch
 import torch.nn as nn
@@ -108,6 +109,49 @@ def get_projections_maps(num_embedding_projections_fn: str = './assets/num_embed
         "cat_embedding_projections": cat_embedding_projections,
         "meta_embedding_projections": meta_embedding_projections
     }
+
+
+def get_buckets_info(feature_name: str,
+                     path: Optional[str] = None) -> Optional[List[float]]:
+    """
+    Loads buckets info (ranges) for numeric features.
+    Args:
+        feature_name: a feature_name for which we need to get buckets;
+        path: a filename to load, requires a pickle/json.
+    Returns:
+        a list of buckets ranges.
+    """
+    # print(os.path.abspath(os.getcwd()))
+
+    default_path = "../assets/dense_features_buckets.pkl"
+    path = path if (path is not None) and os.path.exists(path) else default_path
+
+    # Load buckets for numeric features
+    buckets = []
+
+    try:
+        if path.endswith("pkl"):
+            with open(path, 'rb') as f:
+                buckets = pickle.load(f)
+        elif path.endswith("json"):
+            with open(path, 'rb') as f:
+                buckets = json.load(f)
+        else:
+            print(f"Provided file name extensions: `{os.path.splitext(path)[1]}` is not supported (only json / pkl).")
+            return buckets
+
+        # Select feature
+        buckets = buckets.get(feature_name) if feature_name in buckets else buckets
+        if (buckets is not None) and not isinstance(buckets, dict):
+            print(f"Successfully loaded buckets info for feature `{feature_name}`:\n{buckets}")
+            return buckets
+        else:
+            print(f"Requested feature name: `{feature_name}` was not found in bucket's keys: {buckets.keys()}")
+            return []
+    except Exception as e:
+        print(f"Error occurred during buckets loading:\n{e}")
+        return buckets
+
 
 def init_layers(module: nn.Module):
     """
