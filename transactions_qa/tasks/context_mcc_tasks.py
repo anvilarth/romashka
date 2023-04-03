@@ -135,13 +135,11 @@ class MostFrequentMCCCodeTaskMulti(AbstractTask):
 
         return dict(
             question_start_tokens=question_start_tokens,
-            question_start_attention_mask=question_start_tokens_mask,
             question_end_tokens=question_target_encoded_batch['input_ids'],
-            question_end_attention_mask=question_target_encoded_batch['attention_mask'],
             target_tokens=target_encoded_batch['input_ids'],
-            target_attention_mask=target_encoded_batch['attention_mask'],
             answer_tokens=batch_answer_encoded,  # template + targets
-            answer_mask=batch_answer_mask
+            answer_mask=batch_answer_mask,
+            encoder_input_mask=encoder_input_mask
         )
 
 
@@ -278,13 +276,11 @@ class MostFrequentMCCCodeTaskBinary(AbstractTask):
 
         return dict(
             question_start_tokens=question_start_tokens,
-            question_start_attention_mask=question_start_tokens_mask,
             question_end_tokens=question_target_encoded_batch['input_ids'],
-            question_end_attention_mask=question_target_encoded_batch['attention_mask'],
             target_tokens=target_encoded_batch['input_ids'],
-            target_attention_mask=target_encoded_batch['attention_mask'],
             answer_tokens=batch_answer_encoded,  # template + targets
-            answer_mask=batch_answer_mask
+            answer_mask=batch_answer_mask,
+            encoder_input_mask=encoder_input_mask
         )
 
 
@@ -373,6 +369,12 @@ class MostFrequentMCCCodeTaskOpenEnded(AbstractTask):
         question_end_tokens_mask = question_target_encoded_batch['attention_mask']
         transactions_embedding_mask = batch['mask']
 
+        encoder_input_mask = torch.cat(
+                                        [question_start_tokens_mask, 
+                                        transactions_embedding_mask, 
+                                        question_end_tokens_mask], dim=1
+        )
+
         # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
         # add [:, :-1] for no EOS tokens - ?
         target_encoded_batch = self.tokenizer.batch_encode_plus(target_batch,
@@ -392,13 +394,11 @@ class MostFrequentMCCCodeTaskOpenEnded(AbstractTask):
 
         return dict(
             question_start_tokens=question_start_tokens,
-            question_start_attention_mask=question_start_tokens_mask,
             question_end_tokens=question_target_encoded_batch['input_ids'],
-            question_end_attention_mask=question_target_encoded_batch['attention_mask'],
             target_tokens=target_encoded_batch['input_ids'],
-            target_attention_mask=target_encoded_batch['attention_mask'],
             answer_tokens=batch_answer_encoded,  # template + targets
-            answer_mask=batch_answer_mask
+            answer_mask=batch_answer_mask,
+            encoder_input_mask=encoder_input_mask
         )
 
 
