@@ -185,6 +185,9 @@ class TransactionQAModel(pl.LightningModule):
 
         qa_batch = task.process_input_batch(batch)
 
+        if len(qa_batch) == 0:
+            return None, None
+
         batch_size = batch['mask'].size()[0]
         transactions_history_lengths = batch['mask'].sum(1)
 

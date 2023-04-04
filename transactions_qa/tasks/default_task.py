@@ -38,6 +38,8 @@ class DefaultTask(AbstractTask):
         # all options, for a sample can be reduced to [true_mcc_code + 4 other codes]
         self.positive_answer_word = "Yes"
         self.negative_answer_word = "No"
+
+        self.answers_options = ["Yes", "No"]
         self.answer_template = ""  # left empty for a first time
         self.add_tokens_to_tokenizer = True
 
