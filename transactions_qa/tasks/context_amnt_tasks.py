@@ -1,3 +1,5 @@
+from abc import ABC
+
 import torch
 import random
 import numpy as np
@@ -20,7 +22,12 @@ from romashka.data_generators import (transaction_features,
 
 
 @dataclass
-class MeanAmountTaskBinary(AbstractTask):
+class MeanAmountDiscreteTaskBinary(AbstractTask):
+    """
+    A task for binned Binary QA task: given a discrete or continuous numeric target - Amount,
+    discretize it into bins and answer question with binary answer.
+    """
+
     tokenizer: transformers.PreTrainedTokenizerBase = None
     buckets: Optional[List[float]] = None
 
