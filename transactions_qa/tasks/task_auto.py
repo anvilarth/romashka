@@ -8,6 +8,7 @@ from romashka.transactions_qa.tasks.context_mcc_tasks import (MostFrequentMCCCod
                                                               ruMostFrequentMCCCodeTaskBinary,
                                                               ruMostFrequentMCCCodeTaskMulti,
                                                               ruMostFrequentMCCCodeTaskOpenEnded)
+from romashka.transactions_qa.tasks.context_amnt_tasks import (MeanAmountBinnedTaskBinary)
 
 from romashka.transactions_qa.tasks.default_task import DefaultTask
 from romashka.logging_handler import get_logger
@@ -22,12 +23,15 @@ logger = get_logger(
 )
 
 AUTO_TASKS = [
+        # MCC code
         ("most_frequent_mcc_code_multi", MostFrequentMCCCodeTaskMulti),
         ("most_frequent_mcc_code_binary", MostFrequentMCCCodeTaskBinary),
         ("most_frequent_mcc_code_open-ended", MostFrequentMCCCodeTaskOpenEnded),
         ("ru_most_frequent_mcc_code_binary", ruMostFrequentMCCCodeTaskBinary),
         ("ru_most_frequent_mcc_code_multi", ruMostFrequentMCCCodeTaskMulti),
         ("ru_most_frequent_mcc_code_open-ended", ruMostFrequentMCCCodeTaskOpenEnded),
+        # Amount
+        ("mean_discrete_amount_binary", MeanAmountBinnedTaskBinary),
         ("default", DefaultTask)
     ]
 AUTO_TASKS = OrderedDict(AUTO_TASKS)
