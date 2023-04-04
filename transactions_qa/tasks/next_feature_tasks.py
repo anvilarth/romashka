@@ -169,7 +169,7 @@ class NextFeatureTaskBinary(AbstractTask):
         return metrics 
 
 @dataclass
-class NextCatFeatureTaskBinary(AbstractTask):
+class NextCatFeatureTaskBinary(NextFeatureTaskBinary):
     tokenizer: transformers.PreTrainedTokenizerBase = None
     def __post_init__(self):
         super().__post_init__()
@@ -194,7 +194,7 @@ class NextMCCFeatureTaskBinary(NextCatFeatureTaskBinary):
         self.target_feature_name = 'mcc_category'
         self.threshold = 2
 
-        self.init_feauture_index()
+        self.update_feature_index()
 
         self.question_templates = [
             ("This is the client's transaction history ",
@@ -229,6 +229,8 @@ class NextAmntFeatureTaskBinary(NextNumFeatureTaskBinary):
         self.target_feature_name = 'amnt'
         self.is_open_ended_task = False  # for a default for this task
         
+        self.update_feature_index()
+
         self.threshold = 0.41
         self.question_templates = [
             ("This is the client's transaction history ",
@@ -245,7 +247,7 @@ class NextHourFeatureTaskBinary(NextNumFeatureTaskBinary):
         self.task_name = "next_hour_binary"
         self.target_feature_name = 'hour_diff'
 
-        self.init_feauture_index()
+        self.update_feature_index()
         
         self.question_templates = [
             ("This is the client's transaction history ",
@@ -263,6 +265,8 @@ class NextTransactions30DaysTaskBinary(AbstractTask):
         self.N = 30
         self.is_open_ended_task = False  # for a default for this task
         
+        self.threshold = 9
+
         self.metrics = nn.ModuleDict({
             "auc": AUROC(task='binary'),
             "accuracy": BinaryAccuracy()
@@ -275,6 +279,7 @@ class NextTransactions30DaysTaskBinary(AbstractTask):
 
         self.positive_answer_word = "Yes"
         self.negative_answer_word = "No"
+        self.answers_options = ["Yes", "No"]
         # all options, for a sample can be reduced to [true_mcc_code + 4 other codes]
 
         self.answer_template = ""  # left empty for a first time
@@ -305,10 +310,9 @@ class NextTransactions30DaysTaskBinary(AbstractTask):
             return None, None
 
         input_labels = torch.gather(labels, 1, trx_index)
-        text_answer = list(map(lambda x: 'Yes' if x else 'No', (input_labels >= 9.0)))
-        target = self.tok.batch_encode_plus(text_answer, padding=True, return_tensors='pt')
+        text_answer = list(map(lambda x: self.positive_answer_word if x else self.negative_answer_word, (input_labels >= self.threshold)))
 
-        return target, trx_index
+        return text_answer, trx_index
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         # Construct templates
@@ -416,7 +420,7 @@ class NextTransactions30DaysTaskBinary(AbstractTask):
         return metrics 
 
 @dataclass
-class NextAmount30DaysTaskBinary(AbstractTask):
+class NextAmnt30DaysTaskBinary(AbstractTask):
     tokenizer: transformers.PreTrainedTokenizerBase = None
 
     def __post_init__(self):
@@ -430,6 +434,7 @@ class NextAmount30DaysTaskBinary(AbstractTask):
             "accuracy": BinaryAccuracy()
         })
 
+        self.threshold = 2.66
         self.question_templates = [
             ("This is the client's transaction history ",
              "Will there be more transactions of more than 2.66 in the next 30 days? Yes or No?"),
@@ -437,6 +442,7 @@ class NextAmount30DaysTaskBinary(AbstractTask):
 
         self.positive_answer_word = "Yes"
         self.negative_answer_word = "No"
+        self.answers_options = ["Yes", "No"]
         # all options, for a sample can be reduced to [true_mcc_code + 4 other codes]
 
         self.answer_template = ""  # left empty for a first time
@@ -467,10 +473,9 @@ class NextAmount30DaysTaskBinary(AbstractTask):
             return None, None
 
         input_labels = torch.gather(labels, 1, trx_index)
-        text_answer = list(map(lambda x: 'Yes' if x else 'No', (input_labels >= 2.66)))
-        target = self.tok.batch_encode_plus(text_answer, padding=True, return_tensors='pt')
+        text_answer = list(map(lambda x: self.positive_answer_word if x else self.negative_answer_word , (input_labels >= self.threshold)))
 
-        return target, trx_index
+        return text_answer, trx_index
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         # Construct templates

@@ -60,7 +60,7 @@ class AbstractTask(ABC):
 
     def __post_init__(self):
         # Fill in empty parameters with defaults
-        self.init_feauture_index()
+        self.init_feature_index()
         self.task_specific_config = {
             "source_msx_seq_len": 512,
             "target_max_seq_len": 128
@@ -110,7 +110,10 @@ class AbstractTask(ABC):
         """
         raise NotImplementedError
 
-    def init_feauture_index(self):
+    def init_feature_index(self):
+        """
+        Initialize the feature index.
+        """
         if self.target_feature_name in num_features_names:
             self.target_feature_index = num_features_names.index(self.target_feature_name) \
             if self.target_feature_index is None else self.target_feature_index
@@ -119,6 +122,21 @@ class AbstractTask(ABC):
         elif self.target_feature_name in cat_features_names:
             self.target_feature_index = cat_features_names.index(self.target_feature_name) \
             if self.target_feature_index is None else self.target_feature_index
+            self.target_feature_type = 'cat_features'
+        else:
+            raise AttributeError(f"Provided feature name not in available"
+                                 f"transactions feature names:\n{transaction_features}")
+    
+    def update_feature_index(self):
+        """
+        Update the feature index.
+        """
+        if self.target_feature_name in num_features_names:
+            self.target_feature_index = num_features_names.index(self.target_feature_name) 
+            self.target_feature_type = 'num_features'
+        
+        elif self.target_feature_name in cat_features_names:
+            self.target_feature_index = cat_features_names.index(self.target_feature_name)
             self.target_feature_type = 'cat_features'
         else:
             raise AttributeError(f"Provided feature name not in available"

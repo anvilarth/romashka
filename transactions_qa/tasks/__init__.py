@@ -5,7 +5,11 @@ from .context_mcc_tasks import (MostFrequentMCCCodeTaskMulti,
                                 )
                                 
 from .default_task import DefaultTask
-from .next_feature_tasks import NextMCCFeatureTaskBinary, NextAmntFeatureTaskBinary, NextHourFeatureTaskBinary
+from .next_feature_tasks import (NextMCCFeatureTaskBinary, 
+                                 NextAmntFeatureTaskBinary,
+                                 NextHourFeatureTaskBinary,
+                                 NextAmnt30DaysTaskBinary,
+                                 NextTransactions30DaysTaskBinary)
 
 __all__ = [
     "AbstractTask",
@@ -17,5 +21,7 @@ __all__ = [
     "DefaultTask",
     "NextMCCFeatureTaskBinary",
     "NextHourFeatureTaskBinary",
-    "NextAmntFeatureTaskBinary"
+    "NextAmntFeatureTaskBinary",
+    "NextAmnt30DaysTaskBinary",
+    "NextTransactions30DaysTaskBinary"
 ]
