@@ -1,5 +1,3 @@
-from abc import ABC
-
 import torch
 import random
 import numpy as np
@@ -10,8 +8,6 @@ from typing import (Dict, Tuple, List,
                     Any, Optional)
 
 import transformers
-from torchmetrics import AUROC
-from torchmetrics.text.rouge import ROUGEScore
 from torchmetrics.classification import BinaryAccuracy
 
 from .task_abstract import AbstractTask
@@ -154,9 +150,10 @@ class MeanAmountDiscreteTaskBinary(AbstractTask):
         target_feature_value_range_batch = []
         for i, (feature_, mask_) in enumerate(zip(target_feature_batch, mask_batch)):
             feature_masked = torch.masked_select(feature_.to("cpu"),
-                                                 mask=mask_.to("cpu"))  # get feature without padding
+                                                 mask=mask_.to("cpu")).long()  # get feature without padding
+            # print(f"feature_masked:\n{feature_masked}\n")
             # Calc direct value as float number
-            float_feature_ = np.mean([self.buckets_means[bucket_idx] for bucket_idx in feature_masked])
+            float_feature_ = np.mean([self.buckets_means[bucket_idx.item()] for bucket_idx in feature_masked])
             target_feature_value_batch.append(float_feature_)  # get a single Tensor value of a feature
 
         # Convert to corresponding bucket id
