@@ -11,16 +11,21 @@ from romashka.data_generators import batches_generator
 from torch.nn.utils.rnn import pad_sequence
 from datasets import IterableDataset as HFIterableDataset
 
+import pytorch_lightning as pl
+
 
 class TransactionQADataset:
 
-    def __init__(self, dataset, batch_size: int,
+    def __init__(self, dataset, generator_batch_size: int,
                  min_seq_len: Optional[int] = 50, max_seq_len: Optional[int] = 150,
                  seed: Optional[int] = 42, buffer_size: Optional[int] = 10_000,
                  is_train: Optional[bool] = True, shuffle: Optional[bool] = False, *args, **kwargs):
         super().__init__()
         self.dataset = dataset
-        self.batch_size = batch_size
+
+        assert generator_batch_size == 1, "Batch size of generator must be 1"
+
+        self.generator_batch_size = generator_batch_size
         self.min_seq_len = min_seq_len
         self.max_seq_len = max_seq_len
         self.is_train = is_train
@@ -30,7 +35,7 @@ class TransactionQADataset:
 
     def create_generator(self, dataset):
         return batches_generator(dataset,
-                                 batch_size=self.batch_size,
+                                 batch_size=self.generator_batch_size,
                                  min_seq_len=self.min_seq_len, max_seq_len=self.max_seq_len,
                                  is_train=self.is_train)
 

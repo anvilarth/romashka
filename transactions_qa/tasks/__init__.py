@@ -9,7 +9,8 @@ from .next_feature_tasks import (NextMCCFeatureTaskBinary,
                                  NextAmntFeatureTaskBinary,
                                  NextHourFeatureTaskBinary,
                                  NextAmnt30DaysTaskBinary,
-                                 NextTransactions30DaysTaskBinary)
+                                 NextTransactions30DaysTaskBinary,
+                                 NextMCCCodeTaskMulti)
 
 __all__ = [
     "AbstractTask",
@@ -23,5 +24,6 @@ __all__ = [
     "NextHourFeatureTaskBinary",
     "NextAmntFeatureTaskBinary",
     "NextAmnt30DaysTaskBinary",
-    "NextTransactions30DaysTaskBinary"
+    "NextTransactions30DaysTaskBinary",
+    "NextMCCCodeTaskMulti",
 ]

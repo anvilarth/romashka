@@ -231,6 +231,7 @@ def main():
             'min_seq_len': data_args.min_trx_seq_len,
             'max_seq_len': data_args.max_trx_seq_len,
             'seed': training_args.seed, 
+            'generator_batch_size': 1,
             'buffer_size': data_args.shuffle_buffer_size,
             'batch_size': training_args.per_device_train_batch_size,
             'num_workers': data_args.preprocessing_num_workers
@@ -246,6 +247,7 @@ def main():
             'max_seq_len': data_args.max_trx_seq_len,
             'seed': training_args.seed, 
             'buffer_size': 0,
+            'generator_batch_size': 1,
             'batch_size': training_args.per_device_eval_batch_size,
             'num_workers': data_args.preprocessing_num_workers
         }

@@ -16,7 +16,7 @@ import pytorch_lightning as pl
 
 class TransactionQADataset:
 
-    def __init__(self, dataset, batch_size: int,
+    def __init__(self, dataset, generator_batch_size: int = 1,
                  min_seq_len: Optional[int] = 50, max_seq_len: Optional[int] = 150,
                  seed: Optional[int] = 42, buffer_size: Optional[int] = 10_000,
                  is_train: Optional[bool] = True, shuffle: Optional[bool] = False, *args, **kwargs):
@@ -27,12 +27,13 @@ class TransactionQADataset:
         self.max_seq_len = max_seq_len
         self.is_train = is_train
         self.seed = seed
+        self.generator_batch_size = generator_batch_size
         self.shuffle = shuffle
         self.buffer_size = buffer_size
 
     def create_generator(self, dataset):
         return batches_generator(dataset,
-                                 batch_size=self.batch_size,
+                                 batch_size=self.generator_batch_size,
                                  min_seq_len=self.min_seq_len, max_seq_len=self.max_seq_len,
                                  is_train=self.is_train)
 
