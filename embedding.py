@@ -82,11 +82,11 @@ class EmbeddingLayer(nn.Module):
         return res
         
     def forward(self, batch):
+        batch_size = batch['mask'].shape[0]
+        seq_len = batch['cat_features'][0].shape[1]
+
         cat_features, num_features = batch['cat_features'], batch['num_features']
         time_features, meta_features = batch.get('time'), batch['meta_features']
-        
-        
-        seq_len = batch['cat_features'][0].shape[1]
         embeddings = self.cat_embedding(cat_features)
         
         if self.time_embedding is not None:
@@ -99,7 +99,7 @@ class EmbeddingLayer(nn.Module):
         
         if self.meta_embedding is not None:
             meta_embeddings = self.meta_embedding(meta_features).unsqueeze(1)
-            meta_embeddings = meta_embeddings.repeat(1, seq_len, 1)
+            meta_embeddings = meta_embeddings.repeat(batch_size, seq_len, 1)
             embeddings = torch.cat([embeddings, meta_embeddings], dim=-1)
         
         embeddings = self.dropout(embeddings)
