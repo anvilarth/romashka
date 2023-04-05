@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import random
 
 # DTO
@@ -21,9 +22,10 @@ class MostFrequentMCCCodeTaskMulti(AbstractTask):
         self.task_name = "most_frequent_mcc_code_multi"
         self.target_feature_name = 'mcc'  # 108 unique values
         self.is_open_ended_task = False  # for a default for this task
-        self.metrics = {
+        self.metrics = nn.ModuleDict({
             "rouge": ROUGEScore()
-        }
+        })
+
         self.question_templates = [
                 ("This is the client's transaction history ",
                  ". Which MCC code is the most frequent?"),
@@ -141,6 +143,9 @@ class MostFrequentMCCCodeTaskMulti(AbstractTask):
             answer_mask=batch_answer_mask,
             encoder_input_mask=encoder_input_mask
         )
+    def calculate_metrics(self, outputs: Any, answers: torch.Tensor, task_metrics: dict, **kwargs) -> dict:
+        #TODO: add metrics calculation here
+        return {}
 
 
 @dataclass
@@ -152,9 +157,9 @@ class MostFrequentMCCCodeTaskBinary(AbstractTask):
         self.task_name = "most_frequent_mcc_code_binary"
         self.target_feature_name = 'mcc'  # 108 unique values
         self.is_open_ended_task = False  # for a default for this task
-        self.metrics = {
+        self.metrics = nn.ModuleDict({
             "rouge": ROUGEScore()
-        }
+        })
         self.question_templates = [
                 ("This is the client's transaction history ",
                  ". Is %s MCC code is the most frequent? Yes or No?"),
@@ -282,7 +287,9 @@ class MostFrequentMCCCodeTaskBinary(AbstractTask):
             answer_mask=batch_answer_mask,
             encoder_input_mask=encoder_input_mask
         )
-
+    def calculate_metrics(self, outputs: Any, answers: torch.Tensor, task_metrics: dict, **kwargs) -> dict:
+        #TODO: add metrics calculation here
+        return {}
 
 @dataclass
 class MostFrequentMCCCodeTaskOpenEnded(AbstractTask):
@@ -293,9 +300,9 @@ class MostFrequentMCCCodeTaskOpenEnded(AbstractTask):
         self.task_name = "most_frequent_mcc_code_open-ended"
         self.target_feature_name = 'mcc'  # 108 unique values
         self.is_open_ended_task = True  # for a default for this task
-        self.metrics = {
+        self.metrics = nn.ModuleDict({
             "rouge": ROUGEScore()
-        }
+        })
         self.question_templates = [
                 ("This is the client's transaction history ",
                  ". Which MCC code is the most frequent?"),
@@ -400,6 +407,9 @@ class MostFrequentMCCCodeTaskOpenEnded(AbstractTask):
             answer_mask=batch_answer_mask,
             encoder_input_mask=encoder_input_mask
         )
+    def calculate_metrics(self, outputs: Any, answers: torch.Tensor, task_metrics: dict, **kwargs) -> dict:
+        #TODO: add metrics calculation here
+        return {}
 
 
 @dataclass

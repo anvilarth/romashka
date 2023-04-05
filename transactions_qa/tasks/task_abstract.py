@@ -65,7 +65,7 @@ class AbstractTask(ABC):
             "source_msx_seq_len": 512,
             "target_max_seq_len": 128
         } if self.task_specific_config is None else self.task_specific_config
-        self.metrics = {"rouge": ROUGEScore()} if self.metrics is None else self.metrics
+        self.metrics = nn.ModuleDict({"rouge": ROUGEScore() if self.metrics is None else self.metrics})
         self.question_templates = [
             ("This is the client's transaction history ",
              " Is the last MCC category code 1?")
