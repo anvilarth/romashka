@@ -15,20 +15,6 @@ meta_features_names = ['product']
 
 num_features_indices = [transaction_features.index(x) for x in num_features_names]
 cat_features_indices = [transaction_features.index(x) for x in cat_features_names]
-"""
-    функция для создания батчей на вход для нейронной сети для моделей на keras и pytorch.
-    так же может использоваться как функция на стадии инференса
-    :param list_of_paths: путь до директории с предобработанными последовательностями
-    :param batch_size: размер батча
-    :param verbose: флаг, если True, то печатает текущий обрабатываемый файл
-    :param device: device на который положить данные, если работа на торче
-    :param output_format: допустимые варианты ['tf', 'torch']. Если 'torch', то возвращает словарь,
-    где ключи - батчи из признаков, таргетов и app_id. Если 'tf', то возвращает картеж: лист input-ов
-    для модели, и список таргетов.
-    :param is_train: флаг, Если True, то для кераса вернет (X, y), где X - input-ы в модель, а y - таргеты, 
-    если False, то в y будут app_id; для torch вернет словарь с ключами на device.
-    :return: бачт из последовательностей и таргетов (или app_id)
-    """
 
 def batches_generator(list_of_paths: List[str], batch_size: Optional[int] = 1,
                       min_seq_len: Optional[int] = None, max_seq_len: Optional[int] = None,

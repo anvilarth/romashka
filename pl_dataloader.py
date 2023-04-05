@@ -1,9 +1,10 @@
+from inspect import trace
 import os
 import numpy as np
 import torch
 import torch.nn as nn
 
-from torch.utils.data import IterableDataset
+from torch.utils.data import IterableDataset, DataLoader
 from romashka.data_generators import batches_generator
 from torch.nn.utils.rnn import pad_sequence
 from datasets import IterableDataset as HFIterableDataset
@@ -11,7 +12,7 @@ from datasets import IterableDataset as HFIterableDataset
 import pytorch_lightning as pl
 
 class TransactionQADataset():
-    def __init__(self, dataset, min_seq_len: int = 50, max_seq_len: int = 150, seed: int = 42, buffer_size: int = 10_000, is_train: bool = True):
+    def __init__(self, dataset, min_seq_len: int = 50, max_seq_len: int = 150, seed: int = 42, buffer_size: int = 10_000, is_train: bool = True, *args, **kwargs):
         super().__init__()
         self.dataset = dataset
         self.min_seq_len = min_seq_len
@@ -55,3 +56,39 @@ class TransactionQADataset():
             output['label'] = torch.cat([d['label'] for d in batch])
 
         return output
+
+
+class TransactionQADataModule(pl.LightningDataModule):
+    def __init__(self, train_dataset_config: dict= None, val_dataset_config: dict = None):
+        super().__init__()
+        self.train_dataset_config = train_dataset_config
+        self.val_dataset_config = val_dataset_config
+
+        if train_dataset_config is not None:
+            self.train_ds = TransactionQADataset(**train_dataset_config).build_dataset()  
+        
+        if val_dataset_config is not None:
+            self.val_ds = TransactionQADataset(**val_dataset_config).build_dataset()
+
+
+    def train_dataloader(self):
+        if self.train_dataset_config is None:
+            return None
+        else:
+            self.train_ds.set_epoch(self.trainer.current_epoch)
+            return DataLoader(self.train_ds, 
+                                batch_size=self.train_dataset_config['batch_size'],
+                                num_workers=self.train_dataset_config['num_workers'],
+                                collate_fn=TransactionQADataset.collate_fn)
+
+        
+
+    def val_dataloader(self):
+        if self.val_dataset_config is None:
+            return None
+        else:
+            return DataLoader(self.val_ds, 
+                            batch_size=self.val_dataset_config['batch_size'],
+                            num_workers=self.val_dataset_config['num_workers'], 
+                            collate_fn=TransactionQADataset.collate_fn)
+

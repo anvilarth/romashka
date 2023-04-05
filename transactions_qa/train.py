@@ -42,7 +42,7 @@ from romashka.transactions_qa.train_args import (ModelArguments,
                                                  TrainingArguments,
                                                  TasksArguments)
 from romashka.transactions_qa.tasks import AutoTask, AUTO_TASKS
-from romashka.pl_dataloader import TransactionQADataset
+from romashka.pl_dataloader import TransactionQADataModule
 from romashka.models import TransactionsModel
 from romashka.transactions_qa.tqa_model import TransactionQAModel
 from romashka.transactions_qa.utils import (get_last_checkpoint, get_projections_maps)
@@ -236,16 +236,12 @@ def main():
             'min_seq_len': data_args.min_trx_seq_len,
             'max_seq_len': data_args.max_trx_seq_len,
             'seed': training_args.seed, 
-            'buffer_size': data_args.shuffle_buffer_size
+            'buffer_size': data_args.shuffle_buffer_size,
+            'batch_size': training_args.per_device_train_batch_size,
+            'num_workers': data_args.preprocessing_num_workers
         }
-
-        train_ds = TransactionQADataset(**train_dataset_config).build_dataset()                                      
-
-        train_dataloader = DataLoader(train_ds, 
-                                      batch_size=training_args.per_device_train_batch_size,
-                                      num_workers=data_args.preprocessing_num_workers,
-                                      collate_fn=TransactionQADataset.collate_fn,
-                                      )
+    else:
+        train_dataset_config = None
 
         logger.info(f"Created train dataloader.")
     if training_args.do_eval and "validation" in data_files:
@@ -255,20 +251,18 @@ def main():
             'max_seq_len': data_args.max_trx_seq_len,
             'seed': training_args.seed, 
             'buffer_size': 0,
+            'batch_size': training_args.per_device_eval_batch_size,
+            'num_workers': data_args.preprocessing_num_workers
         }
-
-        val_ds = TransactionQADataset(**val_dataset_config).build_dataset()
-
-        val_dataloader = DataLoader(val_ds, 
-                                        batch_size=training_args.per_device_eval_batch_size,
-                                        num_workers=data_args.preprocessing_num_workers, 
-                                        collate_fn=TransactionQADataset.collate_fn,
-                            )
+    else:
+        val_dataset_config = None
 
         logger.info(f"Created validation dataloader.")
     if (not training_args.do_train) and (not training_args.do_eval):
         logger.error("There is nothing to do. Please pass `do_train` and/or `do_eval`.")
         return 1
+    
+    datamodule = TransactionQADataModule(train_dataset_config, val_dataset_config)
 
     # Training & Callbacks
     wb_logger = WandbLogger(
@@ -307,10 +301,12 @@ def main():
         auto_select_gpus=True,
         log_every_n_steps=100,
         # val_check_interval=training_args.val_check_interval,
+        reload_dataloaders_every_n_epochs=1,
+        gradient_clip_val=training_args.gradient_clip_val,
         accumulate_grad_batches=training_args.gradient_accumulation_steps,
         logger=wb_logger,  #[tb_logger, wb_logger],
         callbacks=[checkpoint_callback, lr_monitor_callback])
-    trainer.fit(model=model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
+    trainer.fit(model=model, datamodule=datamodule)
 
 
 if __name__ == '__main__':
