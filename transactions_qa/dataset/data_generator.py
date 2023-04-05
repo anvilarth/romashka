@@ -1,7 +1,6 @@
 import gc
 import torch
 import pickle
-import numpy as np
 from typing import List, Optional
 
 transaction_features = ['currency', 'operation_kind', 'card_type', 'operation_type',
@@ -40,7 +39,7 @@ def batches_generator(list_of_paths: List[str],
         # Faster loading (probably)
         if verbose:
             print(f'reading {path}')
-        
+
         gc.disable()
         with open(path, 'rb') as f:
             data = pickle.load(f)
@@ -48,7 +47,7 @@ def batches_generator(list_of_paths: List[str],
 
         padded_sequences, products = data['padded_sequences'], data['products']
         app_ids = data['app_id']
-        
+
         if is_train:
             targets = data['targets']
 
