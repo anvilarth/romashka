@@ -223,7 +223,15 @@ class TransactionQAModel(pl.LightningModule):
         encoder_input = torch.cat([question_start_embeddings_batch,
                                    transactions_embeddings,
                                    question_end_embeddings_batch], dim=1)
-        encoder_input_mask = qa_batch['encoder_input_mask']
+        if 'encoder_input_mask' in qa_batch:
+            encoder_input_mask = qa_batch['encoder_input_mask']
+
+        else:
+            encoder_input_mask = torch.cat(
+                [qa_batch['question_start_attention_mask'],
+                batch['mask'],
+                qa_batch['question_end_attention_mask']],dim=1
+                )
 
         # Create answers + masks for LM's decoder inputs
         batch_answers = qa_batch['answer_tokens']

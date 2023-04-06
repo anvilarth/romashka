@@ -137,12 +137,16 @@ class MostFrequentMCCCodeTaskMulti(AbstractTask):
 
         return dict(
             question_start_tokens=question_start_tokens,
+            question_start_tokens_mask=question_start_tokens_mask
             question_end_tokens=question_target_encoded_batch['input_ids'],
+            question_end_attention_mask=question_target_encoded_batch['attention_mask'],
             target_tokens=target_encoded_batch['input_ids'],
+            target_attention_mask=target_encoded_batch['attention_mask'],
             answer_tokens=batch_answer_encoded,  # template + targets
             answer_mask=batch_answer_mask,
             encoder_input_mask=encoder_input_mask
         )
+
     def calculate_metrics(self, outputs: Any, answers: torch.Tensor, task_metrics: dict, **kwargs) -> dict:
         #TODO: add metrics calculation here
         return {}
@@ -281,12 +285,16 @@ class MostFrequentMCCCodeTaskBinary(AbstractTask):
 
         return dict(
             question_start_tokens=question_start_tokens,
+            question_start_tokens_mask=question_start_tokens_mask
             question_end_tokens=question_target_encoded_batch['input_ids'],
+            question_end_attention_mask=question_target_encoded_batch['attention_mask'],
             target_tokens=target_encoded_batch['input_ids'],
+            target_attention_mask=target_encoded_batch['attention_mask'],
             answer_tokens=batch_answer_encoded,  # template + targets
             answer_mask=batch_answer_mask,
             encoder_input_mask=encoder_input_mask
         )
+        
     def calculate_metrics(self, outputs: Any, answers: torch.Tensor, task_metrics: dict, **kwargs) -> dict:
         #TODO: add metrics calculation here
         return {}
@@ -401,12 +409,16 @@ class MostFrequentMCCCodeTaskOpenEnded(AbstractTask):
 
         return dict(
             question_start_tokens=question_start_tokens,
+            question_start_tokens_mask=question_start_tokens_mask
             question_end_tokens=question_target_encoded_batch['input_ids'],
+            question_end_attention_mask=question_target_encoded_batch['attention_mask'],
             target_tokens=target_encoded_batch['input_ids'],
+            target_attention_mask=target_encoded_batch['attention_mask'],
             answer_tokens=batch_answer_encoded,  # template + targets
             answer_mask=batch_answer_mask,
             encoder_input_mask=encoder_input_mask
         )
+        
     def calculate_metrics(self, outputs: Any, answers: torch.Tensor, task_metrics: dict, **kwargs) -> dict:
         #TODO: add metrics calculation here
         return {}
