@@ -28,7 +28,7 @@ class MeanAmountBinnedTaskBinary(AbstractTask):
     buckets: Optional[List[float]] = None
 
     def __post_init__(self):
-        self.task_name = "mean_discrete_amount_binary"
+        self.task_name = "mean_binned_amount_binary"
         self.target_feature_name = 'amnt'  # [0, 1] range of values
         self.target_feature_index = num_features_names.index(self.target_feature_name)
         self.is_open_ended_task = False  # for a default for this task
@@ -256,6 +256,7 @@ class MeanAmountNumericTaskBinary(AbstractTask):
     """
 
     tokenizer: transformers.PreTrainedTokenizerBase = None
+    buckets: Optional[List[float]] = None
 
     def __post_init__(self):
         self.task_name = "mean_numeric_amount_binary"
@@ -296,10 +297,11 @@ class MeanAmountNumericTaskBinary(AbstractTask):
         self.buckets_ranges = self._get_buckets_ranges(self.buckets,
                                                        self.feature_min,
                                                        self.feature_max)
+        self.buckets_means = self._get_buckets_means(self.buckets,
+                                                     self.feature_min,
+                                                     self.feature_max)
         # Note: in this case are not str values!
-        self.answers_options = self._get_buckets_means(self.buckets,
-                                                       self.feature_min,
-                                                       self.feature_max)
+        self.answers_options = self.buckets_means
 
         # Or create random options list
         # self.answers_options = self._get_random_options(self.num_answers_options,
@@ -399,24 +401,20 @@ class MeanAmountNumericTaskBinary(AbstractTask):
 
         # Construct target values
         target_feature_value_batch = []
-        target_feature_value_range_batch = []
         for i, (feature_, mask_) in enumerate(zip(target_feature_batch, mask_batch)):
             feature_masked = torch.masked_select(feature_.to("cpu"),
                                                  mask=mask_.to("cpu")).long()  # get feature without padding
             # Calc direct value as float number
             float_feature_ = np.mean([self.buckets_means[bucket_idx.item()] for bucket_idx in feature_masked])
-            target_feature_value_batch.append(float_feature_)  # get a single Tensor value of a feature
+            target_feature_value_batch.append(round(float_feature_, 3)) # get a single Tensor value of a feature
 
         # Convert to corresponding bucket id
-        target_feature_value_batch = torch.tensor(np.digitize(np.asarray(target_feature_value_batch),
-                                                              bins=self.buckets)).to(device)
-
-        # Get buckets ranges of target
-        target_feature_value_range_batch = [self.answers_options[target_value]
-                                            for target_value in target_feature_value_batch]
+        target_feature_value_bucket_batch = torch.tensor(np.digitize(
+            np.asarray(target_feature_value_batch), bins=self.buckets)
+        ).to(device)
 
         # Map to strings
-        target_feature_value_batch = list(map(lambda x: str(x.item()), target_feature_value_batch))
+        target_feature_value_batch = list(map(lambda x: str(round(x.item(), 3)), target_feature_value_batch))
 
         # for binary task randomly sample True and False examples from batch
         # and construct target sequences
@@ -432,20 +430,22 @@ class MeanAmountNumericTaskBinary(AbstractTask):
                                 pos_neg_target_mask))
 
         # ground truth target (int/str), mask (bool)
-        for target, target_range, pos_neg_mask in zip(target_feature_value_batch,
-                                                      target_feature_value_range_batch,
+        for target, target_bucket, pos_neg_mask in zip(target_feature_value_batch,
+                                                      target_feature_value_bucket_batch,
                                                       pos_neg_target_mask):
             if pos_neg_mask:
                 # positive
-                question_target_batch.append(question_end % target_range)
+                question_target_batch.append(question_end % target)
             else:
                 # negative
                 rand_target = None
                 while rand_target is None:
-                    opt = random.sample(self.answers_options, k=1)[0]
-                    if opt != target_range:
-                        rand_target = opt
-                question_target_batch.append(question_end % rand_target)
+                    bucket_idx_opt = random.sample(list(range(1, len(self.buckets) + 1)), k=1)[0]
+                    if bucket_idx_opt != target_bucket:
+                        # as random option get mean value in random bucket (!= target bucket)
+                        # Note: buckets are indexed from 1 to N, i.e. [1, N)
+                        rand_target = self.answers_options[bucket_idx_opt]
+                question_target_batch.append(question_end % str(round(rand_target, 3)))
 
         # Encode
         # question_start  -> '[task_special_token] + start str [trx]'
