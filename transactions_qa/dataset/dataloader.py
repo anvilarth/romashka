@@ -1,32 +1,38 @@
+from inspect import trace
+import os
+import numpy as np
+import torch
+import torch.nn as nn
+
+from torch.utils.data import IterableDataset, DataLoader
 from typing import Optional
 
-import torch
 
-from torch.utils.data import IterableDataset
-from romashka.data_generators import batches_generator
+from .data_generator import batches_generator
 from torch.nn.utils.rnn import pad_sequence
 from datasets import IterableDataset as HFIterableDataset
+import pytorch_lightning as pl
 
 
 class TransactionQADataset:
 
-    def __init__(self, dataset, batch_size: int,
+    def __init__(self, dataset, generator_batch_size: Optional[int] = 1,
                  min_seq_len: Optional[int] = 50, max_seq_len: Optional[int] = 150,
                  seed: Optional[int] = 42, buffer_size: Optional[int] = 10_000,
-                 is_train: Optional[bool] = True, shuffle: Optional[bool] = False):
+                 is_train: Optional[bool] = True, shuffle: Optional[bool] = False, *args, **kwargs):
         super().__init__()
         self.dataset = dataset
-        self.batch_size = batch_size
         self.min_seq_len = min_seq_len
         self.max_seq_len = max_seq_len
         self.is_train = is_train
         self.seed = seed
+        self.generator_batch_size = generator_batch_size
         self.shuffle = shuffle
         self.buffer_size = buffer_size
 
     def create_generator(self, dataset):
         return batches_generator(dataset,
-                                 batch_size=self.batch_size,
+                                 batch_size=self.generator_batch_size,
                                  min_seq_len=self.min_seq_len, max_seq_len=self.max_seq_len,
                                  is_train=self.is_train)
 
@@ -50,11 +56,11 @@ class TransactionQADataset:
         # checking batch_size correctness
         assert batch[0]['num_features'].shape[1] == 1, "Incorrect output of dataloader"
 
-        output['num_features'] = pad_sequence([d['num_features'].transpose(0, -1) for d in batch],
+        output['num_features'] = pad_sequence([d['num_features'].transpose(0, -1) for d in batch], # num_features x batch_size x seq_len
                                               batch_first=True).squeeze(2).permute(-1, 0, 1)
-        output['cat_features'] = pad_sequence([d['cat_features'].transpose(0, -1) for d in batch],
+        output['cat_features'] = pad_sequence([d['cat_features'].transpose(0, -1) for d in batch], # cat_features x batch_size x seq_len
                                               batch_first=True).squeeze(2).permute(-1, 0, 1)
-        output['meta_features'] = torch.cat([d['meta_features'] for d in batch], dim=1)
+        output['meta_features'] = torch.cat([d['meta_features'] for d in batch], dim=1) # meta_features x batch_size
 
         output['mask'] = pad_sequence([d['mask'].transpose(0, -1) for d in batch], batch_first=True).squeeze(2)
         output['app_id'] = torch.cat([d['app_id'] for d in batch])
@@ -63,3 +69,39 @@ class TransactionQADataset:
             output['label'] = torch.cat([d['label'] for d in batch])
 
         return output
+
+
+class TransactionQADataModule(pl.LightningDataModule):
+    def __init__(self, train_dataset_config: dict= None, val_dataset_config: dict = None):
+        super().__init__()
+        self.train_dataset_config = train_dataset_config
+        self.val_dataset_config = val_dataset_config
+
+        if train_dataset_config is not None:
+            self.train_ds = TransactionQADataset(**train_dataset_config).build_dataset()  
+        
+        if val_dataset_config is not None:
+            self.val_ds = TransactionQADataset(**val_dataset_config).build_dataset()
+
+
+    def train_dataloader(self):
+        if self.train_dataset_config is None:
+            raise KeyError("train_dataset_config is None")
+        else:
+            self.train_ds.set_epoch(self.trainer.current_epoch)
+            return DataLoader(self.train_ds, 
+                                batch_size=self.train_dataset_config['batch_size'],
+                                num_workers=self.train_dataset_config['num_workers'],
+                                collate_fn=TransactionQADataset.collate_fn)
+
+        
+
+    def val_dataloader(self):
+        if self.val_dataset_config is None:
+            raise KeyError("train_dataset_config is None")
+        else:
+            return DataLoader(self.val_ds, 
+                            batch_size=self.val_dataset_config['batch_size'],
+                            num_workers=self.val_dataset_config['num_workers'], 
+                            collate_fn=TransactionQADataset.collate_fn)
+

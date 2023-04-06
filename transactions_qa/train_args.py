@@ -331,7 +331,11 @@ class TrainingArguments:
     do_freeze_connector: Optional[bool] = field(
         default=False, metadata={"help": "Whether to freeze weights of a Connector layer during training."}
     )
-
+    
+    gradient_clip_val: float = field(
+        default=0,
+        metadata={"help": "Clipping norm of gradients. If ||g|| < val, g = val * g / ||g||."},
+    )
     # -----------------
     gradient_accumulation_steps: int = field(
         default=1,

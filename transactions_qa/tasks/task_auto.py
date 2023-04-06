@@ -11,6 +11,13 @@ from romashka.transactions_qa.tasks.context_mcc_tasks import (MostFrequentMCCCod
 from romashka.transactions_qa.tasks.context_amnt_tasks import (MeanAmountBinnedTaskBinary,
                                                                MeanAmountNumericTaskBinary)
 
+from romashka.transactions_qa.tasks.next_feature_tasks import (NextMCCFeatureTaskBinary, 
+                                                               NextAmntFeatureTaskBinary,
+                                                               NextHourFeatureTaskBinary,
+                                                               NextAmnt30DaysTaskBinary,
+                                                               NextTransactions30DaysTaskBinary,
+                                                               NextMCCFeatureTaskMulti)
+                                                               
 from romashka.transactions_qa.tasks.default_task import DefaultTask
 from romashka.logging_handler import get_logger
 
@@ -34,6 +41,14 @@ AUTO_TASKS = [
         # Amount
         ("mean_binned_amount_binary", MeanAmountBinnedTaskBinary),
         ("mean_numeric_amount_binary", MeanAmountNumericTaskBinary),
+        # Predictive
+        ("default", DefaultTask),
+        ("next_mcc_binary", NextMCCFeatureTaskBinary),
+        ("next_amnt_binary", NextAmntFeatureTaskBinary),
+        ("next_hour_binary", NextHourFeatureTaskBinary),
+        ("next_amnt_30_days_binary", NextAmnt30DaysTaskBinary),
+        ("next_transactions_30_days_binary", NextTransactions30DaysTaskBinary),
+        ("next_mcc_multi", NextMCCFeatureTaskMulti),
         ("default", DefaultTask)
     ]
 AUTO_TASKS = OrderedDict(AUTO_TASKS)

@@ -13,9 +13,10 @@ from pytorch_lightning.utilities import rank_zero_info
 from romashka.transactions_qa.layers.connector import (make_linear_connector,
                                                        make_recurrent_connector)
 from romashka.transactions_qa.tasks.task_abstract import AbstractTask
-from ..logging_handler import get_logger
+from romashka.logging_handler import get_logger
 
 from transformers import T5ForConditionalGeneration
+from copy import deepcopy
 
 class TransactionQAModel(pl.LightningModule):
     def __init__(self,
@@ -51,6 +52,9 @@ class TransactionQAModel(pl.LightningModule):
             autoregressive_model=self.language_model) \
             if connector is None else connector
         self.tasks = tasks
+        
+        self.metrics = nn.ModuleDict({task.task_name: deepcopy(task.metrics) for task in self.tasks})
+
         self.warmup_steps: int = warmup_steps
         self.training_steps: int = training_steps
         self.base_learning_rate = learning_rate
@@ -181,6 +185,9 @@ class TransactionQAModel(pl.LightningModule):
 
         qa_batch = task.process_input_batch(batch)
 
+        if len(qa_batch) == 0:
+            return None, None
+
         batch_size = batch['mask'].size()[0]
         transactions_history_lengths = batch['mask'].sum(1)
 
@@ -216,11 +223,15 @@ class TransactionQAModel(pl.LightningModule):
         encoder_input = torch.cat([question_start_embeddings_batch,
                                    transactions_embeddings,
                                    question_end_embeddings_batch], dim=1)
-        encoder_input_mask = torch.cat(
-            [qa_batch['question_start_attention_mask'],
-             batch['mask'],
-             qa_batch['question_end_attention_mask']],
-            dim=1)
+        if 'encoder_input_mask' in qa_batch:
+            encoder_input_mask = qa_batch['encoder_input_mask']
+
+        else:
+            encoder_input_mask = torch.cat(
+                [qa_batch['question_start_attention_mask'],
+                batch['mask'],
+                qa_batch['question_end_attention_mask']],dim=1
+                )
 
         # Create answers + masks for LM's decoder inputs
         batch_answers = qa_batch['answer_tokens']
@@ -337,6 +348,7 @@ class TransactionQAModel(pl.LightningModule):
         task = self.tasks[task_idx]
 
         outputs, batch_answers = self.model_step(batch, task_idx=task_idx)
+        
         if outputs is None:
             return None
 
@@ -354,13 +366,10 @@ class TransactionQAModel(pl.LightningModule):
         #     print(f"\t#{i}{question}:\tpredicted: {pred}, answer: {answer}")
 
         # Calc metrics
-        metrics_scores = {}
-        # for metric_name, metric in task.metrics.items():
-        #     try:
-        #         metrics_scores[metric_name] = metric(predictions_decoded,
-        #                                              batch_answers_decoded)
-        #     except Exception as e:
-        #         self._logger.error(f"error occurred during task metric `{metric_name}` calculation:\n{e}")
+        try: 
+            metrics_scores = task.calculate_metrics(outputs, batch_answers, self.metrics[task.task_name])
+        except Exception as e:
+            self._logger.error(f"error occurred during task metric calculation:\n{e}")
 
         logging_dict = {
             'val_loss': loss,
@@ -437,6 +446,7 @@ class TransactionQAModel(pl.LightningModule):
         """
         task = self.tasks[task_idx]
         outputs, batch_answers = self.model_step(batch, task_idx=task_idx)
+        
         if outputs is None:
             return dict()
 

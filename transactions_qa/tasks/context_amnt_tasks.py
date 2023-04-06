@@ -244,8 +244,13 @@ class MeanAmountBinnedTaskBinary(AbstractTask):
             target_tokens=target_encoded_batch['input_ids'],
             target_attention_mask=target_encoded_batch['attention_mask'],
             answer_tokens=batch_answer_encoded,  # template + targets
-            answer_mask=batch_answer_mask
+            answer_mask=batch_answer_mask,
+            encoder_input_mask=encoder_input_mask,
         )
+    
+    def calculate_metrics(self, outputs: Any, answers: torch.Tensor, task_metrics: dict, **kwargs) -> dict:
+        #TODO: add metrics calculation here
+        return {}
 
 
 @dataclass
@@ -496,5 +501,10 @@ class MeanAmountNumericTaskBinary(AbstractTask):
             target_tokens=target_encoded_batch['input_ids'],
             target_attention_mask=target_encoded_batch['attention_mask'],
             answer_tokens=batch_answer_encoded,  # template + targets
-            answer_mask=batch_answer_mask
+            answer_mask=batch_answer_mask,
+            encoder_input_mask=encoder_input_mask,
         )
+
+    def calculate_metrics(self, outputs: Any, answers: torch.Tensor, task_metrics: dict, **kwargs) -> dict:
+        #TODO: add metrics calculation here
+        return {}

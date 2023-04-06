@@ -74,6 +74,7 @@ def batches_generator(list_of_paths: List[str],
 
                 batch_mask = mask[jdx: jdx + batch_size]
 
+                # TODO Maybe just clip max_len sequence for more data
                 if min_seq_len is not None:
                     if mask.shape[1] < min_seq_len:
                         continue

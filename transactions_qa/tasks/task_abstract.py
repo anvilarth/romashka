@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import functools
 import pandas as pd
 from abc import ABC, abstractmethod
@@ -18,7 +19,7 @@ logger = get_logger(
     logging_level="INFO"
 )
 
-from romashka.data_generators import (transaction_features)
+from romashka.data_generators import (transaction_features, num_features_names, cat_features_names)
 
 
 @dataclass
@@ -59,17 +60,12 @@ class AbstractTask(ABC):
 
     def __post_init__(self):
         # Fill in empty parameters with defaults
-        if self.target_feature_name not in transaction_features:
-            raise AttributeError(f"Provided feature name not in available"
-                                 f"transactions feature names:\n{transaction_features}")
-        self.target_feature_index = transaction_features.index(self.target_feature_name) \
-            if self.target_feature_index is None else self.target_feature_index
-
+        self.init_feature_index()
         self.task_specific_config = {
             "source_msx_seq_len": 512,
             "target_max_seq_len": 128
         } if self.task_specific_config is None else self.task_specific_config
-        self.metrics = {"rouge": ROUGEScore()} if self.metrics is None else self.metrics
+        self.metrics = nn.ModuleDict({"rouge": ROUGEScore() if self.metrics is None else self.metrics})
         self.question_templates = [
             ("This is the client's transaction history ",
              " Is the last MCC category code 1?")
@@ -101,6 +97,56 @@ class AbstractTask(ABC):
         Generated question/answer-specific target sequence.
         """
         raise NotImplementedError
+    
+    def generate_target_question(self, question_end: Any, target_batch: Any, **kwargs) -> Any:
+        """
+        Generated target question
+        """
+        raise NotImplementedError
+
+    def process_outputs(self, outputs: Any, answers: torch.Tensor) -> Any:
+        """
+        Processing target text and output text to get the predictions
+        """
+        raise NotImplementedError
+    
+    def calculate_metrics(self, outputs:  Any, answers: torch.Tensor, task_metrics: dict, **kwargs) -> dict:
+        """
+        Calculate task metrics
+        """
+        raise NotImplementedError
+
+    def init_feature_index(self):
+        """
+        Initialize the feature index.
+        """
+        if self.target_feature_name in num_features_names:
+            self.target_feature_index = num_features_names.index(self.target_feature_name) \
+            if self.target_feature_index is None else self.target_feature_index
+            self.target_feature_type = 'num_features'
+        
+        elif self.target_feature_name in cat_features_names:
+            self.target_feature_index = cat_features_names.index(self.target_feature_name) \
+            if self.target_feature_index is None else self.target_feature_index
+            self.target_feature_type = 'cat_features'
+        else:
+            raise AttributeError(f"Provided feature name not in available"
+                                 f"transactions feature names:\n{transaction_features}")
+    
+    def update_feature_index(self):
+        """
+        Update the feature index.
+        """
+        if self.target_feature_name in num_features_names:
+            self.target_feature_index = num_features_names.index(self.target_feature_name) 
+            self.target_feature_type = 'num_features'
+        
+        elif self.target_feature_name in cat_features_names:
+            self.target_feature_index = cat_features_names.index(self.target_feature_name)
+            self.target_feature_type = 'cat_features'
+        else:
+            raise AttributeError(f"Provided feature name not in available"
+                                 f"transactions feature names:\n{transaction_features}")
 
     @staticmethod
     def extend_vocabulary(
