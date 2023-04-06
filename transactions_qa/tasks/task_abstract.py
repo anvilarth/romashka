@@ -1,13 +1,11 @@
 import torch
 import torch.nn as nn
-import functools
-import pandas as pd
 from abc import ABC, abstractmethod
 
 # DTO
 from dataclasses import dataclass
 from typing import (Dict, Tuple, List,
-                    Any, Optional)
+                    Any, Optional, Union)
 
 import transformers
 from torchmetrics.text.rouge import ROUGEScore
@@ -19,7 +17,9 @@ logger = get_logger(
     logging_level="INFO"
 )
 
-from romashka.data_generators import (transaction_features, num_features_names, cat_features_names)
+from romashka.transactions_qa.dataset.data_generator import (transaction_features,
+                                                             num_features_names,
+                                                             cat_features_names)
 
 
 @dataclass
@@ -38,8 +38,9 @@ class AbstractTask(ABC):
     task_name: Optional[str] = None
     target_feature_name: Optional[str] = None
     target_feature_index: Optional[int] = None
+    target_feature_type: Optional[str] = None
     task_specific_config: Optional[Dict[str, Any]] = None
-    metrics: Optional[Dict[str, Any]] = None
+    metrics: Optional[Union[Dict[str, Any], nn.ModuleDict]] = None
     question_templates: Optional[List[Tuple[str, str]]] = None  # (starting, ending)
     answer_template: Optional[str] = None
     answers_options: Optional[List[str]] = None
@@ -60,12 +61,14 @@ class AbstractTask(ABC):
 
     def __post_init__(self):
         # Fill in empty parameters with defaults
-        self.init_feature_index()
+        if self.target_feature_name is not None:
+            self.init_feature_index()
         self.task_specific_config = {
             "source_msx_seq_len": 512,
             "target_max_seq_len": 128
         } if self.task_specific_config is None else self.task_specific_config
-        self.metrics = nn.ModuleDict({"rouge": ROUGEScore() if self.metrics is None else self.metrics})
+        # Init metrics
+        self.metrics = nn.ModuleDict({"rouge": ROUGEScore()} if self.metrics is None else self.metrics)
         self.question_templates = [
             ("This is the client's transaction history ",
              " Is the last MCC category code 1?")
@@ -97,7 +100,7 @@ class AbstractTask(ABC):
         Generated question/answer-specific target sequence.
         """
         raise NotImplementedError
-    
+
     def generate_target_question(self, question_end: Any, target_batch: Any, **kwargs) -> Any:
         """
         Generated target question
@@ -109,10 +112,10 @@ class AbstractTask(ABC):
         Processing target text and output text to get the predictions
         """
         raise NotImplementedError
-    
-    def calculate_metrics(self, outputs:  Any, answers: torch.Tensor, task_metrics: dict, **kwargs) -> dict:
+
+    def calculate_metrics(self, outputs: Any, answers: torch.Tensor, task_metrics: dict, **kwargs) -> dict:
         """
-        Calculate task metrics
+        Calculate task metrics.
         """
         raise NotImplementedError
 
@@ -122,31 +125,35 @@ class AbstractTask(ABC):
         """
         if self.target_feature_name in num_features_names:
             self.target_feature_index = num_features_names.index(self.target_feature_name) \
-            if self.target_feature_index is None else self.target_feature_index
+                if self.target_feature_index is None else self.target_feature_index
             self.target_feature_type = 'num_features'
-        
+
         elif self.target_feature_name in cat_features_names:
             self.target_feature_index = cat_features_names.index(self.target_feature_name) \
-            if self.target_feature_index is None else self.target_feature_index
+                if self.target_feature_index is None else self.target_feature_index
             self.target_feature_type = 'cat_features'
         else:
             raise AttributeError(f"Provided feature name not in available"
                                  f"transactions feature names:\n{transaction_features}")
-    
+        logger.info(f"For feature with name: {self.target_feature_name} of type {self.target_feature_type}, "
+                    f"set index = {self.target_feature_index}")
+
     def update_feature_index(self):
         """
         Update the feature index.
         """
         if self.target_feature_name in num_features_names:
-            self.target_feature_index = num_features_names.index(self.target_feature_name) 
+            self.target_feature_index = num_features_names.index(self.target_feature_name)
             self.target_feature_type = 'num_features'
-        
+
         elif self.target_feature_name in cat_features_names:
             self.target_feature_index = cat_features_names.index(self.target_feature_name)
             self.target_feature_type = 'cat_features'
         else:
             raise AttributeError(f"Provided feature name not in available"
                                  f"transactions feature names:\n{transaction_features}")
+        logger.info(f"For feature with name: {self.target_feature_name} of type {self.target_feature_type}, "
+                    f"set index = {self.target_feature_index}")
 
     @staticmethod
     def extend_vocabulary(
@@ -179,3 +186,4 @@ class AbstractTask(ABC):
         for key, value in new_attr.items():
             if hasattr(self, key):
                 setattr(self, key, value)
+                logger.info(f"For Task attribute: {key} set value = {value}")

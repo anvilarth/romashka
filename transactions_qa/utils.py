@@ -122,7 +122,7 @@ def get_buckets_info(feature_name: str,
     Returns:
         a list of buckets ranges.
     """
-    # print(os.path.abspath(os.getcwd()))
+    print(f"Running script in {os.path.abspath(os.getcwd())} path.")
 
     default_path = "../assets/dense_features_buckets.pkl"
     path = path if (path is not None) and os.path.exists(path) else default_path

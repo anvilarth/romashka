@@ -83,7 +83,6 @@ class TransactionQADataModule(pl.LightningDataModule):
         if val_dataset_config is not None:
             self.val_ds = TransactionQADataset(**val_dataset_config).build_dataset()
 
-
     def train_dataloader(self):
         if self.train_dataset_config is None:
             raise KeyError("train_dataset_config is None")
@@ -93,8 +92,6 @@ class TransactionQADataModule(pl.LightningDataModule):
                                 batch_size=self.train_dataset_config['batch_size'],
                                 num_workers=self.train_dataset_config['num_workers'],
                                 collate_fn=TransactionQADataset.collate_fn)
-
-        
 
     def val_dataloader(self):
         if self.val_dataset_config is None:

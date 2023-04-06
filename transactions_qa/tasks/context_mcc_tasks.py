@@ -5,25 +5,33 @@ import random
 # DTO
 from dataclasses import dataclass
 from typing import (Dict, Tuple, List,
-                    Any, Optional)
+                    Any, Optional, Union)
 
 import transformers
+from torchmetrics import Accuracy
 from torchmetrics.text.rouge import ROUGEScore
 
 from .task_abstract import AbstractTask
+from .categorical_task_abstract import CategoricalTaskAbstract
 
 
 @dataclass
-class MostFrequentMCCCodeTaskMulti(AbstractTask):
+class MostFrequentMCCCodeTaskMulti(CategoricalTaskAbstract):
 
     tokenizer: transformers.PreTrainedTokenizerBase = None
 
     def __post_init__(self):
         self.task_name = "most_frequent_mcc_code_multi"
         self.target_feature_name = 'mcc'  # 108 unique values
+        self.num_classes = 108
         self.is_open_ended_task = False  # for a default for this task
         self.metrics = nn.ModuleDict({
-            "rouge": ROUGEScore()
+            "rouge": ROUGEScore(),
+            'accuracy': Accuracy(task='multiclass',
+                                 threshold=self.decision_threshold,
+                                 average='weighted',
+                                 ignore_index=self.ignore_class_index,
+                                 num_classes=self.num_classes)
         })
 
         self.question_templates = [
@@ -35,7 +43,7 @@ class MostFrequentMCCCodeTaskMulti(AbstractTask):
                  ". Choose the most frequent MCC code."),
             ]
         # all options, for a sample can be reduced to [true_mcc_code + 4 other codes]
-        self.answers_options = [str(i) for i in range(108)]
+        self.answers_options = [str(i) for i in range(self.num_classes)]
         self.answer_template = ""  # left empty for a first time
         self.add_tokens_to_tokenizer = True
         self.num_options = 6  # ground truth + 5 additional options
@@ -137,7 +145,7 @@ class MostFrequentMCCCodeTaskMulti(AbstractTask):
 
         return dict(
             question_start_tokens=question_start_tokens,
-            question_start_tokens_mask=question_start_tokens_mask
+            question_start_tokens_mask=question_start_tokens_mask,
             question_end_tokens=question_target_encoded_batch['input_ids'],
             question_end_attention_mask=question_target_encoded_batch['attention_mask'],
             target_tokens=target_encoded_batch['input_ids'],
@@ -147,8 +155,23 @@ class MostFrequentMCCCodeTaskMulti(AbstractTask):
             encoder_input_mask=encoder_input_mask
         )
 
-    def calculate_metrics(self, outputs: Any, answers: torch.Tensor, task_metrics: dict, **kwargs) -> dict:
-        #TODO: add metrics calculation here
+    def calculate_metrics(self, outputs: Any, answers: torch.Tensor,
+                          task_metrics: Union[nn.ModuleDict, Dict[str, Any]], **kwargs) -> dict:
+        """
+        Calculate task metrics for a task.
+        Args:
+            outputs: an output from model, can be a tuple of Tensors,
+                    a dict with key-value pairs of a single Tensor;
+            answers: a Tensor with target values;
+            task_metrics: a dictionary (or a torch.nn.ModuleDict) with:
+                key - metric name,
+                value - a class/function for metric score calculation;
+
+        Returns:
+            a dict with:
+                key - metric name,
+                value - metric score.
+        """
         return {}
 
 
@@ -160,6 +183,7 @@ class MostFrequentMCCCodeTaskBinary(AbstractTask):
     def __post_init__(self):
         self.task_name = "most_frequent_mcc_code_binary"
         self.target_feature_name = 'mcc'  # 108 unique values
+        self.num_classes = 108
         self.is_open_ended_task = False  # for a default for this task
         self.metrics = nn.ModuleDict({
             "rouge": ROUGEScore()
@@ -172,7 +196,7 @@ class MostFrequentMCCCodeTaskBinary(AbstractTask):
             ]
 
         # all options for a target feature
-        self.answers_options: List[str] = [str(i) for i in range(108)]
+        self.answers_options: List[str] = [str(i) for i in range(self.num_classes)]
         self.binary_answer_options: Dict[str, str] = {"positive": "Yes", "negative": "No"}
         self.answer_template: str = ""  # left empty for a first time
         self.add_tokens_to_tokenizer = True
@@ -285,7 +309,7 @@ class MostFrequentMCCCodeTaskBinary(AbstractTask):
 
         return dict(
             question_start_tokens=question_start_tokens,
-            question_start_tokens_mask=question_start_tokens_mask
+            question_start_tokens_mask=question_start_tokens_mask,
             question_end_tokens=question_target_encoded_batch['input_ids'],
             question_end_attention_mask=question_target_encoded_batch['attention_mask'],
             target_tokens=target_encoded_batch['input_ids'],
@@ -294,9 +318,24 @@ class MostFrequentMCCCodeTaskBinary(AbstractTask):
             answer_mask=batch_answer_mask,
             encoder_input_mask=encoder_input_mask
         )
-        
-    def calculate_metrics(self, outputs: Any, answers: torch.Tensor, task_metrics: dict, **kwargs) -> dict:
-        #TODO: add metrics calculation here
+
+    def calculate_metrics(self, outputs: Any, answers: torch.Tensor,
+                          task_metrics: Union[nn.ModuleDict, Dict[str, Any]], **kwargs) -> dict:
+        """
+        Calculate task metrics for a task.
+        Args:
+            outputs: an output from model, can be a tuple of Tensors,
+                    a dict with key-value pairs of a single Tensor;
+            answers: a Tensor with target values;
+            task_metrics: a dictionary (or a torch.nn.ModuleDict) with:
+                key - metric name,
+                value - a class/function for metric score calculation;
+
+        Returns:
+            a dict with:
+                key - metric name,
+                value - metric score.
+        """
         return {}
 
 @dataclass
@@ -307,6 +346,7 @@ class MostFrequentMCCCodeTaskOpenEnded(AbstractTask):
     def __post_init__(self):
         self.task_name = "most_frequent_mcc_code_open-ended"
         self.target_feature_name = 'mcc'  # 108 unique values
+        self.num_classes = 108
         self.is_open_ended_task = True  # for a default for this task
         self.metrics = nn.ModuleDict({
             "rouge": ROUGEScore()
@@ -319,7 +359,7 @@ class MostFrequentMCCCodeTaskOpenEnded(AbstractTask):
             ]
 
         # all options for a target feature - it is not actually required here, but still
-        self.answers_options = [str(i) for i in range(108)]
+        self.answers_options = [str(i) for i in range(self.num_classes)]
         self.answer_template = ""  # left empty for a first time
         self.add_tokens_to_tokenizer = True
 
@@ -409,7 +449,7 @@ class MostFrequentMCCCodeTaskOpenEnded(AbstractTask):
 
         return dict(
             question_start_tokens=question_start_tokens,
-            question_start_tokens_mask=question_start_tokens_mask
+            question_start_tokens_mask=question_start_tokens_mask,
             question_end_tokens=question_target_encoded_batch['input_ids'],
             question_end_attention_mask=question_target_encoded_batch['attention_mask'],
             target_tokens=target_encoded_batch['input_ids'],
@@ -418,9 +458,24 @@ class MostFrequentMCCCodeTaskOpenEnded(AbstractTask):
             answer_mask=batch_answer_mask,
             encoder_input_mask=encoder_input_mask
         )
-        
-    def calculate_metrics(self, outputs: Any, answers: torch.Tensor, task_metrics: dict, **kwargs) -> dict:
-        #TODO: add metrics calculation here
+
+    def calculate_metrics(self, outputs: Any, answers: torch.Tensor,
+                          task_metrics: Union[nn.ModuleDict, Dict[str, Any]], **kwargs) -> dict:
+        """
+        Calculate task metrics for a task.
+        Args:
+            outputs: an output from model, can be a tuple of Tensors,
+                    a dict with key-value pairs of a single Tensor;
+            answers: a Tensor with target values;
+            task_metrics: a dictionary (or a torch.nn.ModuleDict) with:
+                key - metric name,
+                value - a class/function for metric score calculation;
+
+        Returns:
+            a dict with:
+                key - metric name,
+                value - metric score.
+        """
         return {}
 
 
