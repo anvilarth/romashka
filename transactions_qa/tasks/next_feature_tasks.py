@@ -61,12 +61,6 @@ class NextFeatureTask(AbstractTask):
         self.positive_token = self.tokenizer(self.positive_answer_word).input_ids[0]
         self.negative_token = self.tokenizer(self.negative_answer_word).input_ids[0]
 
-    def generate_target(self, sample: Any, **kwargs) -> Any:
-        raise NotImplementedError
-    
-    def generate_target_question(self, question_end: Any, target_batch: Any, **kwargs) -> Any:
-        raise NotImplementedError
-
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         # Construct templates
         question_start, question_end = random.choice(self.question_templates)

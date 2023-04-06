@@ -97,6 +97,12 @@ class AbstractTask(ABC):
         Generated question/answer-specific target sequence.
         """
         raise NotImplementedError
+    
+    def generate_target_question(self, question_end: Any, target_batch: Any, **kwargs) -> Any:
+        """
+        Generated target question
+        """
+        raise NotImplementedError
 
     def process_outputs(self, outputs: Any, answers: torch.Tensor) -> Any:
         """

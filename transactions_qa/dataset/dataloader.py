@@ -8,7 +8,7 @@ from torch.utils.data import IterableDataset, DataLoader
 from typing import Optional
 
 
-from romashka.data_generators import batches_generator
+from .data_generator import batches_generator
 from torch.nn.utils.rnn import pad_sequence
 from datasets import IterableDataset as HFIterableDataset
 import pytorch_lightning as pl
@@ -16,7 +16,7 @@ import pytorch_lightning as pl
 
 class TransactionQADataset:
 
-    def __init__(self, dataset, generator_batch_size: int = 1,
+    def __init__(self, dataset, generator_batch_size: Optional[int] = 1,
                  min_seq_len: Optional[int] = 50, max_seq_len: Optional[int] = 150,
                  seed: Optional[int] = 42, buffer_size: Optional[int] = 10_000,
                  is_train: Optional[bool] = True, shuffle: Optional[bool] = False, *args, **kwargs):
@@ -56,11 +56,11 @@ class TransactionQADataset:
         # checking batch_size correctness
         assert batch[0]['num_features'].shape[1] == 1, "Incorrect output of dataloader"
 
-        output['num_features'] = pad_sequence([d['num_features'].transpose(0, -1) for d in batch],
+        output['num_features'] = pad_sequence([d['num_features'].transpose(0, -1) for d in batch], # num_features x batch_size x seq_len
                                               batch_first=True).squeeze(2).permute(-1, 0, 1)
-        output['cat_features'] = pad_sequence([d['cat_features'].transpose(0, -1) for d in batch],
+        output['cat_features'] = pad_sequence([d['cat_features'].transpose(0, -1) for d in batch], # cat_features x batch_size x seq_len
                                               batch_first=True).squeeze(2).permute(-1, 0, 1)
-        output['meta_features'] = torch.cat([d['meta_features'] for d in batch], dim=1)
+        output['meta_features'] = torch.cat([d['meta_features'] for d in batch], dim=1) # meta_features x batch_size
 
         output['mask'] = pad_sequence([d['mask'].transpose(0, -1) for d in batch], batch_first=True).squeeze(2)
         output['app_id'] = torch.cat([d['app_id'] for d in batch])
@@ -86,7 +86,7 @@ class TransactionQADataModule(pl.LightningDataModule):
 
     def train_dataloader(self):
         if self.train_dataset_config is None:
-            return None
+            raise KeyError("train_dataset_config is None")
         else:
             self.train_ds.set_epoch(self.trainer.current_epoch)
             return DataLoader(self.train_ds, 
@@ -98,7 +98,7 @@ class TransactionQADataModule(pl.LightningDataModule):
 
     def val_dataloader(self):
         if self.val_dataset_config is None:
-            return None
+            raise KeyError("train_dataset_config is None")
         else:
             return DataLoader(self.val_ds, 
                             batch_size=self.val_dataset_config['batch_size'],

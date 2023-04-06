@@ -246,6 +246,10 @@ class MeanAmountBinnedTaskBinary(AbstractTask):
             answer_tokens=batch_answer_encoded,  # template + targets
             answer_mask=batch_answer_mask
         )
+    
+    def calculate_metrics(self, outputs: Any, answers: torch.Tensor, task_metrics: dict, **kwargs) -> dict:
+        #TODO: add metrics calculation here
+        return {}
 
 
 @dataclass
@@ -498,3 +502,7 @@ class MeanAmountNumericTaskBinary(AbstractTask):
             answer_tokens=batch_answer_encoded,  # template + targets
             answer_mask=batch_answer_mask
         )
+
+    def calculate_metrics(self, outputs: Any, answers: torch.Tensor, task_metrics: dict, **kwargs) -> dict:
+        #TODO: add metrics calculation here
+        return {}
