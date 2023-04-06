@@ -15,7 +15,7 @@ from romashka.transactions_qa.tasks.next_feature_tasks import (NextMCCFeatureTas
                                                                NextHourFeatureTaskBinary,
                                                                NextAmnt30DaysTaskBinary,
                                                                NextTransactions30DaysTaskBinary,
-                                                               NextMCCCodeTaskMulti)
+                                                               NextMCCFeatureTaskMulti)
                                                                
 from romashka.transactions_qa.tasks.default_task import DefaultTask
 from romashka.logging_handler import get_logger
@@ -46,7 +46,7 @@ AUTO_TASKS = [
         ("next_hour_binary", NextHourFeatureTaskBinary),
         ("next_amnt_30_days_binary", NextAmnt30DaysTaskBinary),
         ("next_transactions_30_days_binary", NextTransactions30DaysTaskBinary),
-        ("next_mcc_multi", NextMCCCodeTaskMulti),
+        ("next_mcc_multi", NextMCCFeatureTaskMulti),
     ]
 AUTO_TASKS = OrderedDict(AUTO_TASKS)
 ALL_TASKS_NAMES = list(AUTO_TASKS.keys())
