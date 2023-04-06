@@ -99,7 +99,7 @@ class EmbeddingLayer(nn.Module):
         
         if self.meta_embedding is not None:
             meta_embeddings = self.meta_embedding(meta_features).unsqueeze(1)
-            meta_embeddings = meta_embeddings.repeat(batch_size, seq_len, 1)
+            meta_embeddings = meta_embeddings.repeat(1, seq_len, 1)
             embeddings = torch.cat([embeddings, meta_embeddings], dim=-1)
         
         embeddings = self.dropout(embeddings)

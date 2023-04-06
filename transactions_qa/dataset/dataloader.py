@@ -22,7 +22,6 @@ class TransactionQADataset:
                  is_train: Optional[bool] = True, shuffle: Optional[bool] = False, *args, **kwargs):
         super().__init__()
         self.dataset = dataset
-        self.batch_size = batch_size
         self.min_seq_len = min_seq_len
         self.max_seq_len = max_seq_len
         self.is_train = is_train
