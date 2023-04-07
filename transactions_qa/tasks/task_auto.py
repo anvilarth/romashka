@@ -9,7 +9,9 @@ from romashka.transactions_qa.tasks.context_mcc_tasks import (MostFrequentMCCCod
                                                               ruMostFrequentMCCCodeTaskMulti,
                                                               ruMostFrequentMCCCodeTaskOpenEnded)
 from romashka.transactions_qa.tasks.context_amnt_tasks import (MeanAmountBinnedTaskBinary,
-                                                               MeanAmountNumericTaskBinary)
+                                                               MeanAmountNumericTaskBinary,
+                                                               MeanAmountBinnedTaskOpenEnded,
+                                                               MeanAmountNumericTaskOpenEnded)
 
 from romashka.transactions_qa.tasks.next_feature_tasks import (NextMCCFeatureTaskBinary, 
                                                                NextAmntFeatureTaskBinary,
@@ -41,6 +43,8 @@ AUTO_TASKS = [
         # Amount
         ("mean_binned_amount_binary", MeanAmountBinnedTaskBinary),
         ("mean_numeric_amount_binary", MeanAmountNumericTaskBinary),
+        ("mean_binned_amount_open-ended", MeanAmountBinnedTaskOpenEnded),
+        ("mean_numeric_amount_open-ended", MeanAmountNumericTaskOpenEnded),
         # Predictive
         ("default", DefaultTask),
         ("next_mcc_binary", NextMCCFeatureTaskBinary),
@@ -48,8 +52,7 @@ AUTO_TASKS = [
         ("next_hour_binary", NextHourFeatureTaskBinary),
         ("next_amnt_30_days_binary", NextAmnt30DaysTaskBinary),
         ("next_transactions_30_days_binary", NextTransactions30DaysTaskBinary),
-        ("next_mcc_multi", NextMCCFeatureTaskMulti),
-        ("default", DefaultTask)
+        ("next_mcc_multi", NextMCCFeatureTaskMulti)
     ]
 AUTO_TASKS = OrderedDict(AUTO_TASKS)
 ALL_TASKS_NAMES = list(AUTO_TASKS.keys())

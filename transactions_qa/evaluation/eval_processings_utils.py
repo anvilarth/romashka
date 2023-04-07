@@ -158,7 +158,6 @@ def check_if_numeric(val: str) -> bool:
             _ = float(val)
             return True
         except Exception as e:
-            print(f"Value is not a number: {val}")
             return False
 
 
@@ -178,5 +177,4 @@ def convert_to_numeric(val: str) -> Optional[Union[int, float]]:
         try:
             return float(val)
         except Exception as e:
-            print(f"Unable to convert the value to numeruc form: {val}")
             return None
