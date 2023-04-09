@@ -198,7 +198,7 @@ class MostFrequentMCCCodeTaskBinary(AbstractTask):
         # all options for a target feature
         self.answers_options: List[str] = [str(i) for i in range(self.num_classes)]
         self.binary_answer_options: Dict[str, str] = {"positive": "Yes", "negative": "No"}
-        self.answer_template: str = ""  # left empty for a first time
+        self.answer_template: str = "Answer: "  # left empty for a first time
         self.add_tokens_to_tokenizer = True
 
         super().__post_init__()
@@ -301,7 +301,7 @@ class MostFrequentMCCCodeTaskBinary(AbstractTask):
         batch_answer_template_encoded = answer_template_encoded.repeat(batch_size, 1)
         # Answer template encoding + target tokens + EOS token
         batch_answer_encoded = torch.cat([batch_answer_template_encoded,
-                                          target_encoded_batch['input_ids']], dim=1).to(device)
+                                          target_encoded_batch['input_ids']], dim=1).long().to(device)
         # Answer masks
         batch_answer_template_mask = torch.ones(batch_size, answer_template_encoded.shape[1]).to(device)
         batch_answer_mask = torch.cat([batch_answer_template_mask,
