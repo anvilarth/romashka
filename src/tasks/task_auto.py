@@ -1,25 +1,25 @@
 from collections import OrderedDict
 from typing import Optional
 
-from romashka.transactions_qa.tasks.task_abstract import AbstractTask
-from romashka.transactions_qa.tasks.context_mcc_tasks import (MostFrequentMCCCodeTaskMulti,
+from .task_abstract import AbstractTask
+from .context_mcc_tasks import (MostFrequentMCCCodeTaskMulti,
                                                               MostFrequentMCCCodeTaskBinary,
                                                               MostFrequentMCCCodeTaskOpenEnded,
                                                               ruMostFrequentMCCCodeTaskBinary,
                                                               ruMostFrequentMCCCodeTaskMulti,
                                                               ruMostFrequentMCCCodeTaskOpenEnded)
-from romashka.transactions_qa.tasks.context_amnt_tasks import (MeanAmountBinnedTaskBinary,
+from .context_amnt_tasks import (MeanAmountBinnedTaskBinary,
                                                                MeanAmountNumericTaskBinary)
 
-from romashka.transactions_qa.tasks.next_feature_tasks import (NextMCCFeatureTaskBinary, 
+from .next_feature_tasks import (NextMCCFeatureTaskBinary, 
                                                                NextAmntFeatureTaskBinary,
                                                                NextHourFeatureTaskBinary,
                                                                NextAmnt30DaysTaskBinary,
                                                                NextTransactions30DaysTaskBinary,
                                                                NextMCCFeatureTaskMulti)
                                                                
-from romashka.transactions_qa.tasks.default_task import DefaultTask
-from romashka.logging_handler import get_logger
+from .default_task import DefaultTask
+from src.utils.logging_handler import get_logger
 
 """
 AutoTask is created so that you can automatically retrieve the relevant dataset/task

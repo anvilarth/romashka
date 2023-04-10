@@ -45,27 +45,32 @@ class DefaultTask(AbstractTask):
 
         super().__post_init__()
 
+        # TODO: fix this comments
+        # if self.tokenizer is None:
+        #     raise AttributeError("This task requires tokenizer to be set!")
+        # if self.add_tokens_to_tokenizer:
+        #     new_tokens = [self.transactions_embeddings_start_token,
+        #                   self.transactions_embeddings_end_token]
+        #     if self.task_special_token is not None:
+        #         new_tokens += [self.task_special_token]
+        #     self.extend_vocabulary(tokenizer=self.tokenizer,
+        #                            new_tokens=new_tokens,
+        #                            special=False)
 
-        if self.tokenizer is None:
-            raise AttributeError("This task requires tokenizer to be set!")
-        if self.add_tokens_to_tokenizer:
-            new_tokens = [self.transactions_embeddings_start_token,
-                          self.transactions_embeddings_end_token]
-            if self.task_special_token is not None:
-                new_tokens += [self.task_special_token]
-            self.extend_vocabulary(tokenizer=self.tokenizer,
-                                   new_tokens=new_tokens,
-                                   special=False)
-
-        self.positive_token = self.tokenizer(self.positive_answer_word).input_ids[0]
-        self.negative_token = self.tokenizer(self.negative_answer_word).input_ids[0]
+        # self.positive_token = self.tokenizer(self.positive_answer_word).input_ids[0]
+        # self.negative_token = self.tokenizer(self.negative_answer_word).input_ids[0]
+        self.criterion = nn.BCEWithLogitsLoss()
 
     def generate_target(self, batch: Any, **kwargs) -> Any:
         target_feature_batch = batch['label']  # Tensor [batch_size]
 
         # Construct target values 
         # Target's questions numeric/categorical answers as str
+        return target_feature_batch.float()
 
+    def generate_text_target(self, batch: Any, **kwargs) -> Any:
+
+        target_feature_batch = self.generate_target(batch)
         target_batch = list(map(lambda x: self.positive_answer_word if x else self.negative_answer_word, (target_feature_batch == 1)))
 
         return target_batch
@@ -87,7 +92,7 @@ class DefaultTask(AbstractTask):
         # Construct target values 
         # Target's questions numeric/categorical answers as str
 
-        target_batch = self.generate_target(batch)
+        target_batch = self.generate_text_target(batch)
 
         # Construct target sequences
         question_target_batch = [question_end for _ in range(batch_size)]  # as strings

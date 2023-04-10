@@ -1,4 +1,4 @@
-_target_: src.data.alfa_datamodule.AlfaDataModule
+_target_: src.data.AlfaDataModule
 data_dir: ${paths.data_dir}
 batch_size: 32
 min_seq_len: 0

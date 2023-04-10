@@ -5,28 +5,20 @@ from pytorch_lightning import LightningModule
 from torchmetrics import MaxMetric, MeanMetric
 from torchmetrics.classification.accuracy import Accuracy
 
-from .models import TransactionsModel
-from .my_utils import get_projections_maps, cat_features_names, num_features_names, meta_features_names
+from models.components.models import TransactionsModel
+from models.components.my_utils import get_projections_maps, cat_features_names, num_features_names, meta_features_names
 
+class TaskModule(LightningModule):
+    """
+    HERE
 
-class DefaultModule(LightningModule):
-    """Example of LightningModule for MNIST classification.
-
-    A LightningModule organizes your PyTorch code into 6 sections:
-        - Computations (init)
-        - Train loop (training_step)
-        - Validation loop (validation_step)
-        - Test loop (test_step)
-        - Prediction Loop (predict_step)
-        - Optimizers and LR Schedulers (configure_optimizers)
-
-    Docs:
-        https://pytorch-lightning.readthedocs.io/en/latest/common/lightning_module.html
     """
 
     def __init__(
         self,
         optimizer: torch.optim.Optimizer,
+        task,
+        task_name,
         encoder_type='whisper/tiny',
         head_type='linear',
     ):
@@ -53,16 +45,17 @@ class DefaultModule(LightningModule):
         }
 
         self.transactions_model = TransactionsModel(**transactions_model_config)
+        self.task = self.hparams.task.get(task_name=task_name)
 
         # loss function
-        self.criterion = torch.nn.BCEWithLogitsLoss()
+        self.criterion = self.task.criterion
 
     def forward(self, x: dict):
         return self.transactions_model(x)
 
     def model_step(self, batch: Any):
-        y = batch['label'].float()
-        logits = self.forward(batch).flatten()
+        y = self.task.generate_target(batch)
+        logits = self.forward(batch)
         loss = self.criterion(logits, y)
         return loss
 

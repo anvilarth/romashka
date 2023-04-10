@@ -9,7 +9,7 @@ class LinearHead(nn.Module):
     
     def forward(self, x, mask=None):
         x = x[:, -1]
-        return self.linear1(x)
+        return self.linear1(x).squeeze()
 
 class MLPHead(nn.Module):
     def __init__(self, input_size, hidden_size=64):

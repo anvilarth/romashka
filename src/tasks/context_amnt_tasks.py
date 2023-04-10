@@ -11,9 +11,9 @@ import transformers
 from torchmetrics.classification import BinaryAccuracy
 
 from .task_abstract import AbstractTask
-from romashka.transactions_qa.utils import get_buckets_info
+from src.transactions_qa.utils import get_buckets_info
 
-from romashka.data_generators import (transaction_features,
+from src.data.alfa.components.data_generator import (transaction_features,
                                       num_features_names)
 
 

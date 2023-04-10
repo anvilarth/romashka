@@ -14,7 +14,7 @@ from torchmetrics.classification import BinaryAccuracy, Accuracy
 
 from .task_abstract import AbstractTask
 
-from romashka.tools import make_time_batch 
+from src.utils.tools import make_time_batch 
 
 @dataclass
 class NextFeatureTask(AbstractTask):

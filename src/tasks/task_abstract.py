@@ -12,14 +12,14 @@ from typing import (Dict, Tuple, List,
 import transformers
 from torchmetrics.text.rouge import ROUGEScore
 
-from romashka.logging_handler import get_logger
+from src.utils.logging_handler import get_logger
 
 logger = get_logger(
     name="Tasks",
     logging_level="INFO"
 )
 
-from romashka.data_generators import (transaction_features, num_features_names, cat_features_names)
+from src.data.alfa.components.data_generator import (transaction_features, num_features_names, cat_features_names)
 
 
 @dataclass

@@ -137,7 +137,7 @@ class MostFrequentMCCCodeTaskMulti(AbstractTask):
 
         return dict(
             question_start_tokens=question_start_tokens,
-            question_start_tokens_mask=question_start_tokens_mask
+            question_start_tokens_mask=question_start_tokens_mask,
             question_end_tokens=question_target_encoded_batch['input_ids'],
             question_end_attention_mask=question_target_encoded_batch['attention_mask'],
             target_tokens=target_encoded_batch['input_ids'],
@@ -285,7 +285,7 @@ class MostFrequentMCCCodeTaskBinary(AbstractTask):
 
         return dict(
             question_start_tokens=question_start_tokens,
-            question_start_tokens_mask=question_start_tokens_mask
+            question_start_tokens_mask=question_start_tokens_mask,
             question_end_tokens=question_target_encoded_batch['input_ids'],
             question_end_attention_mask=question_target_encoded_batch['attention_mask'],
             target_tokens=target_encoded_batch['input_ids'],
@@ -409,7 +409,7 @@ class MostFrequentMCCCodeTaskOpenEnded(AbstractTask):
 
         return dict(
             question_start_tokens=question_start_tokens,
-            question_start_tokens_mask=question_start_tokens_mask
+            question_start_tokens_mask=question_start_tokens_mask,
             question_end_tokens=question_target_encoded_batch['input_ids'],
             question_end_attention_mask=question_target_encoded_batch['attention_mask'],
             target_tokens=target_encoded_batch['input_ids'],

@@ -7,7 +7,7 @@ from transformers.trainer_utils import (
     ShardedDDPOption
 )
 # from transformers import TrainingArguments
-from ..logging_handler import get_logger
+from ..src.logging_handler import get_logger
 
 logger = get_logger(
     name="Tasks",
