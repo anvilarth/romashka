@@ -140,4 +140,7 @@ logs/
 checkpoints/
 .vscode/
 old_configs/
-data/
+
+data/train_buckets
+data/val_buckets
+data/train_target.csv

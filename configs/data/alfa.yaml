@@ -1,0 +1,9 @@
+_target_: src.data.alfa_datamodule.AlfaDataModule
+data_dir: ${paths.data_dir}
+batch_size: 32
+min_seq_len: 0
+max_seq_len: 250
+buffer_size: 1000
+num_workers: 8
+pin_memory: True
+seed: 42
