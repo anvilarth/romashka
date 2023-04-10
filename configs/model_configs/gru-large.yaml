@@ -1,3 +1,0 @@
-encoder_type: gru
-num_layers: 6
-hidden_size: 1024

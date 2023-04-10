@@ -94,19 +94,7 @@ def main():
         raise AttributeError(f"Output directory argument: ({training_args.save_checkpoints_dir}) is not a directory!")
 
     # Get the datasets
-    data_files = {}
-    if data_args.train_folder is not None and training_args.do_train:
-        dir_with_datasets = os.listdir(os.path.join(data_args.data_path, data_args.train_folder))
-        dataset_files = sorted([os.path.join(data_args.data_path, data_args.train_folder, x)
-                                for x in dir_with_datasets])
-        logger.info(f"Detected {len(dataset_files)} files for training.")
-        data_files["train"] = dataset_files
-    if data_args.validation_folder is not None and training_args.do_eval:
-        dir_with_datasets = os.listdir(os.path.join(data_args.data_path, data_args.validation_folder))
-        dataset_files = sorted([os.path.join(data_args.data_path, data_args.validation_folder, x)
-                                for x in dir_with_datasets])
-        logger.info(f"Detected {len(dataset_files)} files for validation.")
-        data_files["validation"] = dataset_files
+
 
     # Check weights existence by paths from args
     if (model_args.transactions_model_name_or_path is None) \
@@ -308,14 +296,4 @@ def main():
 
 if __name__ == '__main__':
     import os
-    # os.environ['HF_DATASETS_OFFLINE'] = '1'  # offline mode for HF datasets
-    # os.environ['TRANSFORMERS_OFFLINE'] = '1'  # offline mode for HF Transformers
-    # os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # disable DataParallel for test
-
-    # Pretrained models are downloaded and locally cached at: ~/.cache/huggingface/transformers/.
-    # This is the default directory given by the shell environment variable TRANSFORMERS_CACHE.
-    os.environ['TRANSFORMERS_CACHE'] = "/Users/abdullaeva/Documents/Projects/TransactionsQA/checkpoints/cache"
-    # or "/home/jovyan/.cache/huggingface/hub"
-    os.environ['HF_DATASETS_CACHE'] = "/Users/abdullaeva/Documents/Projects/TransactionsQA/checkpoints/cache"
-    # or "/home/jovyan/.cache/huggingface/datasets"
     main()

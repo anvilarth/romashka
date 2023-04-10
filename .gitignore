@@ -130,8 +130,8 @@ dmypy.json
 
 wandb/
 experiments/
-*.ipynb
 checkpoints/
+logs/
 
 
 # IDE files & folders
@@ -139,3 +139,5 @@ checkpoints/
 .DS_Store
 checkpoints/
 .vscode/
+old_configs/
+data/
