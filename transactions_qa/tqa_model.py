@@ -1,5 +1,4 @@
 import random
-import numpy as np
 from typing import List, Optional, Tuple, Any, Dict, Union
 
 import wandb

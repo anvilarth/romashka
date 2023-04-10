@@ -63,6 +63,28 @@ def transform_labels(label: str, default_value: Optional[int] = -100) -> int:
     return default_value
 
 
+def mask_padding(input_ids: torch.Tensor,
+                 pad_token_id: Optional[int] = 1,
+                 mask_value: Optional[int] = -100) -> torch.Tensor:
+    """
+    Creates a mask for padded input tensor.
+    """
+    mask = torch.eq(input_ids, pad_token_id)
+    return mask
+
+
+def mask_lm_labels_padding(input_ids: torch.Tensor,
+                           pad_token_id: Optional[int] = 1,
+                           mask_value: Optional[int] = -100) -> torch.Tensor:
+    """
+    Creates a mask for padded input tensor.
+    """
+    labels = input_ids.clone().detach()
+    mask = mask_padding(labels, pad_token_id)
+    labels[mask.nonzero(as_tuple=True)] = mask_value
+    return labels
+
+
 def get_last_checkpoint(folder):
     content = os.listdir(folder)
     checkpoints = [

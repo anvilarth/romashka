@@ -103,13 +103,13 @@ class TransactionQAModel(pl.LightningModule):
 
     def _set_model_type(self):
         # For encoder-decoder models
-        if hasattr(self.language_model, "encoder"):
+        if hasattr(self.model.language_model, "encoder"):
             self._is_encoder_decoder = True
         # For decoder-only
-        elif hasattr(self.language_model, "transformer"):
+        elif hasattr(self.model.language_model, "transformer"):
             self._is_encoder_decoder = False
         else:
-            raise NotImplementedError(f"Unknown model type: {type(self.language_model)}")
+            raise NotImplementedError(f"Unknown model type: {type(self.model.language_model)}")
 
         self._logger.info(f"Language model type: `{'encoder-decoder' if self._is_encoder_decoder else 'decoder'}`")
 
@@ -132,10 +132,10 @@ class TransactionQAModel(pl.LightningModule):
             generation_config = GenerationConfig(**generation_options)
             return self.model.generate(qa_batch, generation_config)
         else:
-            # contains: ???
+            # join two batches
+            for key, val in batch.items():
+                qa_batch[key] = val
             outputs = self.model(qa_batch)
-
-            # Create answers + masks for LM's decoder inputs
             batch_answers = qa_batch['answer_tokens']
 
             return outputs, batch_answers
