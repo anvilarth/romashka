@@ -74,6 +74,9 @@ class DecoderSimpleModel(nn.Module):
         # In case any of tasks extends initial tokenizer vocab with additional tokens
         self._resize_text_embeddings()
 
+        # Prepare tokenizer
+        self._configure_tokenizer()
+
         # Freezing some weights
         if self.do_freeze_tm:
             self.transaction_model.eval()
