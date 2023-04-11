@@ -5,8 +5,8 @@ from pytorch_lightning import LightningModule
 from torchmetrics import MaxMetric, MeanMetric
 from torchmetrics.classification.accuracy import Accuracy
 
-from models.components.models import TransactionsModel
-from models.components.my_utils import get_projections_maps, cat_features_names, num_features_names, meta_features_names
+from src.models.components.models import TransactionsModel
+from src.models.components.my_utils import get_projections_maps, cat_features_names, num_features_names, meta_features_names
 
 from src.tasks import AutoTask
 
@@ -48,6 +48,7 @@ class TaskModule(LightningModule):
         self.transactions_model = TransactionsModel(**transactions_model_config)
         self.task = AutoTask.get(task_name=task_name, task_type='non-text')
 
+        self.metrics = self.task.metrics
         # loss function
         self.criterion = self.task.criterion
 
@@ -58,7 +59,7 @@ class TaskModule(LightningModule):
         y = self.task.generate_target(batch)
         if len(y) == 2:
             y = y[0]
-            
+
         logits = self.forward(batch)
         loss = self.criterion(logits, y)
         return loss
@@ -72,6 +73,12 @@ class TaskModule(LightningModule):
         # and then read it in some callback or in `training_epoch_end()` below
         # remember to always return loss from `training_step()` or backpropagation will fail!
         return {"loss": loss}
+
+    def validation_step(self, batch: Any, **kwargs: Any):
+        output = self.forward(batch)
+
+        self.log
+        return 
 
 
     def configure_optimizers(self):

@@ -7,7 +7,7 @@ from transformers.trainer_utils import (
     ShardedDDPOption
 )
 # from transformers import TrainingArguments
-from ..src.logging_handler import get_logger
+from src.utils.logging_handler import get_logger
 
 logger = get_logger(
     name="Tasks",
@@ -94,7 +94,7 @@ class DataTrainingArguments:
         metadata={"help": "A path to yaml file with unique configs for local setting"},
     )
 
-    data_path: Optional[str] = field(default="data", metadata={"help": "The input data files base path."})
+    data_path: Optional[str] = field(default="romashka/data", metadata={"help": "The input data files base path."})
     projections_mappings_path: Optional[str] = field(default=None,
                                                      metadata={"help": "The mappings files base path."})
     train_folder: Optional[str] = field(

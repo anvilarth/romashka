@@ -1,7 +1,7 @@
 import torch 
 import torch.nn as nn
 
-from losses.masked_loss import MaskedMSELoss
+from src.losses.masked_loss import MaskedMSELoss
 
 
 class NextNumericalFeatureLoss(nn.Module):

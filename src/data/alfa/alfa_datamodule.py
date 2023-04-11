@@ -7,7 +7,7 @@ from torch.utils.data import IterableDataset, DataLoader
 from typing import Optional
 
 
-from data.alfa.components.data_generator import batches_generator
+from src.data.alfa.components.data_generator import batches_generator
 from torch.nn.utils.rnn import pad_sequence
 from datasets import IterableDataset as HFIterableDataset
 import pytorch_lightning as pl

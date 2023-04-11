@@ -25,22 +25,22 @@ sys.path.insert(1, '/Users/abdullaeva/Documents/Projects/TransactionsQA')
 # for MlSpace: /home/jovyan/transactionsQA/romashka
 print(sys.path)
 
-from romashka.logging_handler import get_logger
-from romashka.data_generators import (cat_features_names,
+from src.utils.logging_handler import get_logger
+from src.data.alfa.components import (cat_features_names,
                                       num_features_names,
                                       meta_features_names)
-from romashka.transactions_qa.train_args import (ModelArguments,
+from src.transactions_qa.train_args import (ModelArguments,
                                                  DataTrainingArguments,
                                                  TrainingArguments,
                                                  TasksArguments)
 
-from romashka.transactions_qa.tasks import AutoTask
-from romashka.transactions_qa.dataset.dataloader import TransactionQADataModule
-from romashka.models import TransactionsModel
-from romashka.transactions_qa.tqa_model import TransactionQAModel
-from romashka.transactions_qa.layers.connector import (make_linear_connector,
+from src.tasks import AutoTask
+from src.data import AlfaDataModule
+from src.models.components.models import TransactionsModel
+from src.transactions_qa.tqa_model import TransactionQAModel
+from src.transactions_qa.layers.connector import (make_linear_connector,
                                                        make_recurrent_connector)
-from romashka.transactions_qa.utils import (get_last_checkpoint, get_projections_maps)
+from src.transactions_qa.utils import (get_last_checkpoint, get_projections_maps)
 
 
 def main():
@@ -94,6 +94,19 @@ def main():
         raise AttributeError(f"Output directory argument: ({training_args.save_checkpoints_dir}) is not a directory!")
 
     # Get the datasets
+    data_files = {}
+    if data_args.train_folder is not None and training_args.do_train:
+        dir_with_datasets = os.listdir(os.path.join(data_args.data_path, data_args.train_folder))
+        dataset_files = sorted([os.path.join(data_args.data_path, data_args.train_folder, x)
+                                for x in dir_with_datasets])
+        logger.info(f"Detected {len(dataset_files)} files for training.")
+        data_files["train"] = dataset_files
+    if data_args.validation_folder is not None and training_args.do_eval:
+        dir_with_datasets = os.listdir(os.path.join(data_args.data_path, data_args.validation_folder))
+        dataset_files = sorted([os.path.join(data_args.data_path, data_args.validation_folder, x)
+                                for x in dir_with_datasets])
+        logger.info(f"Detected {len(dataset_files)} files for validation.")
+        data_files["validation"] = dataset_files
 
 
     # Check weights existence by paths from args
@@ -212,42 +225,18 @@ def main():
         **transactionsQA_model_config
     )
 
-    # Datasets & Dataloader & Other utils
-    if training_args.do_train and "train" in data_files:
-        train_dataset_config = {
-            'dataset': data_files['train'],
-            'min_seq_len': data_args.min_trx_seq_len,
-            'max_seq_len': data_args.max_trx_seq_len,
-            'seed': training_args.seed, 
-            'generator_batch_size': 1,
-            'buffer_size': data_args.shuffle_buffer_size,
-            'batch_size': training_args.per_device_train_batch_size,
-            'num_workers': data_args.preprocessing_num_workers
-        }
-    else:
-        train_dataset_config = None
-
-        logger.info(f"Created train dataloader.")
-    if training_args.do_eval and "validation" in data_files:
-        val_dataset_config = {
-            'dataset': data_files['validation'],
-            'min_seq_len': data_args.min_trx_seq_len,
-            'max_seq_len': data_args.max_trx_seq_len,
-            'seed': training_args.seed, 
-            'buffer_size': 0,
-            'generator_batch_size': 1,
-            'batch_size': training_args.per_device_eval_batch_size,
-            'num_workers': data_args.preprocessing_num_workers
-        }
-    else:
-        val_dataset_config = None
-
-        logger.info(f"Created validation dataloader.")
-    if (not training_args.do_train) and (not training_args.do_eval):
-        logger.error("There is nothing to do. Please pass `do_train` and/or `do_eval`.")
-        return 1
+    dataset_config = {
+                'data_dir': data_args.data_path,
+                'batch_size': training_args.per_device_train_batch_size,
+                'min_seq_len': data_args.min_trx_seq_len,
+                'max_seq_len': data_args.max_trx_seq_len,
+                'buffer_size': data_args.shuffle_buffer_size,
+                'num_workers': data_args.preprocessing_num_workers,
+                'pin_memory': True,
+                'seed': training_args.seed
+    }    
     
-    datamodule = TransactionQADataModule(train_dataset_config, val_dataset_config)
+    datamodule = AlfaDataModule(**dataset_config)
 
     # Training & Callbacks
     wb_logger = WandbLogger(

@@ -10,10 +10,10 @@ import transformers
 import pytorch_lightning as pl
 from pytorch_lightning.utilities import rank_zero_info
 
-from romashka.transactions_qa.layers.connector import (make_linear_connector,
+from src.transactions_qa.layers.connector import (make_linear_connector,
                                                        make_recurrent_connector)
-from romashka.transactions_qa.tasks.task_abstract import AbstractTask
-from romashka.logging_handler import get_logger
+from src.tasks.task_abstract import AbstractTask
+from src.utils.logging_handler import get_logger
 
 from transformers import T5ForConditionalGeneration
 from copy import deepcopy
