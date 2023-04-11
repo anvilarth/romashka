@@ -265,7 +265,7 @@ class DecoderSimpleModel(nn.Module):
             question_end_labels[i, :-answer_tokens_len] = -100
 
         labels = torch.cat([
-            torch.full((batch_size, question_start_tokens_batch.size(1) - 1),
+            torch.full((batch_size, batch['question_start_tokens'].size(1) - 1),
                        self.tokenizer.pad_token_id).to(device),  # <pad> * len(question_start_tokens) - 1
             batch['question_start_tokens'][:, -1].repeat(batch_size, 1).to(device),  # <trns>
             torch.full(transactions_embeddings.size()[:2],
