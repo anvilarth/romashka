@@ -8,6 +8,8 @@ from torchmetrics.classification.accuracy import Accuracy
 from models.components.models import TransactionsModel
 from models.components.my_utils import get_projections_maps, cat_features_names, num_features_names, meta_features_names
 
+from src.tasks import AutoTask
+
 class TaskModule(LightningModule):
     """
     HERE
@@ -17,7 +19,6 @@ class TaskModule(LightningModule):
     def __init__(
         self,
         optimizer: torch.optim.Optimizer,
-        task,
         task_name,
         encoder_type='whisper/tiny',
         head_type='linear',
@@ -45,7 +46,7 @@ class TaskModule(LightningModule):
         }
 
         self.transactions_model = TransactionsModel(**transactions_model_config)
-        self.task = self.hparams.task.get(task_name=task_name)
+        self.task = AutoTask.get(task_name=task_name, task_type='non-text')
 
         # loss function
         self.criterion = self.task.criterion
@@ -55,6 +56,9 @@ class TaskModule(LightningModule):
 
     def model_step(self, batch: Any):
         y = self.task.generate_target(batch)
+        if len(y) == 2:
+            y = y[0]
+            
         logits = self.forward(batch)
         loss = self.criterion(logits, y)
         return loss

@@ -36,6 +36,7 @@ class AbstractTask(ABC):
     ...
     """
     task_name: Optional[str] = None
+    task_type: Optional[str] = 'text'
     target_feature_name: Optional[str] = None
     target_feature_index: Optional[int] = None
     task_specific_config: Optional[Dict[str, Any]] = None
@@ -95,6 +96,12 @@ class AbstractTask(ABC):
     def generate_target(self, sample: Any, **kwargs) -> Any:
         """
         Generated question/answer-specific target sequence.
+        """
+        raise NotImplementedError
+
+    def generate_text_target(self, sample: Any, **kwargs) -> Any:
+        """
+                Generated question/answer-specific target sequence in text form.
         """
         raise NotImplementedError
     

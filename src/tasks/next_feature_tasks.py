@@ -21,7 +21,7 @@ class NextFeatureTask(AbstractTask):
     tokenizer: transformers.PreTrainedTokenizerBase = None
 
     def __post_init__(self):
-        self.task_name = "next_cat_feature_binary"
+        self.task_name = "next_feature_binary"
         self.target_feature_name = 'mcc_category'
 
         self.threshold = 2
@@ -47,19 +47,20 @@ class NextFeatureTask(AbstractTask):
 
         super().__post_init__()
 
-        if self.tokenizer is None:
-            raise AttributeError("This task requires tokenizer to be set!")
-        if self.add_tokens_to_tokenizer:
-            new_tokens = [self.transactions_embeddings_start_token,
-                          self.transactions_embeddings_end_token]
-            if self.task_special_token is not None:
-                new_tokens += [self.task_special_token]
-            self.extend_vocabulary(tokenizer=self.tokenizer,
-                                   new_tokens=new_tokens,
-                                   special=False)
+        if self.task_type == 'text':
+            if self.tokenizer is None:
+                raise AttributeError("This task requires tokenizer to be set!")
+            if self.add_tokens_to_tokenizer:
+                new_tokens = [self.transactions_embeddings_start_token,
+                            self.transactions_embeddings_end_token]
+                if self.task_special_token is not None:
+                    new_tokens += [self.task_special_token]
+                self.extend_vocabulary(tokenizer=self.tokenizer,
+                                    new_tokens=new_tokens,
+                                    special=False)
 
-        self.positive_token = self.tokenizer(self.positive_answer_word).input_ids[0]
-        self.negative_token = self.tokenizer(self.negative_answer_word).input_ids[0]
+            self.positive_token = self.tokenizer(self.positive_answer_word).input_ids[0]
+            self.negative_token = self.tokenizer(self.negative_answer_word).input_ids[0]
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         # Construct templates
@@ -79,7 +80,7 @@ class NextFeatureTask(AbstractTask):
         # Construct target values 
         # Target's questions numeric/categorical answers as str
 
-        target_batch, trx_index = self.generate_target(batch)
+        target_batch, trx_index = self.generate_text_target(batch)
 
         # Masking elements which we want to predict
         transactions_embedding_mask[:, trx_index.flatten()] = 0
@@ -153,6 +154,7 @@ class NextFeatureTask(AbstractTask):
 class NextCatFeatureTaskBinary(NextFeatureTask):
     def __post_init__(self):
         super().__post_init__()
+        self.criterion = nn.BCEWithLogitsLoss()
 
     def generate_target_question(self, question_end: Any, target_batch: Any, **kwargs) -> Any:
         return [question_end for _ in range(len(target_batch))] 
@@ -163,9 +165,13 @@ class NextCatFeatureTaskBinary(NextFeatureTask):
         # Construct target values 
         # Target's questions numeric/categorical answers as str
         trx_index = batch['mask'].sum(1, keepdim=True) - 1
-        input_labels = torch.gather(target_feature_batch, 1, trx_index)
-        target_batch = list(map(lambda x: 'Yes' if x else 'No', (input_labels == self.threshold)))
+        input_labels = (torch.gather(target_feature_batch, 1, trx_index) == self.threshold).float()
+        return input_labels, trx_index
 
+    def generate_text_target(self, batch: Any, **kwargs) -> Any:
+
+        input_labels, trx_index = self.generate_target(batch, **kwargs)
+        target_batch = list(map(lambda x: 'Yes' if x else 'No', input_labels))
         return target_batch, trx_index
     
     def process_outputs(self, outputs, answers: torch.Tensor):
@@ -192,6 +198,8 @@ class NextCatFeatureTaskBinary(NextFeatureTask):
 @dataclass
 class NextMCCFeatureTaskBinary(NextCatFeatureTaskBinary):
     def __post_init__(self):
+        super().__post_init__()
+        
         self.task_name = "next_mcc_binary"
         self.target_feature_name = 'mcc_category'
         self.threshold = 2
@@ -208,6 +216,7 @@ class NextNumFeatureTaskBinary(NextFeatureTask):
 
     def __post_init__(self):
         super().__post_init__()
+        self.criterion = nn.BCEWithLogitsLoss()
     
     def generate_target_question(self, question_end: Any, target_batch: Any, **kwargs) -> Any:
         return [question_end for _ in range(len(target_batch))] 
@@ -218,9 +227,12 @@ class NextNumFeatureTaskBinary(NextFeatureTask):
         # Construct target values 
         # Target's questions numeric/categorical answers as str
         trx_index = batch['mask'].sum(1, keepdim=True) - 1
-        input_labels = torch.gather(target_feature_batch, 1, trx_index)
-        target_batch = list(map(lambda x: 'Yes' if x else 'No', (input_labels >= self.threshold)))
+        input_labels = (torch.gather(target_feature_batch, 1, trx_index) >= self.threshold).flatten().float()
+        return input_labels, trx_index
 
+    def generate_text_target(self, batch: Any, **kwargs) -> Any:
+        input_labels, trx_index = self.generate_target(batch, **kwargs)
+        target_batch = list(map(lambda x: 'Yes' if x else 'No', input_labels))
         return target_batch, trx_index
     
     def process_outputs(self, outputs, answers: torch.Tensor):
@@ -305,20 +317,20 @@ class NextTransactions30DaysTaskBinary(AbstractTask):
         self.add_tokens_to_tokenizer = True
 
         super().__post_init__()
+        if self.task_type == 'text':
+            if self.tokenizer is None:
+                raise AttributeError("This task requires tokenizer to be set!")
+            if self.add_tokens_to_tokenizer:
+                new_tokens = [self.transactions_embeddings_start_token,
+                            self.transactions_embeddings_end_token]
+                if self.task_special_token is not None:
+                    new_tokens += [self.task_special_token]
+                self.extend_vocabulary(tokenizer=self.tokenizer,
+                                    new_tokens=new_tokens,
+                                    special=False)
 
-        if self.tokenizer is None:
-            raise AttributeError("This task requires tokenizer to be set!")
-        if self.add_tokens_to_tokenizer:
-            new_tokens = [self.transactions_embeddings_start_token,
-                          self.transactions_embeddings_end_token]
-            if self.task_special_token is not None:
-                new_tokens += [self.task_special_token]
-            self.extend_vocabulary(tokenizer=self.tokenizer,
-                                   new_tokens=new_tokens,
-                                   special=False)
-
-        self.positive_token = self.tokenizer(self.positive_answer_word).input_ids[0]
-        self.negative_token = self.tokenizer(self.negative_answer_word).input_ids[0]
+            self.positive_token = self.tokenizer(self.positive_answer_word).input_ids[0]
+            self.negative_token = self.tokenizer(self.negative_answer_word).input_ids[0]
 
     def generate_target(self, batch: Any, **kwargs) -> Any:
         labels, _, _, padding_mask = make_time_batch(batch, number_days=self.N)
@@ -329,8 +341,14 @@ class NextTransactions30DaysTaskBinary(AbstractTask):
             return None, None
 
         input_labels = torch.gather(labels, 1, trx_index)
-        text_answer = list(map(lambda x: self.positive_answer_word if x else self.negative_answer_word, (input_labels >= self.threshold)))
+        return input_labels, trx_index
 
+    def generate_text_target(self, batch: Any, **kwargs) -> Any:
+        input_labels, trx_index = self.generate_target(batch, **kwargs)
+        if input_labels is None:
+            return None, None
+
+        text_answer = list(map(lambda x: self.positive_answer_word if x else self.negative_answer_word, (input_labels >= self.threshold)))
         return text_answer, trx_index
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
@@ -351,7 +369,7 @@ class NextTransactions30DaysTaskBinary(AbstractTask):
         # Construct target values 
         # Target's questions numeric/categorical answers as str
 
-        target_batch, trx_index = self.generate_target(batch)
+        target_batch, trx_index = self.generate_text_target(batch)
 
         # We don't have target so we return empty dict
         if target_batch is None:
@@ -467,19 +485,20 @@ class NextAmnt30DaysTaskBinary(AbstractTask):
 
         super().__post_init__()
 
-        if self.tokenizer is None:
-            raise AttributeError("This task requires tokenizer to be set!")
-        if self.add_tokens_to_tokenizer:
-            new_tokens = [self.transactions_embeddings_start_token,
-                          self.transactions_embeddings_end_token]
-            if self.task_special_token is not None:
-                new_tokens += [self.task_special_token]
-            self.extend_vocabulary(tokenizer=self.tokenizer,
-                                   new_tokens=new_tokens,
-                                   special=False)
+        if self.task_type == 'text':
+            if self.tokenizer is None:
+                raise AttributeError("This task requires tokenizer to be set!")
+            if self.add_tokens_to_tokenizer:
+                new_tokens = [self.transactions_embeddings_start_token,
+                            self.transactions_embeddings_end_token]
+                if self.task_special_token is not None:
+                    new_tokens += [self.task_special_token]
+                self.extend_vocabulary(tokenizer=self.tokenizer,
+                                    new_tokens=new_tokens,
+                                    special=False)
 
-        self.positive_token = self.tokenizer(self.positive_answer_word).input_ids[0]
-        self.negative_token = self.tokenizer(self.negative_answer_word).input_ids[0]
+            self.positive_token = self.tokenizer(self.positive_answer_word).input_ids[0]
+            self.negative_token = self.tokenizer(self.negative_answer_word).input_ids[0]
 
     def generate_target(self, batch: Any, **kwargs) -> Any:
         _, labels, _, padding_mask = make_time_batch(batch, number_days=self.N)
@@ -490,8 +509,14 @@ class NextAmnt30DaysTaskBinary(AbstractTask):
             return None, None
 
         input_labels = torch.gather(labels, 1, trx_index)
-        text_answer = list(map(lambda x: self.positive_answer_word if x else self.negative_answer_word , (input_labels >= self.threshold)))
+        return input_labels, trx_index
 
+    def generate_text_target(self, batch: Any, **kwargs) -> Any:
+        input_labels, trx_index = self.generate_target(batch, **kwargs)
+        if input_labels is None:
+            return None, None
+
+        text_answer = list(map(lambda x: self.positive_answer_word if x else self.negative_answer_word, (input_labels >= self.threshold)))
         return text_answer, trx_index
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
@@ -512,7 +537,7 @@ class NextAmnt30DaysTaskBinary(AbstractTask):
         # Construct target values 
         # Target's questions numeric/categorical answers as str
 
-        target_batch, trx_index = self.generate_target(batch)
+        target_batch, trx_index = self.generate_text_target(batch)
 
         # We don't have target so we return empty dict
         if target_batch is None:

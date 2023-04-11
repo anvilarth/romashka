@@ -46,19 +46,20 @@ class DefaultTask(AbstractTask):
         super().__post_init__()
 
         # TODO: fix this comments
-        # if self.tokenizer is None:
-        #     raise AttributeError("This task requires tokenizer to be set!")
-        # if self.add_tokens_to_tokenizer:
-        #     new_tokens = [self.transactions_embeddings_start_token,
-        #                   self.transactions_embeddings_end_token]
-        #     if self.task_special_token is not None:
-        #         new_tokens += [self.task_special_token]
-        #     self.extend_vocabulary(tokenizer=self.tokenizer,
-        #                            new_tokens=new_tokens,
-        #                            special=False)
+        if self.task_type == 'text':
+            if self.tokenizer is None:
+                raise AttributeError("This task requires tokenizer to be set!")
+            if self.add_tokens_to_tokenizer:
+                new_tokens = [self.transactions_embeddings_start_token,
+                            self.transactions_embeddings_end_token]
+                if self.task_special_token is not None:
+                    new_tokens += [self.task_special_token]
+                self.extend_vocabulary(tokenizer=self.tokenizer,
+                                    new_tokens=new_tokens,
+                                    special=False)
 
-        # self.positive_token = self.tokenizer(self.positive_answer_word).input_ids[0]
-        # self.negative_token = self.tokenizer(self.negative_answer_word).input_ids[0]
+            self.positive_token = self.tokenizer(self.positive_answer_word).input_ids[0]
+            self.negative_token = self.tokenizer(self.negative_answer_word).input_ids[0]
         self.criterion = nn.BCEWithLogitsLoss()
 
     def generate_target(self, batch: Any, **kwargs) -> Any:

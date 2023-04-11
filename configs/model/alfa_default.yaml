@@ -6,10 +6,5 @@ optimizer:
   lr: 0.001
   weight_decay: 0.0
 
-task:
-  _target_: src.tasks.task_auto.AutoTask
-
-task_name: 'default'
-
 encoder_type: 'whisper/tiny'
 head_type: 'linear'

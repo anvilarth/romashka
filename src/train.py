@@ -4,6 +4,8 @@ import hydra
 import pyrootutils
 import pytorch_lightning as pl
 from omegaconf import DictConfig
+
+from tasks.task_abstract import AbstractTask
 from pytorch_lightning import Callback, LightningDataModule, LightningModule, Trainer
 from pytorch_lightning.loggers import Logger
 
@@ -53,7 +55,7 @@ def train(cfg: DictConfig) -> Tuple[dict, dict]:
     datamodule: LightningDataModule = hydra.utils.instantiate(cfg.data)
 
     log.info(f"Instantiating model <{cfg.model._target_}>")
-    model: LightningModule = hydra.utils.instantiate(cfg.model)
+    model: LightningModule = hydra.utils.instantiate(cfg.model, task_name=cfg.task.task_name)
 
     log.info("Instantiating callbacks...")
     callbacks: List[Callback] = utils.instantiate_callbacks(cfg.get("callbacks"))

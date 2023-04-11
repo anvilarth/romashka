@@ -52,12 +52,17 @@ class NextTimeLoss(nn.Module):
         return l_amnt + l_need + l_num
         
 class NextTransactionLoss(nn.Module):
-    def __init__(self):
+    def __init__(self, cat_weights=None, num_weights=None, cat_feature_ids=None, num_feature_ids=None):
         super().__init__()
         self.cat_criterion = nn.CrossEntropyLoss(ignore_index=0)
         self.num_criterion = MaskedMSELoss()
 
-    def forward(self, output, batch, mask=None, cat_weights=None, num_weights=None, cat_feature_ids=None, num_feature_ids=None):
+        self.cat_weights=cat_weights
+        self.num_weights=num_weights
+        self.cat_feature_ids=cat_feature_ids
+        self.num_feature_ids=num_feature_ids
+
+    def forward(self, output, batch, mask=None, ):
         cat_pred, num_pred = output['cat_features'], output['num_features']
         cat_trues, num_trues = batch['cat_features'], batch['num_features']
         mask = batch['mask'][:, 1:]
@@ -65,20 +70,20 @@ class NextTransactionLoss(nn.Module):
         res = []
         
         for i, (pred, true) in enumerate(zip(cat_pred, cat_trues)):
-            if i not in cat_feature_ids:
+            if i not in self.cat_feature_ids:
                 continue
-            elif cat_weights is not None:
-                coef = cat_weights[i]
+            elif self.cat_weights is not None:
+                coef = self.cat_weights[i]
             else:
                 coef = 1.0
             res.append(coef * self.cat_criterion(pred.permute(0, 2, 1), true[:, 1:]))
         
         for i, (pred, true) in enumerate(zip(num_pred, num_trues)):
-            if i not in num_feature_ids:
+            if i not in self.num_feature_ids:
                 continue
             
-            elif num_weights is not None:
-                coef = num_weights[i]
+            elif self.num_weights is not None:
+                coef = self.num_weights[i]
                 
             else:
                 coef = 1.0

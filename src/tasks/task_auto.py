@@ -19,6 +19,9 @@ from .next_feature_tasks import (NextMCCFeatureTaskBinary,
                                                                NextMCCFeatureTaskMulti)
                                                                
 from .default_task import DefaultTask
+from .next_pred import NextFeatureStandardTask
+
+
 from src.utils.logging_handler import get_logger
 
 """
@@ -49,6 +52,7 @@ AUTO_TASKS = [
         ("next_amnt_30_days_binary", NextAmnt30DaysTaskBinary),
         ("next_transactions_30_days_binary", NextTransactions30DaysTaskBinary),
         ("next_mcc_multi", NextMCCFeatureTaskMulti),
+        ("next_transaction", NextFeatureStandardTask),
         ("default", DefaultTask)
     ]
 AUTO_TASKS = OrderedDict(AUTO_TASKS)
