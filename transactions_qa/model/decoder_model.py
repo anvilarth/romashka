@@ -242,7 +242,7 @@ class DecoderSimpleModel(nn.Module):
         # transactions_tokens_mask = torch.ones(transactions_embeddings.size()[:2]).bool()  # all to 1 == pad
         # question_end_tokens_mask = mask_padding(question_end_tokens_full)  # 0 - token, 1 == pad
 
-        # Label = [question_start_tokens, <trns>,
+        # 1) Label = [question_start_tokens, <trns>,
         #           <pad> * trns_history_len,
         #           question_end_tokens, answer_tokens,
         #           <pad> - ?]
@@ -251,6 +251,29 @@ class DecoderSimpleModel(nn.Module):
             torch.full(transactions_embeddings.size()[:2], self.tokenizer.pad_token_id).to(device),
             question_end_tokens_full
         ], dim=1)
+
+        # 2) Label = [<pad> * len(question_start_tokens) - 1,
+        #            <trns>,  --> train it!
+        #           <pad> * trns_history_len,
+        #           <pad> * len(question_end_tokens) - 1,
+        #           </trns>,  --> train it!
+        #           answer_tokens,
+        #           <pad> - ?]
+        question_end_labels = question_end_tokens_full.clone()
+        for i in range(batch_size):
+            answer_tokens_len = batch['answer_tokens'][i].size(0) + 1  # + 1 for whitespace token
+            question_end_labels[i, :-answer_tokens_len] = -100
+
+        labels = torch.cat([
+            torch.full((batch_size, question_start_tokens_batch.size(1) - 1),
+                       self.tokenizer.pad_token_id).to(device),  # <pad> * len(question_start_tokens) - 1
+            batch['question_start_tokens'][:, -1].repeat(batch_size, 1).to(device),  # <trns>
+            torch.full(transactions_embeddings.size()[:2],
+                       self.tokenizer.pad_token_id).to(device),  # <pad> * trns_history_len
+            question_end_tokens_full[:, 0].unsqueeze(-1),  # </trns> to [batch_size, 1]
+            question_end_labels[:, 1:]
+        ], dim=1)
+
         labels_masked = mask_lm_labels_padding(labels, self.tokenizer.pad_token_id).long().to(device)
 
         # Pass through LM
