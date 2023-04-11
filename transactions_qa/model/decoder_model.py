@@ -23,7 +23,7 @@ class DecoderSimpleModel(nn.Module):
                  do_freeze_tm: Optional[bool] = True,
                  do_freeze_lm: Optional[bool] = False,
                  do_freeze_connector: Optional[bool] = False,
-                 verbose_for_debug: Optional[bool] = False):
+                 is_debug: Optional[bool] = False):
         super().__init__()
         self._logger = get_logger(
             name=self.__class__.__name__,
@@ -46,7 +46,7 @@ class DecoderSimpleModel(nn.Module):
         self.do_freeze_lm: bool = do_freeze_lm
         self.do_freeze_connector: bool = do_freeze_connector
 
-        self._verbose_for_debug: bool = verbose_for_debug
+        self._is_debug: bool = is_debug
         self._prepare_model()
 
     def _set_language_model_arch_type(self):
@@ -54,10 +54,8 @@ class DecoderSimpleModel(nn.Module):
         if len(self.language_model.config.architectures):
             if "OPT" in self.language_model.config.architectures[0]:
                 self.language_model_arch_type = "OPT"  # has a .model.decoder attribute
-                self.language_model_tokens_embedding_func = self.language_model.model.decoder.embed_tokens
             elif "GPT" in self.language_model.config.architectures[0]:
                 self.language_model_arch_type = "GPT"  # has a .transformer attribute
-                self.language_model_tokens_embedding_func = self.language_model.transformer.wte
             else:
                 raise AttributeError(f"Provided language model architecture is not currently supported "
                                      f"`{self.language_model.config.architectures[0]}`. "
@@ -67,15 +65,32 @@ class DecoderSimpleModel(nn.Module):
                 f"Provided language model doesn't have `architecture` attribute set correctly in configuration. "
                 "Try again with different language model.")
 
+    def _set_language_model_embedding_func(self):
+        """
+        Sets inner text tokens embedding function to separate it from HF model architecture.
+        Note: should be called AFTER changing model embedding layer size!
+        """
+        if self.language_model_arch_type == "OPT":  # has a .model.decoder.embed_tokens(...) Embedding layer
+            self.language_model_tokens_embedding_func = self.language_model.model.decoder.embed_tokens
+        elif self.language_model_arch_type == "GPT":  # has a .transformer.wte(...) Embedding layer
+            self.language_model_tokens_embedding_func = self.language_model.transformer.wte
+        else:
+            raise AttributeError(f"Provided language model architecture is not currently supported "
+                                 f"`{self.language_model_arch_type}`. "
+                                 "Try again with different language model.")
+
     def _prepare_model(self):
         # Set language model architecture type / family (i.e. GPT2/Neo/J .../OPT)
         self._set_language_model_arch_type()
 
+        # Prepare tokenizer
+        self._configure_tokenizer()
+
         # In case any of tasks extends initial tokenizer vocab with additional tokens
         self._resize_text_embeddings()
 
-        # Prepare tokenizer
-        self._configure_tokenizer()
+        # Set embedding func
+        self._set_language_model_embedding_func()
 
         # Freezing some weights
         if self.do_freeze_tm:
@@ -104,7 +119,7 @@ class DecoderSimpleModel(nn.Module):
         else:
             init_embeddings = self.language_model.transformer.get_input_embeddings()
 
-        self._logger.info(f"LM initial `num_embeddings`: {init_embeddings.num_embeddings}, "
+        self._logger.info(f"Language model initial `num_embeddings`: {init_embeddings.num_embeddings}, "
                           f"`embedding_dim`: {init_embeddings.embedding_dim}")
 
         self.language_model.resize_token_embeddings(len(self.tokenizer))
@@ -116,7 +131,7 @@ class DecoderSimpleModel(nn.Module):
         else:
             resized_embedds = self.language_model.transformer.get_input_embeddings()
 
-        self._logger.info(f"LM resized `num_embeddings`: {resized_embedds.num_embeddings}, "
+        self._logger.info(f"Language model resized `num_embeddings`: {resized_embedds.num_embeddings}, "
                           f"`embedding_dim`: {resized_embedds.embedding_dim}")
 
     def _configure_tokenizer(self):
@@ -183,6 +198,8 @@ class DecoderSimpleModel(nn.Module):
 
         # Questions: to embedding of LM
         # torch.Size([1, len(question_start_tokens))
+        print(f"Got question_start_tokens: {batch['question_start_tokens']}")
+        # print(f"Got question_start_tokens: {self.tokenizer.decode(batch['question_start_tokens'])}")
         question_start_embeddings = self.language_model_tokens_embedding_func(
             batch['question_start_tokens'])  # call for (embed_tokens): Embedding(vocab_size, model_hidden_dim)
         question_start_embeddings_batch = question_start_embeddings.repeat(batch_size, 1, 1)
@@ -240,6 +257,19 @@ class DecoderSimpleModel(nn.Module):
                                      output_hidden_states=True)
         if is_train:
             output['labels'] = labels_masked
+        if self._is_debug:
+            output['input_embeddings'] = input_embedds  # for debug purposes
+            question_start_tokens_batch = batch['question_start_tokens'].repeat(batch_size, 1)
+            output['question_encoded'] = torch.cat([question_start_tokens_batch,
+                                                    batch['question_end_tokens']], dim=1)
+            # Experimental !
+            transactions_history_lengths = transaction_mask.sum(1)
+            output['transactions_history_lengths'] = transactions_history_lengths
+
+            output['question_start_input_size'] = question_start_embeddings_batch.size(1)
+            output['question_end_input_size'] = question_end_embeddings_batch.size(1)
+            output['transactions_input_size'] = transactions_embeddings.size(1)
+            output['total_input_size'] = input_embedds.size(1)
         return output
 
     def generate(self, batch: Union[Dict[str, torch.Tensor], Any],

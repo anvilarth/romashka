@@ -1,3 +1,5 @@
+import dataclasses
+
 import torch
 import torch.nn as nn
 from abc import ABC, abstractmethod
@@ -50,6 +52,7 @@ class AbstractTask(ABC):
     task_special_token: Optional[str] = None
     transactions_embeddings_start_token: Optional[str] = r"[trx]"
     transactions_embeddings_end_token: Optional[str] = r"[/trx]"
+    special_tokens: Optional[List[str]] = None
     add_tokens_to_tokenizer: Optional[bool] = False
     # This option is set to `False` if the answer is binary: yes/no, true/false, or multichoice
     # Otherwise, it is set to `True` to not require any information about available options/targets
@@ -61,6 +64,11 @@ class AbstractTask(ABC):
 
     def __post_init__(self):
         # Fill in empty parameters with defaults
+        if self.special_tokens is None:
+            self.special_tokens = [self.transactions_embeddings_start_token,
+                                   self.transactions_embeddings_end_token]
+            if self.task_special_token is not None:
+                self.special_tokens += [self.task_special_token]
         if self.target_feature_name is not None:
             self.init_feature_index()
         self.task_specific_config = {
@@ -70,9 +78,8 @@ class AbstractTask(ABC):
         # Init metrics
         self.metrics = nn.ModuleDict({"rouge": ROUGEScore()} if self.metrics is None else self.metrics)
         self.question_templates = [
-            ("This is the client's transaction history ",
-             " Is the last MCC category code 1?")
-        ] if self.question_templates is None else self.question_templates
+            ("This is the client's transaction history ", "")] \
+            if self.question_templates is None else self.question_templates
         self.answer_template = [
             ""  # empty for default
         ] if self.answer_template is None else self.answer_template
@@ -167,7 +174,7 @@ class AbstractTask(ABC):
 
         """
         num_added_toks = tokenizer.add_tokens(new_tokens, special_tokens=special)
-        logger.info(f"Added to tokenizer: {num_added_toks} tokens.")
+        logger.info(f"Added to tokenizer: {num_added_toks} tokens: {new_tokens}.")
         if model is not None:
             # Notice: resize_token_embeddings expect to receive the full size of the new vocabulary,
             # i.e., the length of the tokenizer.

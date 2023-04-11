@@ -112,7 +112,7 @@ class TestDecoderTQAModel(unittest.TestCase):
             transaction_model=transactions_model,
             tokenizer=self.tokenizer,
             connector=connector,
-            verbose_for_debug=True
+            is_debug=True
         )
         self.full_model = TransactionQAModel(model=self.decoder_model,
                                              tasks=tasks)

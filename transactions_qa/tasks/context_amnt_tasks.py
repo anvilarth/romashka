@@ -80,12 +80,8 @@ class MeanAmountBinnedTaskBinary(NumericTaskAbstract):
         if self.tokenizer is None:
             raise AttributeError("This task requires tokenizer to be set!")
         if self.add_tokens_to_tokenizer:
-            new_tokens = [self.transactions_embeddings_start_token,
-                          self.transactions_embeddings_end_token]
-            if self.task_special_token is not None:
-                new_tokens += [self.task_special_token]
             self.extend_vocabulary(tokenizer=self.tokenizer,
-                                   new_tokens=new_tokens,
+                                   new_tokens=self.special_tokens,
                                    special=False)
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
@@ -117,9 +113,12 @@ class MeanAmountBinnedTaskBinary(NumericTaskAbstract):
         # question_target_batch  -> '[/trx] + end str'
         # target_batch -> feature values as str ('15')
 
-        # single tensor without </s> (EOS) !!!
+        # single tensor without </s> (EOS), but only for encoder-decoder !!!
         question_start_tokens = self.tokenizer.encode(question_start,
-                                                      return_tensors='pt')[:, :-1].to(device)
+                                                      return_tensors='pt')
+        if question_start_tokens[:, -1] == self.tokenizer.eos_token_id:
+            question_start_tokens = question_start_tokens[:, :-1]
+        question_start_tokens.to(device)
 
         # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
         question_target_encoded_batch = self.tokenizer(question_target_batch,
@@ -329,12 +328,8 @@ class MeanAmountNumericTaskBinary(NumericTaskAbstract):
         if self.tokenizer is None:
             raise AttributeError("This task requires tokenizer to be set!")
         if self.add_tokens_to_tokenizer:
-            new_tokens = [self.transactions_embeddings_start_token,
-                          self.transactions_embeddings_end_token]
-            if self.task_special_token is not None:
-                new_tokens += [self.task_special_token]
             self.extend_vocabulary(tokenizer=self.tokenizer,
-                                   new_tokens=new_tokens,
+                                   new_tokens=self.special_tokens,
                                    special=False)
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
@@ -366,9 +361,12 @@ class MeanAmountNumericTaskBinary(NumericTaskAbstract):
         # question_target_batch  -> '[/trx] + end str'
         # target_batch -> feature values as str ('15')
 
-        # single tensor without </s> (EOS) !!!
+        # single tensor without </s> (EOS), but only for encoder-decoder !!!
         question_start_tokens = self.tokenizer.encode(question_start,
-                                                      return_tensors='pt')[:, :-1].to(device)
+                                                      return_tensors='pt')
+        if question_start_tokens[:, -1] == self.tokenizer.eos_token_id:
+            question_start_tokens = question_start_tokens[:, :-1]
+        question_start_tokens.to(device)
 
         # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
         question_target_encoded_batch = self.tokenizer(question_target_batch,
@@ -574,12 +572,8 @@ class MeanAmountBinnedTaskOpenEnded(NumericTaskAbstract):
         if self.tokenizer is None:
             raise AttributeError("This task requires tokenizer to be set!")
         if self.add_tokens_to_tokenizer:
-            new_tokens = [self.transactions_embeddings_start_token,
-                          self.transactions_embeddings_end_token]
-            if self.task_special_token is not None:
-                new_tokens += [self.task_special_token]
             self.extend_vocabulary(tokenizer=self.tokenizer,
-                                   new_tokens=new_tokens,
+                                   new_tokens=self.special_tokens,
                                    special=False)
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
@@ -611,9 +605,12 @@ class MeanAmountBinnedTaskOpenEnded(NumericTaskAbstract):
         # question_target_batch  -> '[/trx] + end str'
         # target_batch -> feature values as str ('15')
 
-        # single tensor without </s> (EOS) !!!
+        # single tensor without </s> (EOS), but only for encoder-decoder !!!
         question_start_tokens = self.tokenizer.encode(question_start,
-                                                      return_tensors='pt')[:, :-1].to(device)
+                                                      return_tensors='pt')
+        if question_start_tokens[:, -1] == self.tokenizer.eos_token_id:
+            question_start_tokens = question_start_tokens[:, :-1]
+        question_start_tokens.to(device)
 
         # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
         question_target_encoded_batch = self.tokenizer(question_target_batch,
@@ -798,12 +795,8 @@ class MeanAmountNumericTaskOpenEnded(NumericTaskAbstract):
         if self.tokenizer is None:
             raise AttributeError("This task requires tokenizer to be set!")
         if self.add_tokens_to_tokenizer:
-            new_tokens = [self.transactions_embeddings_start_token,
-                          self.transactions_embeddings_end_token]
-            if self.task_special_token is not None:
-                new_tokens += [self.task_special_token]
             self.extend_vocabulary(tokenizer=self.tokenizer,
-                                   new_tokens=new_tokens,
+                                   new_tokens=self.special_tokens,
                                    special=False)
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
@@ -835,9 +828,12 @@ class MeanAmountNumericTaskOpenEnded(NumericTaskAbstract):
         # question_target_batch  -> '[/trx] + end str'
         # target_batch -> feature values as str ('15')
 
-        # single tensor without </s> (EOS) !!!
+        # single tensor without </s> (EOS), but only for encoder-decoder !!!
         question_start_tokens = self.tokenizer.encode(question_start,
-                                                      return_tensors='pt')[:, :-1].to(device)
+                                                      return_tensors='pt')
+        if question_start_tokens[:, -1] == self.tokenizer.eos_token_id:
+            question_start_tokens = question_start_tokens[:, :-1]
+        question_start_tokens.to(device)
 
         # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
         question_target_encoded_batch = self.tokenizer(question_target_batch,

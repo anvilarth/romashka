@@ -136,7 +136,7 @@ class TransactionQAModel(pl.LightningModule):
             for key, val in batch.items():
                 qa_batch[key] = val
             outputs = self.model(qa_batch)
-            batch_answers = qa_batch['answer_tokens']
+            batch_answers = qa_batch['answer_tokens'] if "answer_tokens" not in outputs else outputs['answer_tokens']
 
             return outputs, batch_answers
 
@@ -175,7 +175,6 @@ class TransactionQAModel(pl.LightningModule):
                 logging_dict = dict(list(logging_dict.items()) + list(additional_logging_dict.items()))
 
         self.log_dict(logging_dict)
-        # self._logger.info(f"Train step results:\n{logging_dict}")
         return loss
 
     def _collect_additional_info(self, outputs: Any) -> Dict[str, Any]:
@@ -257,10 +256,14 @@ class TransactionQAModel(pl.LightningModule):
 
         # Log predictions on validation set
         if self.log_eval_steps_counter < self.num_eval_batches_to_log:
+            questions = outputs.question_encoded.detach().cpu() if hasattr(outputs, "question_encoded") else ""
+            transactions_history_lengths = outputs['transactions_history_lengths'].detach().cpu() if hasattr(outputs,
+                                                                                                             "transactions_history_lengths") else [
+                0]
             self.log_predictions(logits=outputs.logits.detach().cpu(),
                                  answers=batch_answers.detach().cpu(),
-                                 questions=outputs.question_encoded.detach().cpu(),
-                                 transactions_history_lengths=outputs['transactions_history_lengths'].detach().cpu(),
+                                 questions=questions,
+                                 transactions_history_lengths=transactions_history_lengths,
                                  predictions_table=self.log_eval_predictions_table,
                                  log_counter=self.log_eval_steps_counter)
             self.log_eval_steps_counter += 1
@@ -370,18 +373,18 @@ class TransactionQAModel(pl.LightningModule):
                         log_counter: int,
                         transactions_history_lengths: Optional[torch.Tensor] = [],
                         task_name: Optional[str] = "default"):
-        predictions_decoded = self.tokenizer.batch_decode(logits.argmax(2),
-                                                          skip_special_tokens=True)
-        answers_decoded = self.tokenizer.batch_decode(answers,
-                                                      skip_special_tokens=True)
-        questions_decoded = self.tokenizer.batch_decode(questions,
-                                                        skip_special_tokens=True)
+        predictions_decoded = self.model.tokenizer.batch_decode(logits.argmax(2),
+                                                                skip_special_tokens=True)
+        answers_decoded = self.model.tokenizer.batch_decode(answers,
+                                                            skip_special_tokens=True)
+        questions_decoded = self.model.tokenizer.batch_decode(questions,
+                                                              skip_special_tokens=True)
 
         print(f"Validation predictions vs. answers, batch #{log_counter}:")
 
         # columns = ["epoch", "step #", "task", "question", "prediction", "truth", "transactions_history_lengths"]
         for i, (pred, answer, question) in enumerate(zip(predictions_decoded, answers_decoded, questions_decoded)):
-            print(f"\t#{i}:\tpredicted: {pred}, answer: {answer}")
+            print(f"\t#{i}:\tpredicted: {pred},\n\tanswer: {answer}")
             predictions_table.add_data(self.current_epoch,
                                        "_".join([str(log_counter), str(i)]),
                                        task_name,
