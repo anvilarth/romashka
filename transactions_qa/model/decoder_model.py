@@ -190,6 +190,8 @@ class DecoderSimpleModel(nn.Module):
         # torch.Tensor - mask
         # ]
         transaction_mask = batch['mask']
+        device = transaction_mask.device
+        # print(f"\n----------- Init device set to: {device} -----------\n")
         batch_size = transaction_mask.size(0)
         transactions_embeddings, transactions_embeddings_mask = self.transaction_model.get_embs(batch)
 
@@ -198,8 +200,6 @@ class DecoderSimpleModel(nn.Module):
 
         # Questions: to embedding of LM
         # torch.Size([1, len(question_start_tokens))
-        print(f"Got question_start_tokens: {batch['question_start_tokens']}")
-        # print(f"Got question_start_tokens: {self.tokenizer.decode(batch['question_start_tokens'])}")
         question_start_embeddings = self.language_model_tokens_embedding_func(
             batch['question_start_tokens'])  # call for (embed_tokens): Embedding(vocab_size, model_hidden_dim)
         question_start_embeddings_batch = question_start_embeddings.repeat(batch_size, 1, 1)
@@ -213,17 +213,21 @@ class DecoderSimpleModel(nn.Module):
             question_end_tokens_ = batch['question_end_tokens'][i][
                 question_end_tokens_mask[i]]  # question without padding
             answer_ = batch['answer_tokens'][i]
-            question_end_tokens_full.append(torch.cat([question_end_tokens_, self.whitespace_token_id, answer_], dim=0))
+            question_end_tokens_full.append(torch.cat([question_end_tokens_,
+                                                       self.whitespace_token_id.to(device),
+                                                       answer_], dim=0))
 
         # 2) Pad to max q+a length
         max_question_answer_len = max([len(qa) for qa in question_end_tokens_full])
         for i in range(question_end_tokens_mask.size(0)):
             n_padds = max_question_answer_len - question_end_tokens_full[i].size(0)
             question_end_tokens_full[i] = torch.cat(
-                [question_end_tokens_full[i], torch.full((n_padds,), self.tokenizer.pad_token_id)], dim=0)
+                [question_end_tokens_full[i],
+                 torch.full((n_padds,), self.tokenizer.pad_token_id).to(device)
+                ], dim=0)
 
         # 3) Cat back into batch
-        question_end_tokens_full = torch.stack(question_end_tokens_full)
+        question_end_tokens_full = torch.stack(question_end_tokens_full).long()
 
         question_end_embeddings_batch = self.language_model_tokens_embedding_func(question_end_tokens_full)
 
@@ -243,11 +247,11 @@ class DecoderSimpleModel(nn.Module):
         #           question_end_tokens, answer_tokens,
         #           <pad> - ?]
         labels = torch.cat([
-            batch['question_start_tokens'].repeat(batch_size, 1),
-            torch.full(transactions_embeddings.size()[:2], self.tokenizer.pad_token_id),
+            batch['question_start_tokens'].repeat(batch_size, 1).to(device),
+            torch.full(transactions_embeddings.size()[:2], self.tokenizer.pad_token_id).to(device),
             question_end_tokens_full
         ], dim=1)
-        labels_masked = mask_lm_labels_padding(labels, self.tokenizer.pad_token_id).long()
+        labels_masked = mask_lm_labels_padding(labels, self.tokenizer.pad_token_id).long().to(device)
 
         # Pass through LM
         # contains: ['loss', 'logits', 'past_key_values', 'last_hidden_state']

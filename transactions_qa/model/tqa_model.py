@@ -373,11 +373,11 @@ class TransactionQAModel(pl.LightningModule):
                         log_counter: int,
                         transactions_history_lengths: Optional[torch.Tensor] = [],
                         task_name: Optional[str] = "default"):
-        predictions_decoded = self.model.tokenizer.batch_decode(logits.argmax(2),
+        predictions_decoded = self.model.tokenizer.batch_decode(logits.argmax(2).long(),
                                                                 skip_special_tokens=True)
-        answers_decoded = self.model.tokenizer.batch_decode(answers,
+        answers_decoded = self.model.tokenizer.batch_decode(answers.long(),
                                                             skip_special_tokens=True)
-        questions_decoded = self.model.tokenizer.batch_decode(questions,
+        questions_decoded = self.model.tokenizer.batch_decode(questions.long(),
                                                               skip_special_tokens=True)
 
         print(f"Validation predictions vs. answers, batch #{log_counter}:")

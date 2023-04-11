@@ -118,7 +118,7 @@ class MeanAmountBinnedTaskBinary(NumericTaskAbstract):
                                                       return_tensors='pt')
         if question_start_tokens[:, -1] == self.tokenizer.eos_token_id:
             question_start_tokens = question_start_tokens[:, :-1]
-        question_start_tokens.to(device)
+        question_start_tokens = question_start_tokens.to(device)
 
         # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
         question_target_encoded_batch = self.tokenizer(question_target_batch,
@@ -366,7 +366,7 @@ class MeanAmountNumericTaskBinary(NumericTaskAbstract):
                                                       return_tensors='pt')
         if question_start_tokens[:, -1] == self.tokenizer.eos_token_id:
             question_start_tokens = question_start_tokens[:, :-1]
-        question_start_tokens.to(device)
+        question_start_tokens = question_start_tokens.to(device)
 
         # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
         question_target_encoded_batch = self.tokenizer(question_target_batch,
@@ -610,7 +610,7 @@ class MeanAmountBinnedTaskOpenEnded(NumericTaskAbstract):
                                                       return_tensors='pt')
         if question_start_tokens[:, -1] == self.tokenizer.eos_token_id:
             question_start_tokens = question_start_tokens[:, :-1]
-        question_start_tokens.to(device)
+        question_start_tokens = question_start_tokens.to(device)
 
         # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
         question_target_encoded_batch = self.tokenizer(question_target_batch,
@@ -833,7 +833,7 @@ class MeanAmountNumericTaskOpenEnded(NumericTaskAbstract):
                                                       return_tensors='pt')
         if question_start_tokens[:, -1] == self.tokenizer.eos_token_id:
             question_start_tokens = question_start_tokens[:, :-1]
-        question_start_tokens.to(device)
+        question_start_tokens = question_start_tokens.to(device)
 
         # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
         question_target_encoded_batch = self.tokenizer(question_target_batch,
