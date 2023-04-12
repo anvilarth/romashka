@@ -3,6 +3,8 @@ import re
 
 import json
 import pickle
+import random
+import numpy as np
 from typing import Dict, Any, Optional, List
 
 import torch
@@ -10,6 +12,16 @@ import torch.nn as nn
 
 PREFIX_CHECKPOINT_DIR = "checkpoint"
 _re_checkpoint = re.compile(r"^" + PREFIX_CHECKPOINT_DIR + r"\-(\d+)$")
+
+
+def seed_everything(seed):
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = True
 
 
 def preprocess_logits_for_metrics(logits: Any, labels: Any):
