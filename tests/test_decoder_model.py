@@ -12,7 +12,7 @@ from romashka.transactions_qa.utils import get_projections_maps
 from romashka.transactions_qa.dataset.data_generator import (cat_features_names,
                                                              meta_features_names,
                                                              num_features_names)
-from romashka.transactions_qa.model.generation_utils import BinaryQACriteria
+from romashka.transactions_qa.model.generation_utils import AnsweredQACriteria
 from romashka.transactions_qa.tasks import AutoTask
 
 
@@ -143,20 +143,39 @@ class TestDecoderTQAModel(unittest.TestCase):
         diversity_penalty = 0.0
 
         task = self.tasks[0]
+        print(f"Task: {task.task_name}")
         if 'binary' in task.task_name:
             answer_options = list(task.binary_answer_options.values())
         else:
-            answer_options = list(task.answer_options)
-        force_words_ids = self.tokenizer(answer_options, add_special_tokens=False).input_ids
+            answer_options = list(task.answers_options)
+        print(f"Answer options: {answer_options}\n")
+        force_words_ids = self.decoder_model.tokenizer(answer_options, add_special_tokens=False).input_ids
+
+        qa_batch = task.process_input_batch(self.test_batch)
 
         # Which hidden dims to take
         hidden_dims_indexes = [-1]
         # Value to assign to tokens that should never be generated.
         filter_value = -float('Inf')
 
-        stopping_criteria = BinaryQACriteria(prompt_length=0, answer_tokens_ids=[i[0] for i in force_words_ids])
+        stopping_criteria = AnsweredQACriteria(prompt_length=0, answer_tokens_ids=[i[0] for i in force_words_ids])
 
-        output = self.decoder_model.generate(self.test_batch)
+        predictions = self.decoder_model.generate(
+            questions=qa_batch['question_end_tokens'],
+            transactions_batch=self.test_batch,
+            prefix_prompt=qa_batch['question_start_tokens'],
+            answer_template=task.answer_template,
+            max_new_tokens=max_new_tokens,
+            min_new_tokens=min_new_tokens,
+            top_p=top_p,
+            temperature=temperature,
+            filter_value=filter_value,
+            allowed_token_ids=[i[0] for i in force_words_ids],
+            hidden_dims_indexes=hidden_dims_indexes,
+            stopping_criteria=stopping_criteria,
+            seed=11
+        )
+        print(f"Predicted:\n{predictions['generated_texts']}")
 
 
 if __name__ == '__main__':

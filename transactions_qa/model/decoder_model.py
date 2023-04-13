@@ -24,6 +24,7 @@ class DecoderSimpleModel(nn.Module):
                  do_freeze_tm: Optional[bool] = True,
                  do_freeze_lm: Optional[bool] = False,
                  do_freeze_connector: Optional[bool] = False,
+                 generation_config: Optional[Dict[str, Any]] = None,
                  is_debug: Optional[bool] = False):
         super().__init__()
         self._logger = get_logger(
@@ -48,6 +49,7 @@ class DecoderSimpleModel(nn.Module):
         self.do_freeze_tm: bool = do_freeze_tm
         self.do_freeze_lm: bool = do_freeze_lm
         self.do_freeze_connector: bool = do_freeze_connector
+        self.generation_config = generation_config
 
         self._is_debug: bool = is_debug
         self._prepare_model()
@@ -94,6 +96,9 @@ class DecoderSimpleModel(nn.Module):
 
         # Set embedding func
         self._set_language_model_embedding_func()
+
+        # Set generation parameters
+        self._set_generation_config()
 
         # Freezing some weights
         if self.do_freeze_tm:
@@ -171,8 +176,29 @@ class DecoderSimpleModel(nn.Module):
                     self.tokenizer.eos_token = "<|endoftext|>"
 
         self.tokenizer.padding_side = 'left'
-        self.bos_token_id = torch.Tensor([self.tokenizer.bos_token_id,]).long()
-        self.eos_token_id = torch.Tensor([self.tokenizer.eos_token_id,]).long()
+        self.bos_token_id = torch.Tensor([self.tokenizer.bos_token_id, ]).long()
+        self.eos_token_id = torch.Tensor([self.tokenizer.eos_token_id, ]).long()
+
+    def _set_generation_config(self):
+        """
+        Configure model's parameters for generation (if generation config was not specified on init() stage).
+        """
+        if self.generation_config is None:
+            self.generation_config = {
+                "max_new_tokens": 3,
+                "min_new_tokens": 1,
+                "top_p": 1.0,
+                "temperature": 0.0,  # 0.0 - greedy decoding
+                "hidden_dims_indexes": [-1],  # Which hidden dims to take
+                "filter_value": -float('Inf'),  # Value to assign to tokens that should never be generated.
+                "create_allowed_token_ids": False,
+                "allowed_token_ids": None,
+                "create_stopping_criteria": False,
+                "stopping_criteria": None,
+                "seed": 42
+            }
+            self._logger.info(f"Created default generation configration for a model:\n"
+                              f"{self.generation_config}")
 
     def forward(self, batch: Union[Dict[str, torch.Tensor], Any],
                 is_train: Optional[bool] = True) -> Any:
@@ -386,8 +412,8 @@ class DecoderSimpleModel(nn.Module):
         # In case single question in string form
         if isinstance(prefix_prompt, str):
             prefix_prompt_tokens = self.tokenizer.encode(prefix_prompt,
-                                                    add_special_tokens=False,
-                                                    return_tensors='pt')
+                                                         add_special_tokens=False,
+                                                         return_tensors='pt')
         elif isinstance(prefix_prompt, torch.Tensor):
             prefix_prompt_tokens = prefix_prompt
         else:
@@ -400,8 +426,8 @@ class DecoderSimpleModel(nn.Module):
         # In case single question in string form
         if isinstance(questions, str):
             question_tokens = self.tokenizer.encode(questions,
-                                               add_special_tokens=False,
-                                               return_tensors='pt')
+                                                    add_special_tokens=False,
+                                                    return_tensors='pt')
             question_embeddings = self.language_model.model.decoder.embed_tokens(question_tokens)
             question_embeddings_batch = question_embeddings.repeat(batch_size, 1, 1)
 
@@ -417,9 +443,9 @@ class DecoderSimpleModel(nn.Module):
         # In case a list of dtring questions provided
         elif isinstance(questions, list) and isinstance(questions[0], str):
             question_tokens = self.tokenizer.encode(questions,
-                                               padding=True,
-                                               add_special_tokens=False,
-                                               return_tensors='pt')
+                                                    padding=True,
+                                                    add_special_tokens=False,
+                                                    return_tensors='pt')
             question_embeddings = self.language_model.model.decoder.embed_tokens(question_tokens)
             question_embeddings_batch = question_embeddings
         else:
@@ -427,8 +453,12 @@ class DecoderSimpleModel(nn.Module):
 
         # Answer template --> embeddings
         answer_template_tokens = self.tokenizer.encode(answer_template,
-                                                  add_special_tokens=False,
-                                                  return_tensors='pt')
+                                                       add_special_tokens=False,
+                                                       return_tensors='pt')
+        # If empty template (to prevent errors in embeddings)
+        if not answer_template_tokens.size(1):
+            answer_template_tokens = self.whitespace_token_id
+
         answer_template_embeddings = self.language_model.model.decoder.embed_tokens(answer_template_tokens)
         answer_template_embeddings_batch = answer_template_embeddings.repeat(batch_size, 1, 1)
 
@@ -528,4 +558,3 @@ class DecoderSimpleModel(nn.Module):
         return dict(generated_texts=out,
                     output_embeddings=output_embeddings,
                     output_logits=output_logits)
-

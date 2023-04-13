@@ -10,10 +10,10 @@ def isin(elements: torch.Tensor, test_elements: torch.Tensor):
     return (elements[..., None] == test_elements).any(-1)
 
 
-class BinaryQACriteria(StoppingCriteria):
+class AnsweredQACriteria(StoppingCriteria):
     """
     A custom criteria to stop generation as soon as all the sequences in the batch have at least
-    one Yes/No answer after the prompt.
+    one Yes/No or any other fixed answer token (! single one !) after the prompt.
     """
 
     def __init__(self, prompt_length: int, answer_tokens_ids: List[int]):

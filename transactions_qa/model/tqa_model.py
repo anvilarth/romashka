@@ -10,6 +10,7 @@ import transformers
 import pytorch_lightning as pl
 from pytorch_lightning.utilities import rank_zero_info
 
+from romashka.transactions_qa.model.generation_utils import AnsweredQACriteria
 from romashka.transactions_qa.tasks.task_abstract import AbstractTask
 from romashka.logging_handler import get_logger
 
@@ -288,11 +289,22 @@ class TransactionQAModel(pl.LightningModule):
         tasks_predictions = {}
         for task_idx, task in enumerate(self.tasks):
             try:
-                predictions = self._predict_step_task(batch,
-                                                      batch_idx=batch_idx,
-                                                      task_idx=task_idx,
-                                                      verbose=True,
-                                                      calculate_metrics=False)
+                # For encoder-decoder models make a step with a model and get answers from outputs
+                if self._is_encoder_decoder:
+                    predictions = self._predict_step_task(batch,
+                                                          batch_idx=batch_idx,
+                                                          task_idx=task_idx,
+                                                          verbose=True,
+                                                          calculate_metrics=False)
+                else:
+                    # For decoder-only models run generate() on questions
+                    predictions = self._predict_with_generate_step_task(batch,
+                                                                        batch_idx=batch_idx,
+                                                                        task_idx=task_idx,
+                                                                        verbose=True,
+                                                                        calculate_metrics=False,
+                                                                        return_embeddings=False,
+                                                                        return_logits=False)
 
                 tasks_predictions[task.task_name] = predictions
             except Exception as e:
@@ -303,7 +315,7 @@ class TransactionQAModel(pl.LightningModule):
     def _predict_step_task(self, batch: Any, task_idx: int,
                            calculate_metrics: Optional[bool] = False,
                            verbose: Optional[bool] = False,
-                           batch_idx: Optional[int] = 0) -> Dict[str, Any]:
+                           batch_idx: Optional[int] = 0, **kwargs) -> Dict[str, Any]:
         """
         Predict for single task.
         Args:
@@ -352,6 +364,105 @@ class TransactionQAModel(pl.LightningModule):
             metrics=metrics_scores,
             batch_idx=batch_idx
         )
+
+    def _predict_with_generate_step_task(self, batch: Any, task_idx: int,
+                                         calculate_metrics: Optional[bool] = False,
+                                         verbose: Optional[bool] = False,
+                                         batch_idx: Optional[int] = 0,
+                                         return_embeddings: Optional[bool] = False,
+                                         return_logits: Optional[bool] = False) -> Dict[str, Any]:
+        """
+        Predict with generate() function for single task.
+        Args:
+            batch: Current batch;
+            task_idx: selected task index;
+            batch_idx: Index of current batch.
+
+        Returns:
+            results: as dictionary, where:
+                keys are - metrics / predictions / answers / questions.
+        """
+        task = self.tasks[task_idx]
+        qa_batch = task.process_input_batch(batch)
+        batch_answers = qa_batch['answer_tokens'] if "answer_tokens" in qa_batch else None
+
+        # Get parameters for generation from model
+        generation_config = self.model.generation_config
+
+        # Whether to restrict outputs of generation to small subspace of vocabulary
+        if generation_config.get("create_allowed_token_ids", False) \
+                and (generation_config.get("allowed_token_ids") is None):
+            if 'binary' in task.task_name:
+                answer_options = list(task.binary_answer_options.values())
+            else:
+                answer_options = list(task.answers_options)
+            allowed_token_ids = [i[0] for i in
+                                 self.model.tokenizer(answer_options, add_special_tokens=False).input_ids]
+        elif generation_config.get("allowed_token_ids") is not None:
+            allowed_token_ids = generation_config.get("allowed_token_ids")
+        else:
+            allowed_token_ids = None
+
+        # Whether to create create_stopping_criteria
+        stopping_criteria = None
+        if generation_config.get("create_stopping_criteria", False) and (allowed_token_ids is not None):
+            stopping_criteria = AnsweredQACriteria(prompt_length=0,
+                                                   answer_tokens_ids=allowed_token_ids)
+        elif generation_config.get("create_stopping_criteria", False):
+            self._logger.warning(f"Unable to create stopping criteria, no `allowed_token_ids` provided!")
+
+        predictions = self.model.generate(
+            questions=qa_batch['question_end_tokens'],
+            transactions_batch=batch,
+            prefix_prompt=qa_batch['question_start_tokens'],
+            answer_template=task.answer_template,
+            max_new_tokens=generation_config.get("max_new_tokens", False),
+            min_new_tokens=generation_config.get("min_new_tokens", False),
+            top_p=generation_config.get("top_p", False),
+            temperature=generation_config.get("temperature", False),
+            filter_value=generation_config.get("filter_value", False),
+            allowed_token_ids=allowed_token_ids,
+            hidden_dims_indexes=generation_config.get("hidden_dims_indexes", False),
+            stopping_criteria=stopping_criteria,
+            seed=generation_config.get("seed", False)
+        )
+
+        # as list of strings
+        predictions_decoded = self.model.tokenizer.batch_decode(predictions['generated_texts'],
+                                                                skip_special_tokens=True)
+        batch_answers_decoded = self.model.tokenizer.batch_decode(batch_answers,
+                                                                  skip_special_tokens=True) \
+            if batch_answers is not None else None
+        batch_questions_decoded = self.model.tokenizer.batch_decode(qa_batch['question_end_tokens'].detach().cpu(),
+                                                                    skip_special_tokens=True)
+
+        if verbose:
+            self._logger.info("----- Prediction step -----")
+            self._logger.info(f"Generated for batch #{batch_idx}:\n{predictions_decoded}")
+
+        # Calc metrics
+        metrics_scores = {}
+        if calculate_metrics:
+            for metric_name, metric in task.metrics.items():
+                try:
+                    metrics_scores[metric_name] = metric(predictions_decoded,
+                                                         batch_answers_decoded)
+                except Exception as e:
+                    self._logger.error(f"error occurred during task metric `{metric_name}` calculation:\n{e}")
+
+        outputs = {
+            "predictions": predictions_decoded,
+            "questions": batch_questions_decoded,
+            "metrics": metrics_scores,
+            "batch_idx": batch_idx
+        }
+        if batch_answers is not None:
+            outputs['answers'] = batch_answers_decoded
+        if return_embeddings:
+            outputs['embeddings'] = predictions['output_embeddings']
+        if return_logits:
+            outputs['logits'] = predictions['output_logits']
+        return outputs
 
     def on_validation_epoch_start(self) -> None:
         print(f"\n----------- Validation start ----------\n")
