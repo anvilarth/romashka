@@ -43,6 +43,8 @@ class DecoderSimpleModel(nn.Module):
         self.language_model_arch_type = None
         self.language_model_tokens_embedding_func = None
         self.whitespace_token_id = None
+        self.bos_token_id = None
+        self.eos_token_id = None
         self.do_freeze_tm: bool = do_freeze_tm
         self.do_freeze_lm: bool = do_freeze_lm
         self.do_freeze_connector: bool = do_freeze_connector
@@ -167,7 +169,10 @@ class DecoderSimpleModel(nn.Module):
                 else:
                     self.tokenizer.pad_token = "<|endoftext|>"
                     self.tokenizer.eos_token = "<|endoftext|>"
-            self.tokenizer.padding_side = 'left'
+
+        self.tokenizer.padding_side = 'left'
+        self.bos_token_id = torch.Tensor([self.tokenizer.bos_token_id,]).long()
+        self.eos_token_id = torch.Tensor([self.tokenizer.eos_token_id,]).long()
 
     def forward(self, batch: Union[Dict[str, torch.Tensor], Any],
                 is_train: Optional[bool] = True) -> Any:
@@ -192,7 +197,7 @@ class DecoderSimpleModel(nn.Module):
         # ]
         transaction_mask = batch['mask']
         device = transaction_mask.device
-        # print(f"\n----------- Init device set to: {device} -----------\n")
+
         batch_size = transaction_mask.size(0)
         transactions_embeddings, transactions_embeddings_mask = self.transaction_model.get_embs(batch)
 
@@ -216,15 +221,16 @@ class DecoderSimpleModel(nn.Module):
             answer_ = batch['answer_tokens'][i]
             question_end_tokens_full.append(torch.cat([question_end_tokens_,
                                                        self.whitespace_token_id.to(device),
-                                                       answer_], dim=0))
+                                                       answer_,
+                                                       self.eos_token_id], dim=0))
 
         # 2) Pad to max q+a length
         max_question_answer_len = max([len(qa) for qa in question_end_tokens_full])
         for i in range(question_end_tokens_mask.size(0)):
             n_padds = max_question_answer_len - question_end_tokens_full[i].size(0)
             question_end_tokens_full[i] = torch.cat(
-                [question_end_tokens_full[i],
-                 torch.full((n_padds,), self.tokenizer.pad_token_id).to(device)
+                [torch.full((n_padds,), self.tokenizer.pad_token_id).to(device),
+                 question_end_tokens_full[i],
                  ], dim=0)
 
         # 3) Cat back into batch
@@ -245,8 +251,9 @@ class DecoderSimpleModel(nn.Module):
 
         # 1) Label = [question_start_tokens, <trns>,
         #           <pad> * trns_history_len,
+        #           <pad> * n, </trns>,
         #           question_end_tokens, answer_tokens,
-        #           <pad> - ?]
+        #           <eos> - ?]
         labels = torch.cat([
             batch['question_start_tokens'].repeat(batch_size, 1).to(device),
             torch.full(transactions_embeddings.size()[:2], self.tokenizer.pad_token_id).to(device),
@@ -260,20 +267,20 @@ class DecoderSimpleModel(nn.Module):
         #           </trns>,  --> train it!
         #           answer_tokens,
         #           <pad> - ?]
-        question_end_labels = question_end_tokens_full.clone()
-        for i in range(batch_size):
-            answer_tokens_len = batch['answer_tokens'][i].size(0) + 1  # + 1 for whitespace token
-            question_end_labels[i, :-answer_tokens_len] = -100
-
-        labels = torch.cat([
-            torch.full((batch_size, batch['question_start_tokens'].size(1) - 1),
-                       self.tokenizer.pad_token_id).to(device),  # <pad> * len(question_start_tokens) - 1
-            batch['question_start_tokens'][:, -1].repeat(batch_size, 1).to(device),  # <trns>
-            torch.full(transactions_embeddings.size()[:2],
-                       self.tokenizer.pad_token_id).to(device),  # <pad> * trns_history_len
-            question_end_tokens_full[:, 0].unsqueeze(-1),  # </trns> to [batch_size, 1]
-            question_end_labels[:, 1:]
-        ], dim=1)
+        # question_end_labels = question_end_tokens_full.clone()
+        # for i in range(batch_size):
+        #     answer_tokens_len = batch['answer_tokens'][i].size(0) + 1  # + 1 for whitespace token
+        #     question_end_labels[i, :-answer_tokens_len] = -100
+        #
+        # labels = torch.cat([
+        #     torch.full((batch_size, batch['question_start_tokens'].size(1) - 1),
+        #                self.tokenizer.pad_token_id).to(device),  # <pad> * len(question_start_tokens) - 1
+        #     batch['question_start_tokens'][:, -1].repeat(batch_size, 1).to(device),  # <trns>
+        #     torch.full(transactions_embeddings.size()[:2],
+        #                self.tokenizer.pad_token_id).to(device),  # <pad> * trns_history_len
+        #     question_end_tokens_full[:, 0].unsqueeze(-1),  # </trns> to [batch_size, 1]
+        #     question_end_labels[:, 1:]
+        # ], dim=1)
 
         labels_masked = mask_lm_labels_padding(labels, self.tokenizer.pad_token_id).long().to(device)
 
@@ -327,23 +334,31 @@ class DecoderSimpleModel(nn.Module):
             prefix_prompt: Union[str, torch.Tensor] - a prefix for transactions embeddings. Can be passed as:
                 str: a prefix in string representation;
                 torch.Tensor: a tokenized prefix;
-            answer_template:
-            max_length:
-            max_new_tokens:
-            min_length:
-            min_new_tokens:
-            top_p:
-            temperature:
-            suggestions:
-            diversity_penalty:
-            filter_value:
-            allowed_token_ids:
-            hidden_dims_indexes:
-            stopping_criteria:
-            seed:
+            answer_template: str - an answer template prefix to add to the question ending;
+            max_new_tokens: int - the maximum number of tokens to generate,
+                                    ignoring the number of tokens in the question;
+            min_new_tokens: int - the minimum number of tokens to generate,
+                                    ignoring the number of tokens in the question;
+            top_p: float - If set to float < 1, only the most probable tokens with probabilities
+                            that add up to top_p or higher are kept for generation;
+            temperature: float - The value used to module the next token probabilities;
+            suggestions: TBD
+            diversity_penalty: TBD
+            filter_value: float - a value to assign to tokens that should never be generated;
+            allowed_token_ids: List[int] - a list of token ids that must be generated;
+            hidden_dims_indexes: List[int] - a list of hidden layers' indexes from
+                                        which to take hidden states for embedding creation.
+                                        Default set to -1 - so only last layer's hidden states would be used;
+            stopping_criteria: a class instance / callable that can be used to change
+                                when to stop generation (other than EOS token).
+                                It should return a boolean flag when all batch samples are successfully finished;
+            seed: int - a seed for generation;
 
         Returns:
-
+            A dict with keys:
+             - generated_texts - a list of generated text tokens sequences for each batch sample;
+             - output_embeddings - a list of embeddings for sequences, collected from selected hidden layers' states;
+             - output_logits - a list of logits generated for each batch sample on each step.
         """
         seed_everything(seed)
         self.eval()  # freeze all at once
@@ -510,5 +525,7 @@ class DecoderSimpleModel(nn.Module):
                     self._logger.warning(f"Stopping criteria triggered!")
                     break
 
-        return out, output_embeddings, output_logits
+        return dict(generated_texts=out,
+                    output_embeddings=output_embeddings,
+                    output_logits=output_logits)
 
