@@ -1,9 +1,12 @@
+import json
+import random
 import datasets
 from typing import (Dict, Any, Optional)
 
-
 from romashka.logging_handler import get_logger
 from romashka.benchmark.tasks.text_task_abstract import AbstractTextTask
+from romashka.benchmark.tasks.mappings import DATA_PATHS_MAPPING, PROMT_PATH
+
 
 class BigBenchTaskDataset(AbstractTextTask):
 
@@ -11,10 +14,12 @@ class BigBenchTaskDataset(AbstractTextTask):
         self.task_name = None
 
     def __post_init__(self):
-        self.split_to_data_split = {"train": "train"}
         self.name = "" if self.name is None else self.name
+        self.split_to_data_split = {"train": "train"}
+
         self.data_path = self.data_path if self.data_path is not None \
-            else f"{DATA_PATHS_MAPPING['Flan_raw']}bigbench_{self.name}/"
+            else f"{DATA_PATHS_MAPPING['BigBench']}/bigbench_{self.name}/"
+
         self.logger = get_logger(
             name=self.__class__.__name__,
             logging_level="DEBUG" if self.verbose else "INFO"

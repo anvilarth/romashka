@@ -1,20 +1,9 @@
-import json
-
-DATA_PATHS_MAPPING = {
-    "BigBench": "../data/bigbench/",
-    "MMLU": "./data/mmlu/",
-}
-
-PROMT_PATH = "../assets/prompts.json"
-ALL_TASKS_FN = "../assets/benchmark_tasks.json"
-ALL_TASKS = json.load(open(ALL_TASKS_FN))
-
-# DTO
 from collections import OrderedDict
 from typing import (Callable, Dict, Mapping, List,
                     Any, Optional, Union)
 
 from romashka.logging_handler import get_logger
+from romashka.benchmark.tasks.mappings import ALL_TASKS
 from romashka.benchmark.tasks.bigbench_task import BigBenchTaskDataset
 
 """
@@ -34,6 +23,7 @@ BigBench_CLASSES = [(task_name, base_class) for (task_name, base_class) in zip(B
 TEXT_TASK_LIST = BigBench_CLASSES  # add here other tasks
 TEXT_TASK_MAPPING = OrderedDict(TEXT_TASK_LIST)
 
+
 class AutoTextTask:
 
     @classmethod
@@ -47,6 +37,8 @@ class AutoTextTask:
 
 def help_task_selection():
     s = f"To create AutoTextTask select one from implemented tasks by it's name."
-    for task_name in TEXT_TASK_MAPPING:
-        s += "\n\t" + task_name
+    for dataset_name in TEXT_TASK_MAPPING:
+        s += "\nDataset:\t" + dataset_name
+        for tas_name in TEXT_TASK_MAPPING[dataset_name]:
+            s += "\n\t" + dataset_name
     print(s)
