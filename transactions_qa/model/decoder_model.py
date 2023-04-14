@@ -248,7 +248,7 @@ class DecoderSimpleModel(nn.Module):
             question_end_tokens_full.append(torch.cat([question_end_tokens_,
                                                        self.whitespace_token_id.to(device),
                                                        answer_,
-                                                       self.eos_token_id], dim=0))
+                                                       self.eos_token_id.to(device)], dim=0))
 
         # 2) Pad to max q+a length
         max_question_answer_len = max([len(qa) for qa in question_end_tokens_full])
@@ -413,9 +413,9 @@ class DecoderSimpleModel(nn.Module):
         if isinstance(prefix_prompt, str):
             prefix_prompt_tokens = self.tokenizer.encode(prefix_prompt,
                                                          add_special_tokens=False,
-                                                         return_tensors='pt')
+                                                         return_tensors='pt').long().to(device)
         elif isinstance(prefix_prompt, torch.Tensor):
-            prefix_prompt_tokens = prefix_prompt
+            prefix_prompt_tokens = prefix_prompt.long().to(device)
         else:
             raise AttributeError(f"Unable to use prefix prompt in provided form: {type(prefix_prompt)}!")
 
@@ -427,7 +427,7 @@ class DecoderSimpleModel(nn.Module):
         if isinstance(questions, str):
             question_tokens = self.tokenizer.encode(questions,
                                                     add_special_tokens=False,
-                                                    return_tensors='pt')
+                                                    return_tensors='pt').long().to(device)
             question_embeddings = self.language_model.model.decoder.embed_tokens(question_tokens)
             question_embeddings_batch = question_embeddings.repeat(batch_size, 1, 1)
 
@@ -445,7 +445,7 @@ class DecoderSimpleModel(nn.Module):
             question_tokens = self.tokenizer.encode(questions,
                                                     padding=True,
                                                     add_special_tokens=False,
-                                                    return_tensors='pt')
+                                                    return_tensors='pt').long().to(device)
             question_embeddings = self.language_model.model.decoder.embed_tokens(question_tokens)
             question_embeddings_batch = question_embeddings
         else:
@@ -454,10 +454,10 @@ class DecoderSimpleModel(nn.Module):
         # Answer template --> embeddings
         answer_template_tokens = self.tokenizer.encode(answer_template,
                                                        add_special_tokens=False,
-                                                       return_tensors='pt')
+                                                       return_tensors='pt').long().to(device)
         # If empty template (to prevent errors in embeddings)
         if not answer_template_tokens.size(1):
-            answer_template_tokens = self.whitespace_token_id
+            answer_template_tokens = self.whitespace_token_id.to(device)
 
         answer_template_embeddings = self.language_model.model.decoder.embed_tokens(answer_template_tokens)
         answer_template_embeddings_batch = answer_template_embeddings.repeat(batch_size, 1, 1)
@@ -467,9 +467,9 @@ class DecoderSimpleModel(nn.Module):
         input_embedds = torch.cat([prefix_prompt_embeddings_batch,
                                    transactions_history_embeddings,
                                    question_embeddings_batch,
-                                   answer_template_embeddings_batch], dim=1)
+                                   answer_template_embeddings_batch], dim=1).to(device)
 
-        embeddings = input_embedds.clone()
+        embeddings = input_embedds.clone().to(device)
         output_embeddings = []
         output_logits = []
         out = None

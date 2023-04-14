@@ -301,7 +301,7 @@ class TransactionQAModel(pl.LightningModule):
                     predictions = self._predict_with_generate_step_task(batch,
                                                                         batch_idx=batch_idx,
                                                                         task_idx=task_idx,
-                                                                        verbose=True,
+                                                                        verbose=False,
                                                                         calculate_metrics=False,
                                                                         return_embeddings=False,
                                                                         return_logits=False)
