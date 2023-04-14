@@ -10,10 +10,8 @@ from romashka.benchmark.tasks.mappings import DATA_PATHS_MAPPING, PROMT_PATH
 
 class BigBenchTaskDataset(AbstractTextTask):
 
-    def __init__(self):
-        self.task_name = None
-
     def __post_init__(self):
+        super().__post_init__()
         self.name = "" if self.name is None else self.name
         self.split_to_data_split = {"train": "train"}
 
@@ -25,9 +23,9 @@ class BigBenchTaskDataset(AbstractTextTask):
             logging_level="DEBUG" if self.verbose else "INFO"
         )
 
-    def load_dataset(self, extension: Optional[str] = "json",
-                     data_files: Optional[Dict[str, str]] = None,
-                     split: str = None, **kwargs):
+    def load_dataset_local(self, extension: Optional[str] = "json",
+                             data_files: Optional[Dict[str, str]] = None,
+                             split: str = None, **kwargs):
         try:
             return super().load_dataset_local(path=self.data_path,
                                               data_files=data_files,

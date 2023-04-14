@@ -53,8 +53,8 @@ class AbstractTextTask(ABC):
         self.split_to_data_split = {"train": "train", "validation": "validation", "test": "test"} if not len(
             self.split_to_data_split) else self.split_to_data_split
 
-    def load_dataset_local(self, path: str,
-                           data_files: Optional[Dict[str, str]],
+    def load_dataset_local(self, path: Optional[str] = None,
+                           data_files: Optional[Dict[str, str]] = None,
                            split: Optional[str] = None,
                            **kwargs) -> datasets.DatasetDict:
         """
@@ -69,13 +69,14 @@ class AbstractTextTask(ABC):
         :type path: str;
         :param data_files: a mapping of data files;
         :type data_files: Dict[str, str];
-        :param split: a name of the laoding split;
+        :param split: a name of the loading split;
         :type split: str;
         :return:
         :rtype: DatasetDict instance.
         """
         self.logger.info(f"Loading dataset '{self.name}'...")
-        data = datasets.load_dataset(path, data_files=data_files, split=split, **kwargs)
+        data_path = path if (path is not None) else self.data_path
+        data = datasets.load_dataset(data_path, data_files=data_files, split=split, **kwargs)
         self.logger.info("Dataset loaded.")
         return data
 
@@ -194,7 +195,10 @@ class AbstractTextTask(ABC):
             mapped_split = mapped_split + f"[:{requested_n}]"
         return mapped_split
 
-    def get_shuffled_sampled_split(self, split: str, requested_n: Optional[int] = None):
+    def get_shuffled_sampled_split(self,
+                                   split: str,
+                                   requested_n: Optional[int] = None,
+                                   is_local: Optional[bool] = True):
         # Defines the random generator.
         generator = torch.Generator()
         generator.manual_seed(self.seed)
@@ -203,7 +207,10 @@ class AbstractTextTask(ABC):
         mapped_split = self.split_to_data_split[split]
 
         self.logger.info(f"Loading dataset '{self.name}/{mapped_split}'...")
-        dataset = self.load_dataset_from_hub(mapped_split)
+        if is_local:
+            dataset = self.load_dataset_local(split=mapped_split)
+        else:
+            dataset = self.load_dataset_from_hub(mapped_split)
         self.logger.info(f"Dataset loaded.")
 
         # shuffle the dataset and get the random samples.
@@ -214,13 +221,17 @@ class AbstractTextTask(ABC):
 
     def get_dataset(self, split: str, requested_n: int = None, add_prefix: bool = True,
                     validation_size: Optional[Union[int, float]] = 1000,
-                    split_validation_test: bool = False):
+                    split_validation_test: bool = False,
+                    is_local: Optional[bool] = True):
 
         # For small datasets (n_samples < 10K) without test set, we divide validation set to
         # half, use one half as test set and one half as validation set.
         if split_validation_test and split != "train":
             mapped_split = self.split_to_data_split["validation"]
-            dataset = self.load_dataset_from_hub(split=mapped_split)
+            if is_local:
+                dataset = self.load_dataset_local(split=mapped_split)
+            else:
+                dataset = self.load_dataset_from_hub(split=mapped_split)
             indices = self.get_train_val_split_indices(split, validation_size=0.5)
             dataset = self.select_dataset_samples(indices, dataset, requested_n)
 
@@ -228,13 +239,19 @@ class AbstractTextTask(ABC):
         # validation and the rest as training set, keeping the original validation
         # set as the test set.
         elif split_validation_test and split == "train":
-            dataset = self.load_dataset_from_hub(split="train")
+            if is_local:
+                dataset = self.load_dataset_local(split="train")
+            else:
+                dataset = self.load_dataset_from_hub(split="train")
             indices = self.get_train_val_split_indices(split, validation_size=validation_size)
             dataset = self.select_dataset_samples(indices, dataset, requested_n)
         else:
             # TODO: later we can join these as one.
             if requested_n == -1:
-                dataset = self.load_dataset_from_hub(split=split)
+                if is_local:
+                    dataset = self.load_dataset_local(split=split)
+                else:
+                    dataset = self.load_dataset_from_hub(split=split)
             else:
                 # shuffles the data and samples it.
                 dataset = self.get_shuffled_sampled_split(split, requested_n)

@@ -1,14 +1,28 @@
 import json
+import sys
+from pathlib import Path
+
+# DATA_PATHS_MAPPING = {
+#     "BigBench": "/home/jovyan/abdullaeva/data/bigbench",
+#     "MMLU": "/home/jovyan/abdullaeva/data/mmlu",
+# }
 
 DATA_PATHS_MAPPING = {
-    "BigBench": "/home/jovyan/abdullaeva/data/bigbench/bigbench_code_line_description",
+    "BigBench": "/Users/abdullaeva/Documents/Projects/TransactionsQA/data/benchmark/bigbench",
     "MMLU": "/home/jovyan/abdullaeva/data/mmlu",
 }
 
-PROMT_PATH = "../assets/prompts.json"
+# /Users/abdullaeva/Documents/Projects/TransactionsQA/data/benchmark/bigbench
 
-ALL_TASKS_FN = "../assets/benchmark_tasks.json"
-ALL_TASKS = json.load(open(ALL_TASKS_FN))
+
+print(f"Current path: {Path('.').resolve()}")
+PROMT_PATH = Path("./romashka/benchmark/assets/prompts.json").resolve()
+
+ALL_TASKS_FN = Path("./romashka/benchmark/assets/benchmarks_tasks.json").resolve()
+# /Users/abdullaeva/Documents/Projects/TransactionsQA/romashka/benchmark/assets/benchmarks_tasks.json
+print(f"Try to load: {ALL_TASKS_FN}")
+
+ALL_TASKS = json.load(open(str(ALL_TASKS_FN)))
 
 
 # DATA_PATHS_MAPPING = {

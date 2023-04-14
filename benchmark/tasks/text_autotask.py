@@ -29,7 +29,7 @@ class AutoTextTask:
     @classmethod
     def get(cls, task_name: str, seed: Optional[int] = 42, **kwargs):
         try:
-            return TEXT_TASK_MAPPING[task_name](seed=seed, **kwargs)
+            return TEXT_TASK_MAPPING[task_name](name=task_name, seed=seed, **kwargs)
         except Exception as e:
             logger.error(f"Error during AutoTextTask creation with `task_name`-`{task_name}`\n:{e}")
             raise ValueError(f"Error during AutoTextTask creation with `task_name`-`{task_name}`\n:{e}")
