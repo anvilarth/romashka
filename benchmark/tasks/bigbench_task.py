@@ -44,7 +44,7 @@ class BigBenchTaskDataset(AbstractTextTask):
             options = 'OPTIONS: - ' + '; - '.join(example['multiple_choice_targets'])
         else:
             options = ''
-        if self.task_name in ['conceptual_combinations', 'language_identification']:
+        if self.name in ['conceptual_combinations', 'language_identification']:
             options = ''
         if 'russian' in self.name:
             options = 'ВАРИАНТЫ: - ' + '; - '.join(example['multiple_choice_targets'])

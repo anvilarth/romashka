@@ -93,8 +93,10 @@ class AbstractTextTask(ABC):
         """
         return datasets.load_dataset(self.name, split=split)
 
-    def get_train_val_split_indices(self, split: str,
-                                    validation_size: Optional[Union[int, float]] = 1000) -> List[int]:
+    def get_train_val_split_indices(self,
+                                    dataset,
+                                    split: str,
+                                    validation_size: Optional[Union[int, float]] = -1) -> List[int]:
         """
         Load dataset within selected split and then split it again for smaller train/validation parts.
         :param split:  Which split of the data to load.
@@ -112,11 +114,6 @@ class AbstractTextTask(ABC):
         """
         generator = torch.Generator()
         generator.manual_seed(self.seed)
-        mapped_split = self.split_to_data_split["train"]
-
-        self.logger.info(f"Loading dataset '{self.name}/{split}'...")
-        dataset = self.load_dataset_from_hub(mapped_split)
-        self.logger.info(f"Dataset loaded.")
 
         dataset_size = len(dataset)
         indices = torch.randperm(dataset_size, generator=generator).tolist()
@@ -169,49 +166,12 @@ class AbstractTextTask(ABC):
                                 f"Requested number of samples clipped to dataset size = {total_size}")
         return requested_n
 
-    def get_sampled_split(self, split: str, requested_n: Optional[int] = None) -> str:
-        """
-        Load required dataset split and select `requested_n` samples from it.
-        :param split:  Which split of the data to load.
-                        If None, will return a dict with all splits
-                        (typically datasets.Split.TRAIN and datasets.Split.TEST).
-                        If given, will return a single Dataset.
-        :type split: str;
-        :param requested_n: requested number of samples;
-        :type requested_n: int;
-        :return: split name;
-        :rtype: str.
-        """
-        # If the requested number of observation is more than dataset
-        # size we reset it to the maximum available.
-        mapped_split = self.split_to_data_split[split]
-        self.logger.info(f"Loading dataset '{self.name}/{mapped_split}'...")
-        dataset = self.load_dataset_from_hub(mapped_split)
-        self.logger.info(f"Dataset loaded.")
-
-        total_size = len(dataset)
-        requested_n = self.check_number_samples(requested_n, total_size)
-        if requested_n is not None:
-            mapped_split = mapped_split + f"[:{requested_n}]"
-        return mapped_split
-
     def get_shuffled_sampled_split(self,
-                                   split: str,
-                                   requested_n: Optional[int] = None,
-                                   is_local: Optional[bool] = True):
+                                   dataset,
+                                   requested_n: Optional[int] = None):
         # Defines the random generator.
         generator = torch.Generator()
         generator.manual_seed(self.seed)
-        # If the requested number of observation is more than dataset
-        # size we reset it to the maximum available.
-        mapped_split = self.split_to_data_split[split]
-
-        self.logger.info(f"Loading dataset '{self.name}/{mapped_split}'...")
-        if is_local:
-            dataset = self.load_dataset_local(split=mapped_split)
-        else:
-            dataset = self.load_dataset_from_hub(mapped_split)
-        self.logger.info(f"Dataset loaded.")
 
         # shuffle the dataset and get the random samples.
         total_size = len(dataset)
@@ -219,44 +179,33 @@ class AbstractTextTask(ABC):
         dataset = self.select_dataset_samples(indices, dataset, requested_n=requested_n)
         return dataset
 
-    def get_dataset(self, split: str, requested_n: int = None, add_prefix: bool = True,
-                    validation_size: Optional[Union[int, float]] = 1000,
-                    split_validation_test: bool = False,
+    def get_dataset(self, split: str,
+                    num_samples: int = -1,
+                    add_prefix: bool = True,
+                    split_train_validation: Optional[bool] = False,
                     is_local: Optional[bool] = True):
 
-        # For small datasets (n_samples < 10K) without test set, we divide validation set to
-        # half, use one half as test set and one half as validation set.
-        if split_validation_test and split != "train":
-            mapped_split = self.split_to_data_split["validation"]
-            if is_local:
-                dataset = self.load_dataset_local(split=mapped_split)
-            else:
-                dataset = self.load_dataset_from_hub(split=mapped_split)
-            indices = self.get_train_val_split_indices(split, validation_size=0.5)
-            dataset = self.select_dataset_samples(indices, dataset, requested_n)
+        mapped_split = self.split_to_data_split[split]
 
-        # For larger datasets (n_samples > 10K), we divide training set into 1K as
-        # validation and the rest as training set, keeping the original validation
-        # set as the test set.
-        elif split_validation_test and split == "train":
-            if is_local:
-                dataset = self.load_dataset_local(split="train")
-            else:
-                dataset = self.load_dataset_from_hub(split="train")
-            indices = self.get_train_val_split_indices(split, validation_size=validation_size)
-            dataset = self.select_dataset_samples(indices, dataset, requested_n)
+        # if (num_samples is not None) and (num_samples ==-1):
+        if is_local:
+            dataset = self.load_dataset_local(split=mapped_split)
         else:
-            # TODO: later we can join these as one.
-            if requested_n == -1:
-                if is_local:
-                    dataset = self.load_dataset_local(split=split)
-                else:
-                    dataset = self.load_dataset_from_hub(split=split)
-            else:
-                # shuffles the data and samples it.
-                dataset = self.get_shuffled_sampled_split(split, requested_n)
+            dataset = self.load_dataset_from_hub(split=mapped_split)
+
+        # Split to train/validation
+        if split_train_validation:
+            indices = self.get_train_val_split_indices(dataset,
+                                                       split,
+                                                       validation_size=num_samples)
+            dataset = self.select_dataset_samples(indices, dataset, num_samples)
+        else:
+            # Just shuffle dataset and sample requested number of samples
+            dataset = self.get_shuffled_sampled_split(dataset, num_samples)
+
         return dataset.map(functools.partial(self.preprocessor, add_prefix=add_prefix),
                            remove_columns=dataset.column_names)
+
 
     def format_as_seq2seq(self, src_data: List[str], tgt_data: List[str],
                           add_prefix: bool = False, prefix: str = None) -> Dict[str, str]:

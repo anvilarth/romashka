@@ -63,7 +63,7 @@ def generate(args,
         source_text,
         max_length=args.max_len_input,
         padding='max_length',
-        truncation='only_second',
+        truncation='only_first',
         return_attention_mask=True,
         add_special_tokens=True,
         return_tensors='pt'
@@ -171,7 +171,7 @@ def main():
     benchmark_dataset = [
         dataset_class.get(task_name, seed=args.seed).get_dataset(
             split=args.task_split,
-            requested_n=args.task_num_samples,
+            num_samples=args.task_num_samples,
             add_prefix=False) for task_name in tasks_list
     ]
 
