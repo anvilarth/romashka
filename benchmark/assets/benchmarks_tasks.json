@@ -22,7 +22,8 @@
   "tydiqa": ["tydiqa-ar", "tydiqa-ben", "tydiqa-fi", "tydiqa-ind",
     "tydiqa-ko", "tydiqa-ru", "tydiqa-sw", "tydiqa-te"],
   "bigbench": ["code_line_description", "conceptual_combinations", "known_unknowns",
-    "language_identification", "logic_grid_puzzle", "misconceptions",
+    "logic_grid_puzzle", "misconceptions",
     "misconceptions_russian", "movie_dialog_same_or_different", "novel_concepts",
-    "vitaminc_fact_verification", "winowhy", "formal_fallacies_syllogisms_negation", "logical_deduction"]
+    "vitaminc_fact_verification", "winowhy", "formal_fallacies_syllogisms_negation", "logical_deduction"],
+    "unused": ["bigbench language_identification"]
 }
