@@ -162,7 +162,7 @@ def check_if_numeric(val: str) -> bool:
             return False
 
 
-def convert_to_numeric(val: str) -> Optional[Union[int, float]]:
+def convert_to_numeric(val: str, default_value=None) -> Optional[Union[int, float]]:
     """
     Converts a given value to:
     - a digit;
@@ -171,7 +171,7 @@ def convert_to_numeric(val: str) -> Optional[Union[int, float]]:
     (if it is possible).
     """
     if not check_if_numeric(val):
-        return None
+        return default_value
     try:
         return int(val)
     except:

@@ -19,3 +19,5 @@ setup(
         ]
     },
 )
+
+# install_reqs = parse_requirements('requirements.txt', session='hack')

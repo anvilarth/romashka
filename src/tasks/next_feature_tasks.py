@@ -11,6 +11,7 @@ import transformers
 from torchmetrics.text.rouge import ROUGEScore
 from torchmetrics import AUROC
 from torchmetrics.classification import BinaryAccuracy, Accuracy
+from src.transactions_qa.evaluation.eval_processings_utils import convert_to_numeric
 
 from .task_abstract import AbstractTask
 
@@ -178,12 +179,12 @@ class NextCatFeatureTaskBinary(NextFeatureTask):
         targets = (answers[:, -2] == self.positive_token).long()
         preds = torch.sigmoid(outputs.logits[:, 0, self.positive_token] - outputs.logits[:, 0, self.negative_token])
 
-        return targets, preds
+        return preds, targets 
 
     def calculate_metrics(self, outputs, answers, task_metrics):
         metrics = {}
 
-        targets, preds = self.process_outputs(outputs, answers)
+        preds, targets = self.process_outputs(outputs, answers)
 
         if 'auc' in task_metrics:
             task_metrics['auc'](preds, targets)
@@ -239,12 +240,12 @@ class NextNumFeatureTaskBinary(NextFeatureTask):
         targets = (answers[:, -2] == self.positive_token).long()
         preds = torch.sigmoid(outputs.logits[:, 0, self.positive_token] - outputs.logits[:, 0, self.negative_token])
 
-        return targets, preds
+        return preds, targets 
 
     def calculate_metrics(self, outputs, answers, task_metrics):
         metrics = {}
 
-        targets, preds = self.process_outputs(outputs, answers)
+        preds, targets = self.process_outputs(outputs, answers)
 
         if 'auc' in task_metrics:
             task_metrics['auc'](preds, targets)
@@ -630,8 +631,9 @@ class NextCatFeatureTaskMulti(NextFeatureTask):
 
         super().__post_init__()
         self.task_name = "next_cat_feature_multi"
-        self.target_feature_name = 'mcc_category'  # 108 unique values
+        self.target_feature_name = 'mcc_category'  # 28 unique values
         self.is_open_ended_task = False  # for a default for this task
+        self.num_classes = 2
 
         self.update_feature_index()
 
@@ -641,13 +643,15 @@ class NextCatFeatureTaskMulti(NextFeatureTask):
         ]
 
         # all options, for a sample can be reduced to [true_mcc_code + 4 other codes]
-        self.answers_options = ["1"]
+        self.answers_options = [str(i) for i in range(self.num_classes)]
 
         self.answer_template = ""  # left empty for a first time
         self.num_options = 6  # ground truth + 5 additional options
 
         self.metrics = nn.ModuleDict({
-            "accuracy": Accuracy(task='multiclass', num_classes=self.num_options),
+            'accuracy': Accuracy(task='multiclass',
+                                 average='weighted',
+                                 num_classes=self.num_classes)
         })
 
     def generate_target(self, batch: Any, **kwargs) -> Any:
@@ -657,14 +661,19 @@ class NextCatFeatureTaskMulti(NextFeatureTask):
         # Target's questions numeric/categorical answers as str
         trx_index = batch['mask'].sum(1, keepdim=True) - 1
         input_labels = torch.gather(target_feature_batch, 1, trx_index)
+
+        return input_labels, trx_index
+
+    def generate_text_target(self, batch: Any, **kwargs) -> Any:
+        input_labels, trx_index = self.generate_target(batch, **kwargs)
         target_batch = list(map(lambda x: str(x.item()), input_labels))
 
         return target_batch, trx_index
 
-    def generate_target_question(self, question_end, target_batch, **kwargs) -> Any:
+    def generate_target_question(self, question_end, target_batch) -> Any:
         target_batch_options = []  # a list of str target options
         for gt_target in target_batch:
-            target_options = {gt_target.item()}
+            target_options = {gt_target}
             while len(target_options) < self.num_options:
                 target_options.add(random.sample(self.answers_options, k=1)[0])
 
@@ -678,21 +687,51 @@ class NextCatFeatureTaskMulti(NextFeatureTask):
                                  target_batch_options]  # as strings
 
         return question_target_batch
+    
+    def process_outputs(self, outputs, answers: torch.Tensor):
+        predictions_decoded = self.tokenizer.batch_decode(outputs.logits.argmax(2),
+                                                          skip_special_tokens=True)
+        
+        answers_decoded = self.tokenizer.batch_decode(answers, skip_special_tokens=True)
+        processed_answers =  torch.tensor(list(map(lambda x: convert_to_numeric(x, -1), answers_decoded)), device=answers.device)
+        processed = torch.tensor(list(map(lambda x: convert_to_numeric(x, -1), predictions_decoded)), device=answers.device)
+        
+        return processed, processed_answers
+
+    def calculate_metrics(self, outputs, answers, task_metrics):
+        metrics = {}
+
+        preds, targets = self.process_outputs(outputs, answers)
+    
+        if 'accuracy' in task_metrics:
+            task_metrics['accuracy'](preds, targets)
+            metrics['accuracy'] = task_metrics['accuracy']
+
+        return metrics 
 
 @dataclass
 class NextMCCFeatureTaskMulti(NextCatFeatureTaskMulti):
     def __post_init__(self):
+        
+        super().__post_init__()
         self.task_name = "next_mcc_multi"
         self.target_feature_name = 'mcc_category'
+        self.num_classes = 28
+
+        self.metrics = nn.ModuleDict({
+            'accuracy': Accuracy(task='multiclass',
+                                 average='weighted',
+                                 num_classes=self.num_classes)
+        })
 
         self.update_feature_index()
 
         self.question_templates = [
             ("This is the client's transaction history ",
-             "Will the next transactions have merchant category code 2? Yes or No?"),
+             "What merchant category will the next transactions have?"),
         ]
 
-        self.answers_options = [str(i) for i in range(28)]
+        self.answers_options = [str(i) for i in range(self.num_classes)]
 
 @dataclass
 class NextNumFeatureTaskMulti(NextFeatureTask):
