@@ -52,9 +52,11 @@ class TransactionQAModel(pl.LightningModule):
             autoregressive_model=self.language_model) \
             if connector is None else connector
         self.tasks = tasks
-        
+
+        self._logger.info(f"Setuping metrics.")
         self.metrics = nn.ModuleDict({task.task_name: deepcopy(task.metrics) for task in self.tasks})
 
+        print(self.metrics)
         self.warmup_steps: int = warmup_steps
         self.training_steps: int = training_steps
         self.base_learning_rate = learning_rate

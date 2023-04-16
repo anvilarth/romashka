@@ -167,12 +167,12 @@ class DefaultTask(AbstractTask):
         targets, preds = self.process_outputs(outputs, answers)
 
         if 'auc' in task_metrics:
-            task_metrics['auc'](preds, targets)
-            metrics['auc'] = task_metrics['auc']
+            task_metrics['auc'].update(preds, targets)
+            metrics[self.task_name + '_auc'] = task_metrics['auc']
         
         if 'accuracy' in task_metrics:
             task_metrics['accuracy'](preds, targets)
-            metrics['accuracy'] = task_metrics['accuracy']
+            metrics[self.task_name + '_accuracy'] = task_metrics['accuracy']
 
         return metrics 
 
