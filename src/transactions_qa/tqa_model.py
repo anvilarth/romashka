@@ -27,6 +27,7 @@ class TransactionQAModel(pl.LightningModule):
                  connector: Optional[nn.Module] = None,
                  connector_input_size: Optional[int] = None,
                  connector_output_size: Optional[int] = None,
+                 checkpoint_dir: Optional[str] = None,
                  do_freeze_tm: Optional[bool] = True,
                  do_freeze_lm: Optional[bool] = False,
                  do_freeze_connector: Optional[bool] = False,
@@ -52,6 +53,7 @@ class TransactionQAModel(pl.LightningModule):
             autoregressive_model=self.language_model) \
             if connector is None else connector
         self.tasks = tasks
+        self.checkpoint_dir = checkpoint_dir
 
         self._logger.info(f"Setuping metrics.")
         self.metrics = nn.ModuleDict({task.task_name: deepcopy(task.metrics) for task in self.tasks})

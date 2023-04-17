@@ -73,22 +73,20 @@ def main():
     if (os.path.isdir(training_args.save_checkpoints_dir)
             and training_args.do_train
             and not training_args.overwrite_output_dir):
-        last_checkpoint = get_last_checkpoint(training_args.save_checkpoints_dir)
-        if last_checkpoint is None and len(os.listdir(training_args.save_checkpoints_dir)) > 0:
-            raise ValueError(
-                f"Output directory ({training_args.save_checkpoints_dir}) already exists and is not empty. "
-                "Use --overwrite_output_dir to overcome."
-            )
-        elif last_checkpoint is not None and training_args.resume_from_checkpoint is None:
+
+        if training_args.resume_from_checkpoint is not None:
+            last_checkpoint = get_last_checkpoint(training_args.save_checkpoints_dir)
             logger.info(
                 f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
                 "the `--save_checkpoints_dir` or add `--overwrite_output_dir` to train from scratch."
             )
     elif not os.path.exists(training_args.save_checkpoints_dir):
         os.makedirs(training_args.save_checkpoints_dir)
+
     elif os.path.exists(training_args.save_checkpoints_dir) and training_args.overwrite_output_dir:
         shutil.rmtree(training_args.save_checkpoints_dir)
         os.makedirs(training_args.save_checkpoints_dir)
+
     else:
         logger.error(f"Output directory argument: ({training_args.save_checkpoints_dir}) is not a directory!")
         raise AttributeError(f"Output directory argument: ({training_args.save_checkpoints_dir}) is not a directory!")
@@ -208,23 +206,6 @@ def main():
         tasks.append(task)
     logger.info(f"Created {len(tasks)} tasks.")
 
-    # Create general Tranactions QA model
-    transactionsQA_model_config = {
-        "warmup_steps": training_args.warmup_steps,
-        "training_steps": training_args.max_steps,
-        "do_freeze_tm": training_args.do_freeze_transactions_model,
-        "do_freeze_lm": training_args.do_freeze_language_model,
-        "do_freeze_connector": training_args.do_freeze_connector,
-        "connector_input_size": 384,
-    }
-    model = TransactionQAModel(
-        language_model=lm_model,
-        transaction_model=transactions_model,
-        tokenizer=tokenizer,
-        tasks=tasks,
-        **transactionsQA_model_config
-    )
-
     dataset_config = {
                 'data_dir': data_args.data_path,
                 'batch_size': training_args.per_device_train_batch_size,
@@ -251,11 +232,23 @@ def main():
 
     # Create separate checkpoints directory for each run
     save_checkpoints_dir = f"{training_args.save_checkpoints_dir}/{training_args.run_name}"
+
     if not Path(save_checkpoints_dir).resolve().exists():
         logger.info(f"Checkpoints path do not exists: {Path(save_checkpoints_dir).resolve()}")
         logger.info("Creating...")
         Path(save_checkpoints_dir).resolve().mkdir()
-        logger.info(f"Checkpoints path created at: {Path(save_checkpoints_dir).resolve()}")
+    else:
+        k = 1
+        while True:
+            new_save_checkpoints_dir = f"{save_checkpoints_dir}_v{k}"
+            if not Path(new_save_checkpoints_dir).resolve().exists():
+                save_checkpoints_dir = new_save_checkpoints_dir
+                Path(save_checkpoints_dir).resolve().mkdir()
+                break
+            k += 1
+
+    logger.info(f"Checkpoints path created at: {Path(save_checkpoints_dir).resolve()}")
+
 
     checkpoint_callback = ModelCheckpoint(
         monitor=training_args.save_strategy_metric,  # default: 'val_loss'
@@ -265,7 +258,27 @@ def main():
         every_n_epochs=training_args.save_epochs,  # default: '1'
         save_last=training_args.save_last_checkpoint,  # default: 'True'
         mode=training_args.save_strategy_mode,  # default: 'max'
+        save_top_k=training_args.save_top_k,  # default: '3'
     )
+
+    # Create general Tranactions QA model
+    transactionsQA_model_config = {
+        "warmup_steps": training_args.warmup_steps,
+        "training_steps": training_args.max_steps,
+        "do_freeze_tm": training_args.do_freeze_transactions_model,
+        "do_freeze_lm": training_args.do_freeze_language_model,
+        "do_freeze_connector": training_args.do_freeze_connector,
+        "connector_input_size": 384,
+    }
+    model = TransactionQAModel(
+        language_model=lm_model,
+        transaction_model=transactions_model,
+        tokenizer=tokenizer,
+        tasks=tasks,
+        checkpoint_dir=Path(save_checkpoints_dir).resolve(),
+        **transactionsQA_model_config
+    )
+
 
     trainer = pl.Trainer(
         fast_dev_run=training_args.fast_dev_run,
@@ -274,7 +287,10 @@ def main():
         gpus=len(available_gpus),
         auto_select_gpus=True,
         log_every_n_steps=100,
+        limit_train_batches=training_args.limit_train_batches,
+        limit_val_batches=training_args.limit_val_batches,
         # val_check_interval=training_args.val_check_interval,
+        check_val_every_n_epoch=training_args.check_val_every_n_epoch,
         reload_dataloaders_every_n_epochs=1,
         gradient_clip_val=training_args.gradient_clip_val,
         accumulate_grad_batches=training_args.gradient_accumulation_steps,
