@@ -126,7 +126,7 @@ class BenchmarkArguments:
     )
 
     verbose: Optional[bool] = field(
-        default=True,
+        default=False,
         metadata={"help": "Whether to log all benchmark results or not."},
     )
 

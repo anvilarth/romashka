@@ -23,6 +23,7 @@ class TransactionQAModel(pl.LightningModule):
                  model: nn.Module,
                  tasks: List[AbstractTask],
                  learning_rate: Optional[float] = 5e-5,
+                 scheduler_type: Optional[Union[transformers.SchedulerType, str]] = "linear",
                  adam_beta1: Optional[float] = 0.9,
                  adam_beta2: Optional[float] = 0.999,
                  adam_epsilon: Optional[float] = 1e-8,
@@ -42,6 +43,7 @@ class TransactionQAModel(pl.LightningModule):
         self.warmup_steps: int = warmup_steps
         self.training_steps: int = training_steps
         self.base_learning_rate = learning_rate
+        self.scheduler_type = scheduler_type
         self.adam_beta1: float = adam_beta1
         self.adam_beta2: float = adam_beta2
         self.adam_epsilon = adam_epsilon
@@ -79,10 +81,12 @@ class TransactionQAModel(pl.LightningModule):
         optimizer = torch.optim.AdamW(self.parameters(),
                                       betas=(self.adam_beta1, self.adam_beta2),
                                       lr=self.base_learning_rate)
-        scheduler = transformers.get_linear_schedule_with_warmup(optimizer,
-                                                                 num_warmup_steps=self.warmup_steps,
-                                                                 num_training_steps=self.training_steps
-                                                                 )  # was: 10_000 * 20
+        # Select scheduler
+        scheduler = transformers.get_scheduler(name=self.scheduler_type,
+                                               optimizer=optimizer,
+                                               num_warmup_steps=self.warmup_steps,
+                                               num_training_steps=self.training_steps)
+
         return {
             "optimizer": optimizer,
             "lr_scheduler": scheduler,

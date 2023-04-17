@@ -21,8 +21,8 @@ from transformers import (
     AutoConfig, AutoTokenizer, AutoModelForSeq2SeqLM
 )
 
-sys.path.insert(1, '/Users/abdullaeva/Documents/Projects/TransactionsQA')
-# for MlSpace: /home/jovyan/abdullaeva/transactionsQA/romashka
+sys.path.insert(1, '/home/jovyan/abdullaeva/TransactionsQA')
+# for MlSpace: /home/jovyan/transactionsQA/romashka
 print(sys.path)
 
 from romashka.benchmark.metrics import mlqa
@@ -295,8 +295,6 @@ def load_lm_from_general_checkpoint(checkpoint_model_path: str,
     model.resize_token_embeddings(len(tokenizer))
 
     return tokenizer, model
-
-
 
 
 if __name__ == '__main__':
