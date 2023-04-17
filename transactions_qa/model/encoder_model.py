@@ -2,6 +2,7 @@ from typing import (List, Optional,
                     Tuple, Any,
                     Dict, Union)
 
+import tokenizers.pre_tokenizers
 import torch
 import torch.nn as nn
 import transformers
@@ -17,6 +18,7 @@ class EncoderSimpleModel(nn.Module):
                  language_model: nn.Module,
                  transaction_model: nn.Module,
                  tokenizer: transformers.PreTrainedTokenizerBase,
+
                  connector: Optional[nn.Module] = None,
                  connector_input_size: Optional[int] = None,
                  connector_output_size: Optional[int] = None,

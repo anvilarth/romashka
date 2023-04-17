@@ -10,6 +10,7 @@ from typing import (Dict, Tuple, List,
                     Any, Optional, Union)
 
 import transformers
+import tokenizers
 from torchmetrics.text.rouge import ROUGEScore
 
 from romashka.logging_handler import get_logger
@@ -46,6 +47,9 @@ class AbstractTask(ABC):
     question_templates: Optional[List[Tuple[str, str]]] = None  # (starting, ending)
     answer_template: Optional[str] = None
     answers_options: Optional[List[str]] = None
+
+    tokenizer: transformers.PreTrainedTokenizerBase = None
+    pre_tokenizer: Optional[tokenizers.pre_tokenizers.PreTokenizer] = None,
 
     seed: Optional[int] = 11
     verbose: Optional[bool] = False

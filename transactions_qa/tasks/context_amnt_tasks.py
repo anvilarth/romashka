@@ -29,8 +29,6 @@ class MeanAmountBinnedTaskBinary(NumericTaskAbstract):
     discretize it into bins and answer question with binary answer.
     """
 
-    tokenizer: transformers.PreTrainedTokenizerBase = None
-
     def __post_init__(self):
         self.task_name = "mean_binned_amount_binary"
         self.target_feature_name = 'amnt'  # [0, 1] range of values
@@ -114,13 +112,21 @@ class MeanAmountBinnedTaskBinary(NumericTaskAbstract):
         # target_batch -> feature values as str ('15')
 
         # single tensor without </s> (EOS), but only for encoder-decoder !!!
+        # Can be use pre-tokenization: splitting into words/digits/etc.
+        if self.pre_tokenizer is not None:
+            question_start = [word[0] for word in self.pre_tokenizer.pre_tokenize_str(question_start)]
         question_start_tokens = self.tokenizer.encode(question_start,
-                                                      return_tensors='pt')
+                                                      return_tensors='pt',
+                                                      is_split_into_words=True if self.pre_tokenizer is not None \
+                                                      else False)
         if question_start_tokens[:, -1] == self.tokenizer.eos_token_id:
             question_start_tokens = question_start_tokens[:, :-1]
         question_start_tokens = question_start_tokens.to(device)
 
         # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
+        # Can be use pre-tokenization: splitting into words/digits/etc.
+        if self.pre_tokenizer is not None:
+            question_start = [word[0] for word in self.pre_tokenizer.pre_tokenize_str(question_target_batch)]
         question_target_encoded_batch = self.tokenizer(question_target_batch,
                                                        padding=True,
                                                        truncation=True,
@@ -271,8 +277,6 @@ class MeanAmountNumericTaskBinary(NumericTaskAbstract):
     A task for floating-point Binary QA task: given a continuous numeric target - Amount,
     answer question with a binary answer.
     """
-
-    tokenizer: transformers.PreTrainedTokenizerBase = None
 
     def __post_init__(self):
         self.task_name = "mean_numeric_amount_binary"
@@ -508,8 +512,6 @@ class MeanAmountBinnedTaskOpenEnded(NumericTaskAbstract):
     discretize it into bins and answer question with bin identifyer.
     """
 
-    tokenizer: transformers.PreTrainedTokenizerBase = None
-
     def __post_init__(self):
         self.task_name = "mean_binned_amount_open-ended"
         self.target_feature_name = 'amnt'  # [0, 1] range of values
@@ -726,8 +728,6 @@ class MeanAmountNumericTaskOpenEnded(NumericTaskAbstract):
     A task for floating-point Open-Ended QA task: given a continuous numeric target - Amount,
     answer question with a numeric answer.
     """
-
-    tokenizer: transformers.PreTrainedTokenizerBase = None
 
     def __post_init__(self):
         self.task_name = "mean_numeric_amount_open-ended"

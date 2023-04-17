@@ -18,8 +18,6 @@ from .categorical_task_abstract import CategoricalTaskAbstract
 @dataclass
 class MostFrequentMCCCodeTaskMulti(CategoricalTaskAbstract):
 
-    tokenizer: transformers.PreTrainedTokenizerBase = None
-
     def __post_init__(self):
         self.task_name = "most_frequent_mcc_code_multi"
         self.target_feature_name = 'mcc'  # 108 unique values
@@ -176,8 +174,6 @@ class MostFrequentMCCCodeTaskMulti(CategoricalTaskAbstract):
 
 @dataclass
 class MostFrequentMCCCodeTaskBinary(AbstractTask):
-
-    tokenizer: transformers.PreTrainedTokenizerBase = None
 
     def __post_init__(self):
         self.task_name = "most_frequent_mcc_code_binary"
@@ -339,7 +335,6 @@ class MostFrequentMCCCodeTaskBinary(AbstractTask):
 @dataclass
 class MostFrequentMCCCodeTaskOpenEnded(AbstractTask):
 
-    tokenizer: transformers.PreTrainedTokenizerBase = None
 
     def __post_init__(self):
         self.task_name = "most_frequent_mcc_code_open-ended"
@@ -479,7 +474,6 @@ class MostFrequentMCCCodeTaskOpenEnded(AbstractTask):
 @dataclass
 class ruMostFrequentMCCCodeTaskMulti(MostFrequentMCCCodeTaskMulti):
 
-    tokenizer: transformers.PreTrainedTokenizerBase = None
 
     def __post_init__(self):
         super().__post_init__()
@@ -506,8 +500,6 @@ class ruMostFrequentMCCCodeTaskMulti(MostFrequentMCCCodeTaskMulti):
 @dataclass
 class ruMostFrequentMCCCodeTaskBinary(MostFrequentMCCCodeTaskBinary):
 
-    tokenizer: transformers.PreTrainedTokenizerBase = None
-
     def __post_init__(self):
         super().__post_init__()
 
@@ -529,8 +521,6 @@ class ruMostFrequentMCCCodeTaskBinary(MostFrequentMCCCodeTaskBinary):
 
 @dataclass
 class ruMostFrequentMCCCodeTaskOpenEnded(MostFrequentMCCCodeTaskOpenEnded):
-
-    tokenizer: transformers.PreTrainedTokenizerBase = None
 
     def __post_init__(self):
         super().__post_init__()

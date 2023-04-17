@@ -18,7 +18,6 @@ from romashka.tools import make_time_batch
 
 @dataclass
 class NextFeatureTask(AbstractTask):
-    tokenizer: transformers.PreTrainedTokenizerBase = None
 
     def __post_init__(self):
         self.task_name = "next_cat_feature_binary"
