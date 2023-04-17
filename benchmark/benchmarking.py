@@ -3,6 +3,8 @@ import sys
 import json
 import string
 import datetime
+import collections
+from typing import Optional
 
 import transformers
 import pandas as pd
@@ -20,7 +22,7 @@ from transformers import (
 )
 
 sys.path.insert(1, '/Users/abdullaeva/Documents/Projects/TransactionsQA')
-# for MlSpace: /home/jovyan/transactionsQA/romashka
+# for MlSpace: /home/jovyan/abdullaeva/transactionsQA/romashka
 print(sys.path)
 
 from romashka.benchmark.metrics import mlqa
@@ -41,6 +43,11 @@ warnings.filterwarnings("ignore")
 # Setup logging
 from romashka.logging_handler import get_logger
 
+# Set up logging
+logger = get_logger(
+    name="benchmark",
+    logging_level="INFO"
+)
 
 def generate(args,
              device,
@@ -108,11 +115,6 @@ def main():
         print(f"{args}")
 
     pl.seed_everything(args.seed)
-    # Set up logging
-    logger = get_logger(
-        name="benchmark",
-        logging_level="INFO"
-    )
 
     # Load/create model
     if not args.from_checkpoint:
@@ -120,27 +122,9 @@ def main():
         tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_name)
         model = AutoModelForSeq2SeqLM.from_pretrained(args.model_name)
     else:
-        logger.info(f"Loading fine-tuned model: {args.model_name}")
-        tokenizer = AutoTokenizer.from_pretrained(args.tokenizer_name, bos_token='<s>', sep_token='<sep>')
-
-        logger.info(f"Adding special tokens: ['[NLU]', '[NLG]', '[S2S]']")
-        tokenizer.add_tokens(list(set(['[NLU]', '[NLG]', '[S2S]'])))
-
-        config = AutoConfig.from_pretrained(args.model_name,
-                                            vocab_size=len(tokenizer),
-                                            dropout_rate=0.05)
-        model = AutoModelForSeq2SeqLM(config)
-
-        checkpoint_model_path = args.checkpoint_model_path
-        if args.from_checkpoint:
-            logger.info("Initializing from checkpoint...")
-            if ".pt" in checkpoint_model_path:
-                model.load_state_dict(torch.load(checkpoint_model_path))
-            else:
-                checkpoint = torch.load(checkpoint_model_path)
-                model_state_dict = dict([(n[6:], p) for n, p in checkpoint['state_dict'].items()])
-                model.load_state_dict(model_state_dict)  # , map_location='cpu' force loading on CPU
-            logger.info("Weights loaded!")
+        logger.info(f"Loading fine-tuned model of type: {args.model_name},\nfrom {args.checkpoint_model_path}")
+        tokenizer, model = load_lm_from_general_checkpoint(args.checkpoint_model_path,
+                                                           model_type_name=args.model_name)
 
     # Put model in freeze() and eval() model. Not sure the purpose of freeze
     # Not sure if this should be after or before changing device for inference.
@@ -248,6 +232,71 @@ def main():
     metrics_save_fn = str(saving_path / f'all_tasks_metrics.json')
     with open(metrics_save_fn, 'w') as f:
         json.dump(all_tasks_metrics_dict, f, ensure_ascii=False)
+
+
+def load_lm_from_general_checkpoint(checkpoint_model_path: str,
+                                    model_type_name: Optional[str] = 'google/t5-small'):
+    """
+    Loads tokenizer and LLM from full Transactions QA model's checkpoint.
+    Args:
+        checkpoint_model_path: str, a path to Transactions QA model's checkpoint;
+        model_type_name: a general LLM model's architecture type to instantiate model class;
+
+    Returns:
+        a tuple og Tokenizer and an initialized model.
+    """
+    checkpoint_model_path = Path(checkpoint_model_path).resolve()
+    if not checkpoint_model_path.exists():
+        raise FileNotFoundError(f"TransactionsQA model checkpoint was not found by path: {checkpoint_model_path} !")
+
+    # Load weights
+    logger.info(f"\nLoading model checkpoint: {checkpoint_model_path.name}")
+    ckpt = torch.load(str(checkpoint_model_path), map_location='cpu')
+    if str(checkpoint_model_path).endswith(".ckpt"):
+        logger.info(f"Epoch: {ckpt.get('epoch')}, step: {ckpt.get('global_step')}")
+        logger.info(f"HPs:\n{ckpt.get('hyper_parameters')}")
+
+    if str(checkpoint_model_path).endswith(".ckpt") and ("tokenizer" in ckpt.get('hyper_parameters', dict)):
+        tokenizer = ckpt['hyper_parameters']['tokenizer']
+        logger.info(f"Loaded tokenizer from checkpoint, of length: {len(tokenizer)}")
+    else:
+        tokenizer = AutoTokenizer.from_pretrained(model_type_name)
+        logger.info(f"Created tokenizer from general model type, of length: {len(tokenizer)}")
+
+    # Load model class
+    logger.info(f"Creating mode of type: `{model_type_name}`")
+    config = AutoConfig.from_pretrained(model_type_name,
+                                        vocab_size=len(tokenizer),
+                                        dropout_rate=0.05)
+    model = AutoModelForSeq2SeqLM.from_config(config)
+    model.resize_token_embeddings(len(tokenizer))
+
+    # Collect LM only parameters
+    if str(checkpoint_model_path).endswith(".ckpt"):
+        logger.info(f"Collecting model state_dict...")
+        lm_state_dict = collections.OrderedDict()
+        for key in ckpt['state_dict'].keys():
+            if key.startswith("language_model"):
+                model_key = ".".join(key.split(".")[1:])
+                lm_state_dict[model_key] = ckpt['state_dict'][key]
+        model.load_state_dict(lm_state_dict, strict=False)
+
+    elif str(checkpoint_model_path).endswith(".pt"):
+        logger.info(f"Checkpoint is itself a model state_dict, loading...")
+        model.load_state_dict(str(checkpoint_model_path), strict=False)
+    else:
+        raise AttributeError(f"Unknown checkpoint extension: {checkpoint_model_path.name}")
+
+    # Add flan-t5 special tokens map
+    # t5_special_tokens = ['[NLU]', '[NLG]', '[S2S]']
+    # logger.info(f"Adding special tokens: {t5_special_tokens}")
+    # num_added_toks = tokenizer.add_tokens(t5_special_tokens)
+    # logger.info(f"Added to tokenizer: {num_added_toks} tokens: {t5_special_tokens}.")
+    model.resize_token_embeddings(len(tokenizer))
+
+    return tokenizer, model
+
+
 
 
 if __name__ == '__main__':
