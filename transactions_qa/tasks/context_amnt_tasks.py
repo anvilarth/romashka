@@ -53,7 +53,7 @@ class MeanAmountBinnedTaskBinary(NumericTaskAbstract):
         # self.answers_options: List[str] = [str(i) for i in get_buckets_info(self.target_feature_name,
         #                                                                     "../../assets/dense_features_buckets.pkl")]
         self.binary_answer_options: Dict[str, str] = {"positive": "Yes", "negative": "No"}
-        self.answer_template: str = ""  # left empty for a first time
+        self.answer_template: str = " "  # left empty for a first time
         self.add_tokens_to_tokenizer = True
 
         # Required to specify available feature value range
@@ -113,24 +113,20 @@ class MeanAmountBinnedTaskBinary(NumericTaskAbstract):
 
         # single tensor without </s> (EOS), but only for encoder-decoder !!!
         # Can be use pre-tokenization: splitting into words/digits/etc.
-        if self.pre_tokenizer is not None:
-            question_start = [word[0] for word in self.pre_tokenizer.pre_tokenize_str(question_start)]
-        question_start_tokens = self.tokenizer.encode(question_start,
-                                                      return_tensors='pt',
-                                                      is_split_into_words=True if self.pre_tokenizer is not None \
-                                                      else False)
+        question_start_tokens = self.custom_tokenize(question_start,
+                                                     return_tensors='pt')['input_ids']
         if question_start_tokens[:, -1] == self.tokenizer.eos_token_id:
             question_start_tokens = question_start_tokens[:, :-1]
         question_start_tokens = question_start_tokens.to(device)
 
         # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
         # Can be use pre-tokenization: splitting into words/digits/etc.
-        if self.pre_tokenizer is not None:
-            question_start = [word[0] for word in self.pre_tokenizer.pre_tokenize_str(question_target_batch)]
-        question_target_encoded_batch = self.tokenizer(question_target_batch,
-                                                       padding=True,
-                                                       truncation=True,
-                                                       return_tensors='pt').to(device)
+        question_target_encoded_batch = self.custom_tokenize(question_target_batch,
+                                                             return_tensors='pt',
+                                                             padding=True,
+                                                             truncation=True,
+                                                             return_attention_mask=True
+                                                             ).to(device)
         # Attention masks
         # already for full batch
         question_start_tokens_mask = torch.ones(question_start_tokens.size()).repeat(batch_size, 1).to(device)
@@ -143,12 +139,15 @@ class MeanAmountBinnedTaskBinary(NumericTaskAbstract):
 
         # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
         # add [:, :-1] for no EOS tokens - ?
-        target_encoded_batch = self.tokenizer.batch_encode_plus(target_batch,
-                                                                padding=True,
-                                                                return_tensors='pt').to(device)
+        target_encoded_batch = self.custom_tokenize(target_batch,
+                                                    return_tensors='pt',
+                                                    padding=True,
+                                                    truncation=True).to(device)
         # Answer template encoding + strip </s> (EOS) token
-        answer_template_encoded = self.tokenizer.encode(self.answer_template,
-                                                        return_tensors='pt')[:, :-1].to(device)
+        answer_template_encoded = self.custom_tokenize(self.answer_template,
+                                                       return_tensors='pt',
+                                                       return_attention_mask=False)['input_ids'][:, :-1].to(device)
+
         batch_answer_template_encoded = answer_template_encoded.repeat(batch_size, 1)
         # Answer template encoding + target tokens + EOS token
         batch_answer_encoded = torch.cat([batch_answer_template_encoded,
@@ -366,17 +365,19 @@ class MeanAmountNumericTaskBinary(NumericTaskAbstract):
         # target_batch -> feature values as str ('15')
 
         # single tensor without </s> (EOS), but only for encoder-decoder !!!
-        question_start_tokens = self.tokenizer.encode(question_start,
-                                                      return_tensors='pt')
+        question_start_tokens = self.custom_tokenize(question_start,
+                                                     return_tensors='pt')['input_ids']
         if question_start_tokens[:, -1] == self.tokenizer.eos_token_id:
             question_start_tokens = question_start_tokens[:, :-1]
         question_start_tokens = question_start_tokens.to(device)
 
         # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
-        question_target_encoded_batch = self.tokenizer(question_target_batch,
-                                                       padding=True,
-                                                       truncation=True,
-                                                       return_tensors='pt').to(device)
+        question_target_encoded_batch = self.custom_tokenize(question_target_batch,
+                                                             return_tensors='pt',
+                                                             padding=True,
+                                                             truncation=True,
+                                                             return_attention_mask=True
+                                                             ).to(device)
         # Attention masks
         # already for full batch
         question_start_tokens_mask = torch.ones(question_start_tokens.size()).repeat(batch_size, 1).to(device)
@@ -389,12 +390,16 @@ class MeanAmountNumericTaskBinary(NumericTaskAbstract):
 
         # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
         # add [:, :-1] for no EOS tokens - ?
-        target_encoded_batch = self.tokenizer.batch_encode_plus(target_batch,
-                                                                padding=True,
-                                                                return_tensors='pt').to(device)
         # Answer template encoding + strip </s> (EOS) token
-        answer_template_encoded = self.tokenizer.encode(self.answer_template,
-                                                        return_tensors='pt')[:, :-1].to(device)
+        target_encoded_batch = self.custom_tokenize(target_batch,
+                                                    return_tensors='pt',
+                                                    padding=True,
+                                                    truncation=True).to(device)
+        # Answer template encoding + strip </s> (EOS) token
+        answer_template_encoded = self.custom_tokenize(self.answer_template,
+                                                       return_tensors='pt',
+                                                       return_attention_mask=False)['input_ids'][:, :-1].to(device)
+
         batch_answer_template_encoded = answer_template_encoded.repeat(batch_size, 1)
         # Answer template encoding + target tokens + EOS token
         batch_answer_encoded = torch.cat([batch_answer_template_encoded,
@@ -608,17 +613,19 @@ class MeanAmountBinnedTaskOpenEnded(NumericTaskAbstract):
         # target_batch -> feature values as str ('15')
 
         # single tensor without </s> (EOS), but only for encoder-decoder !!!
-        question_start_tokens = self.tokenizer.encode(question_start,
-                                                      return_tensors='pt')
+        question_start_tokens = self.custom_tokenize(question_start,
+                                                     return_tensors='pt')['input_ids']
         if question_start_tokens[:, -1] == self.tokenizer.eos_token_id:
             question_start_tokens = question_start_tokens[:, :-1]
         question_start_tokens = question_start_tokens.to(device)
 
         # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
-        question_target_encoded_batch = self.tokenizer(question_target_batch,
-                                                       padding=True,
-                                                       truncation=True,
-                                                       return_tensors='pt').to(device)
+        question_target_encoded_batch = self.custom_tokenize(question_target_batch,
+                                                             return_tensors='pt',
+                                                             padding=True,
+                                                             truncation=True,
+                                                             return_attention_mask=True
+                                                             ).to(device)
         # Attention masks
         # already for full batch
         question_start_tokens_mask = torch.ones(question_start_tokens.size()).repeat(batch_size, 1).to(device)
@@ -631,12 +638,14 @@ class MeanAmountBinnedTaskOpenEnded(NumericTaskAbstract):
 
         # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
         # add [:, :-1] for no EOS tokens - ?
-        target_encoded_batch = self.tokenizer.batch_encode_plus(target_batch,
-                                                                padding=True,
-                                                                return_tensors='pt').to(device)
+        target_encoded_batch = self.custom_tokenize(target_batch,
+                                                    return_tensors='pt',
+                                                    padding=True,
+                                                    truncation=True).to(device)
         # Answer template encoding + strip </s> (EOS) token
-        answer_template_encoded = self.tokenizer.encode(self.answer_template,
-                                                        return_tensors='pt')[:, :-1].to(device)
+        answer_template_encoded = self.custom_tokenize(self.answer_template,
+                                                       return_tensors='pt',
+                                                       return_attention_mask=False)['input_ids'][:, :-1].to(device)
         batch_answer_template_encoded = answer_template_encoded.repeat(batch_size, 1)
         # Answer template encoding + target tokens + EOS token
         batch_answer_encoded = torch.cat([batch_answer_template_encoded,
@@ -829,17 +838,19 @@ class MeanAmountNumericTaskOpenEnded(NumericTaskAbstract):
         # target_batch -> feature values as str ('15')
 
         # single tensor without </s> (EOS), but only for encoder-decoder !!!
-        question_start_tokens = self.tokenizer.encode(question_start,
-                                                      return_tensors='pt')
+        question_start_tokens = self.custom_tokenize(question_start,
+                                                     return_tensors='pt')['input_ids']
         if question_start_tokens[:, -1] == self.tokenizer.eos_token_id:
             question_start_tokens = question_start_tokens[:, :-1]
         question_start_tokens = question_start_tokens.to(device)
 
         # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
-        question_target_encoded_batch = self.tokenizer(question_target_batch,
-                                                       padding=True,
-                                                       truncation=True,
-                                                       return_tensors='pt').to(device)
+        question_target_encoded_batch = self.custom_tokenize(question_target_batch,
+                                                             return_tensors='pt',
+                                                             padding=True,
+                                                             truncation=True,
+                                                             return_attention_mask=True
+                                                             ).to(device)
         # Attention masks
         # already for full batch
         question_start_tokens_mask = torch.ones(question_start_tokens.size()).repeat(batch_size, 1).to(device)
@@ -852,12 +863,17 @@ class MeanAmountNumericTaskOpenEnded(NumericTaskAbstract):
 
         # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
         # add [:, :-1] for no EOS tokens - ?
-        target_encoded_batch = self.tokenizer.batch_encode_plus(target_batch,
-                                                                padding=True,
-                                                                return_tensors='pt').to(device)
+        # target_encoded_batch = self.tokenizer.batch_encode_plus(target_batch,
+        #                                                         padding=True,
+        #                                                         return_tensors='pt').to(device)
+        target_encoded_batch = self.custom_tokenize(target_batch,
+                                                    return_tensors='pt',
+                                                    padding=True,
+                                                    truncation=True).to(device)
         # Answer template encoding + strip </s> (EOS) token
-        answer_template_encoded = self.tokenizer.encode(self.answer_template,
-                                                        return_tensors='pt')[:, :-1].to(device)
+        answer_template_encoded = self.custom_tokenize(self.answer_template,
+                                                       return_tensors='pt',
+                                                       return_attention_mask=False)['input_ids'][:, :-1].to(device)
         batch_answer_template_encoded = answer_template_encoded.repeat(batch_size, 1)
         # Answer template encoding + target tokens + EOS token
         batch_answer_encoded = torch.cat([batch_answer_template_encoded,

@@ -49,7 +49,6 @@ class AbstractTask(ABC):
     answers_options: Optional[List[str]] = None
 
     tokenizer: transformers.PreTrainedTokenizerBase = None
-    pre_tokenizer: Optional[tokenizers.pre_tokenizers.PreTokenizer] = None,
 
     seed: Optional[int] = 11
     verbose: Optional[bool] = False
@@ -185,6 +184,54 @@ class AbstractTask(ABC):
             model.resize_token_embeddings(len(tokenizer))
         else:
             logger.info(f"Notice: resize_token_embeddings of a model to adapt to the size of the new vocabulary!")
+
+    def custom_tokenize(self, sequence: Union[str, List[str]],
+                        **kwargs) -> Dict[str, Union[List[int], torch.Tensor]]:
+        """
+        A custom tokenization for a task. It takes input text (or sequence of texts),
+        split them according to pre-defined logic (as `pre-tokenizer`)
+        and return with additional (optional) post-processing.
+        Args:
+            sequence: a str or a List[str] as an input text (or sequence of texts);
+            **kwargs: other args for any steps of tokenization pipeline;
+
+        Returns:
+            a Dictionary with values as List[int] or torch.Tensor, keys:
+                'input_ids' - a tokenized text (or sequence of texts);
+                'attention_mask' - an attention mask for tokenized text (or sequence of texts).
+        """
+        sequence, is_pre_tokenized = self.pre_tokenize(sequence=sequence)
+        if not len(sequence) and is_pre_tokenized:
+            sequence = ""
+        sequence_encoded = self.tokenizer(sequence,
+                                          is_split_into_words=True if is_pre_tokenized else False,
+                                          **kwargs)
+        return sequence_encoded
+
+    def pre_tokenize(self, sequence: Union[str, List[str]]) -> Tuple[Union[str, List[str], List[List[str]]], bool]:
+        """
+        Pre-tokenization is required for splitting a text into smaller objects.
+        For instance, here is a pre-tokenizer that will split on space, punctuation and digits,
+        separating numbers in their individual digits.
+        Args:
+            sequence: a str or a List[str] sequence(-s) of texts;
+
+        Returns:
+            a List[str] or List[List[str]] - a list of words on which all input text was separated;
+            a boolean flag that pre-tokenization was made.
+        """
+        is_pre_tokenized = False
+        if hasattr(self.tokenizer, "pre_tokenizer") and (self.tokenizer.pre_tokenizer is not None):
+            is_pre_tokenized = True
+            if isinstance(sequence, str):
+                sequence = [pretok_sequence[0]
+                            for pretok_sequence in self.tokenizer.pre_tokenizer.pre_tokenize_str(sequence)]
+            else:
+                pretokenized = [self.tokenizer.pre_tokenizer.pre_tokenize_str(pretok_seq) for pretok_seq in sequence]
+                sequence = [[pretokenized_subsequence[0] for pretokenized_subsequence in pretokenized_sequence]
+                            for pretokenized_sequence in pretokenized]
+        return sequence, is_pre_tokenized
+
 
     def update(self, new_attr: Dict[str, Any]):
         """
