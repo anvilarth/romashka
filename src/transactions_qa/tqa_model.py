@@ -15,7 +15,9 @@ from src.transactions_qa.layers.connector import (make_linear_connector,
 from src.tasks.task_abstract import AbstractTask
 from src.utils.logging_handler import get_logger
 
-from transformers import T5ForConditionalGeneration
+from transformers import Adafactor
+from transformers.optimization import AdafactorSchedule
+
 from copy import deepcopy
 
 class TransactionQAModel(pl.LightningModule):
@@ -31,10 +33,11 @@ class TransactionQAModel(pl.LightningModule):
                  do_freeze_tm: Optional[bool] = True,
                  do_freeze_lm: Optional[bool] = False,
                  do_freeze_connector: Optional[bool] = False,
+                 optimizer_name: Optional[str] = 'AdamW',
+                 scheduler_name: Optional[str] = 'linear_schedule_with_warmup',
                  learning_rate: Optional[float] = 5e-5,
-                 adam_beta1: Optional[float] = 0.9,
-                 adam_beta2: Optional[float] = 0.999,
-                 adam_epsilon: Optional[float] = 1e-8,
+                 weight_decay: Optional[float] = 0.0,
+                 scale_parameter: Optional[bool] = False,
                  warmup_steps: Optional[int] = 100,
                  training_steps: Optional[int] = 10_000,
                  verbose_for_debug: Optional[bool] = False):
@@ -61,10 +64,11 @@ class TransactionQAModel(pl.LightningModule):
         print(self.metrics)
         self.warmup_steps: int = warmup_steps
         self.training_steps: int = training_steps
-        self.base_learning_rate = learning_rate
-        self.adam_beta1: float = adam_beta1
-        self.adam_beta2: float = adam_beta2
-        self.adam_epsilon = adam_epsilon
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
+        self.scale_parameter = scale_parameter
+        self.optimizer_name = optimizer_name
+        self.scheduler_name = scheduler_name
 
         self.do_freeze_tm: bool = do_freeze_tm
         self.do_freeze_lm: bool = do_freeze_lm
@@ -101,13 +105,37 @@ class TransactionQAModel(pl.LightningModule):
             f"The model will start training with only {len(trainable_parameters)} "
             f"trainable parameters out of {len(parameters)}."
         )
-        optimizer = torch.optim.AdamW(self.parameters(),
-                                      betas=(self.adam_beta1, self.adam_beta2),
-                                      lr=self.base_learning_rate)
-        scheduler = transformers.get_linear_schedule_with_warmup(optimizer,
+        if self.optimizer_name == 'AdamW':
+            optimizer = torch.optim.AdamW(self.parameters(),
+                                        lr=self.learning_rate,
+                                        weight_decay=self.weight_decay,
+                                        eps=1e-8)
+
+        elif self.optimizer_name == 'Adafactor':
+            optimizer = Adafactor(
+                self.parameters(),
+                lr=self.learning_rate,
+                weight_decay=self.weight_decay,
+                scale_parameter=self.scale_parameter,
+                relative_step=False,
+                warmup_init=False,
+            )
+        else:
+            raise NotImplementedError
+
+        if self.scheduler_name == 'linear_schedule_with_warmup':
+            scheduler = transformers.get_linear_schedule_with_warmup(optimizer,
                                                                  num_warmup_steps=self.warmup_steps,
                                                                  num_training_steps=self.training_steps
                                                                  )  # was: 10_000 * 20
+        elif self.scheduler_name == "adafactor":
+            scheduler = AdafactorSchedule(optimizer, self.learning_rate)
+        
+        else:
+            raise NotImplementedError
+
+        self._logger.info(f"Training with {self.optimizer_name}-lr={self.learning_rate} and {self.scheduler_name}.")
+
         return {
             "optimizer": optimizer,
             "lr_scheduler": scheduler,

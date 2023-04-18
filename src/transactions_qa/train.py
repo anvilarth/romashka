@@ -21,8 +21,6 @@ from transformers import (AutoModelForSeq2SeqLM,
                           AutoConfig,
                           HfArgumentParser)
 
-sys.path.insert(1, '/Users/abdullaeva/Documents/Projects/TransactionsQA')
-# for MlSpace: /home/jovyan/transactionsQA/romashka
 print(sys.path)
 
 from src.utils.logging_handler import get_logger
@@ -265,11 +263,16 @@ def main():
     transactionsQA_model_config = {
         "warmup_steps": training_args.warmup_steps,
         "training_steps": training_args.max_steps,
+        "learning_rate": training_args.learning_rate,
         "do_freeze_tm": training_args.do_freeze_transactions_model,
         "do_freeze_lm": training_args.do_freeze_language_model,
         "do_freeze_connector": training_args.do_freeze_connector,
         "connector_input_size": 384,
+        "scale_parameter": training_args.scale_parameter,
+        "optimizer_name": training_args.optimizer_name,
+        "scheduler_name": training_args.scheduler_name,
     }
+
     model = TransactionQAModel(
         language_model=lm_model,
         transaction_model=transactions_model,
@@ -292,7 +295,7 @@ def main():
         # val_check_interval=training_args.val_check_interval,
         check_val_every_n_epoch=training_args.check_val_every_n_epoch,
         reload_dataloaders_every_n_epochs=1,
-        gradient_clip_val=training_args.gradient_clip_val,
+        gradient_clip_val=training_args.gradient_clip_norm,
         accumulate_grad_batches=training_args.gradient_accumulation_steps,
         logger=wb_logger,  #[tb_logger, wb_logger],
         callbacks=[checkpoint_callback, lr_monitor_callback])

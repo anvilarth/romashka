@@ -144,3 +144,4 @@ old_configs/
 data/train_buckets
 data/val_buckets
 data/train_target.csv
+cache/

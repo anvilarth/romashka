@@ -21,7 +21,6 @@ class AlfaDataModule(pl.LightningDataModule):
                 batch_size: Optional[int] = 32,
                 val_batch_size: Optional[int] = 32,
                 buffer_size: Optional[int] = 10_000,
-                shuffle: Optional[bool] = False,
                 num_workers: Optional[int] = 0,
                 pin_memory: Optional[bool] = False,
         ):
@@ -33,7 +32,6 @@ class AlfaDataModule(pl.LightningDataModule):
         self.batch_size = batch_size
         self.val_batch_size = val_batch_size
         self.buffer_size = buffer_size
-        self.shuffle = shuffle
         self.num_workers = num_workers
         self.pin_memory = pin_memory
 
@@ -62,7 +60,7 @@ class AlfaDataModule(pl.LightningDataModule):
                                                         'max_seq_len': self.max_seq_len,
                                                     }
         )
-        if self.buffer_size > 0 and self.shuffle:
+        if self.buffer_size > 0:
             dataset = dataset.shuffle(seed=self.seed, buffer_size=self.buffer_size)
         
         return dataset.with_format('torch')

@@ -90,7 +90,7 @@ class DataTrainingArguments:
     Arguments pertaining to what data we are going to input our model for training and eval.
     """
     local_config: Optional[str] = field(
-        default="romashka/configs/local_config.yaml",
+        default="./configs/local_config.yaml",
         metadata={"help": "A path to yaml file with unique configs for local setting"},
     )
 
@@ -215,7 +215,6 @@ class DataTrainingArguments:
             )
         },
     )
-
     shuffle_buffer_size: Optional[int] = field(
         default=10_000,
         metadata={
@@ -332,8 +331,8 @@ class TrainingArguments:
         default=False, metadata={"help": "Whether to freeze weights of a Connector layer during training."}
     )
     
-    gradient_clip_val: float = field(
-        default=0,
+    gradient_clip_norm: float = field(
+        default=1.0,
         metadata={"help": "Clipping norm of gradients. If ||g|| < val, g = val * g / ||g||."},
     )
     # -----------------
@@ -343,10 +342,10 @@ class TrainingArguments:
     )
     learning_rate: Optional[float] = field(default=5e-5, metadata={"help": "The initial learning rate for AdamW."})
     weight_decay: Optional[float] = field(default=0.0, metadata={"help": "Weight decay for AdamW if we apply some."})
-    adam_beta1: Optional[float] = field(default=0.9, metadata={"help": "Beta1 for AdamW optimizer"})
-    adam_beta2: Optional[float] = field(default=0.999, metadata={"help": "Beta2 for AdamW optimizer"})
-    adam_epsilon: Optional[float] = field(default=1e-8, metadata={"help": "Epsilon for AdamW optimizer."})
+    optimizer_name: Optional[str] = field(default='AdamW', metadata={"help": "The optimizer to use."})
+    scale_parameter: Optional[bool] = field(default=True, metadata={"help": "Adafactor scaling parameter"})
     max_grad_norm: Optional[float] = field(default=1.0, metadata={"help": "Max gradient norm."})
+    scheduler_name: Optional[str] = field(default='linear_schedule_with_warmup', metadata={"help": "The scheduler"})
 
     fast_dev_run: Optional[int] = field(
         default=False,
