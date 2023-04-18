@@ -18,7 +18,6 @@ class EncoderSimpleModel(nn.Module):
                  language_model: nn.Module,
                  transaction_model: nn.Module,
                  tokenizer: transformers.PreTrainedTokenizerBase,
-
                  connector: Optional[nn.Module] = None,
                  connector_input_size: Optional[int] = None,
                  connector_output_size: Optional[int] = None,
@@ -43,7 +42,6 @@ class EncoderSimpleModel(nn.Module):
 
         self.language_model_arch_type = None
         self.language_model_tokens_embedding_func = None
-        self.whitespace_token_id = None
         self.do_freeze_tm: bool = do_freeze_tm
         self.do_freeze_lm: bool = do_freeze_lm
         self.do_freeze_connector: bool = do_freeze_connector
@@ -128,7 +126,8 @@ class EncoderSimpleModel(nn.Module):
         Configures the tokenizer for the model (optionally,
         can be performed before passing tokenizer instance to the model).
         """
-        self.whitespace_token_id = torch.Tensor(self.tokenizer.encode(' ')).long()
+        self.register_buffer("whitespace_token_id", torch.Tensor(self.tokenizer.encode(' ')).long())
+        # self.whitespace_token_id = torch.Tensor(self.tokenizer.encode(' ')).long()
         # todo: here any number of extra/additional tokens can be added to tokenizer's vocab
 
     def forward(self, batch: Union[Dict[str, torch.Tensor], Any],

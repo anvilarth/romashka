@@ -43,9 +43,6 @@ class DecoderSimpleModel(nn.Module):
 
         self.language_model_arch_type = None
         self.language_model_tokens_embedding_func = None
-        self.whitespace_token_id = None
-        self.bos_token_id = None
-        self.eos_token_id = None
         self.do_freeze_tm: bool = do_freeze_tm
         self.do_freeze_lm: bool = do_freeze_lm
         self.do_freeze_connector: bool = do_freeze_connector
@@ -147,7 +144,8 @@ class DecoderSimpleModel(nn.Module):
         Configures the tokenizer for the model (optionally,
         can be performed before passing tokenizer instance to the model).
         """
-        self.whitespace_token_id = torch.Tensor(self.tokenizer.encode(' ')).long()
+        self.register_buffer("whitespace_token_id", torch.Tensor(self.tokenizer.encode(' ')).long())
+        # self.whitespace_token_id = torch.Tensor(self.tokenizer.encode(' ')).long()
 
         if self.language_model_arch_type == "OPT":
             # setup padding
@@ -176,8 +174,12 @@ class DecoderSimpleModel(nn.Module):
                     self.tokenizer.eos_token = "<|endoftext|>"
 
         self.tokenizer.padding_side = 'left'
-        self.bos_token_id = torch.Tensor([self.tokenizer.bos_token_id, ]).long()
-        self.eos_token_id = torch.Tensor([self.tokenizer.eos_token_id, ]).long()
+
+        self.register_buffer("bos_token_id", torch.Tensor([self.tokenizer.bos_token_id, ]).long())
+        # self.bos_token_id = torch.Tensor([self.tokenizer.bos_token_id, ]).long()
+
+        self.register_buffer("eos_token_id", torch.Tensor([self.tokenizer.eos_token_id, ]).long())
+        # self.eos_token_id = torch.Tensor([self.tokenizer.eos_token_id, ]).long()
 
     def _set_generation_config(self):
         """

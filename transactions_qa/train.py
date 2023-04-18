@@ -21,25 +21,32 @@ from transformers import (AutoModelForSeq2SeqLM,
                           AutoConfig,
                           HfArgumentParser)
 
-sys.path.insert(1, '/Users/abdullaeva/Documents/Projects/TransactionsQA')
-# for MlSpace: /home/jovyan/transactionsQA/romashka
+sys.path.insert(1, '/home/jovyan/abdullaeva/transactionsQA')
+# for MlSpace: /home/jovyan/abdullaeva/transactionsQA
 print(sys.path)
 
 from romashka.logging_handler import get_logger
-from romashka.data_generators import (cat_features_names,
-                                      num_features_names,
-                                      meta_features_names)
-from romashka.transactions_qa.train_args import (ModelArguments,
-                                                 DataTrainingArguments,
-                                                 TrainingArguments,
-                                                 TasksArguments)
+from romashka.tools import (make_time_batch,
+                   calculate_embedding_size)
+from romashka.transactions_qa.train_args import (ModelArguments, DataTrainingArguments,
+                                                 TrainingArguments, TasksArguments)
+from romashka.transactions_qa.dataset.data_generator import (
+    transaction_features,
+    cat_features_names,
+    num_features_names,
+    meta_features_names)
 
-from romashka.transactions_qa.tasks import AutoTask
-from romashka.transactions_qa.dataset.dataloader import TransactionQADataModule
+from romashka.transactions_qa.dataset.dataloader import (TransactionQADataset, TransactionQADataModule)
+
 from romashka.models import TransactionsModel
-from romashka.transactions_qa.tqa_model import TransactionQAModel
+from romashka.transactions_qa.model.encoder_model import EncoderSimpleModel
+from romashka.transactions_qa.model.decoder_model import DecoderSimpleModel
+from romashka.transactions_qa.model.tqa_model import TransactionQAModel
 from romashka.transactions_qa.layers.connector import (make_linear_connector,
                                                        make_recurrent_connector)
+
+from romashka.transactions_qa.utils import get_projections_maps, get_buckets_info
+from romashka.transactions_qa.tasks import AutoTask
 from romashka.transactions_qa.utils import (get_last_checkpoint, get_projections_maps)
 
 
@@ -154,7 +161,7 @@ def main():
     # Load weights
     ckpt = torch.load(model_args.transactions_model_name_or_path, map_location='cpu')
     transactions_model.load_state_dict(ckpt)
-    transactions_model.to(device)
+    # transactions_model.to(device)
 
     # Configure and load from HF hub LM model
     logger.info(f"Loading Language model: `{model_args.language_model_name_or_path}`...")
@@ -216,13 +223,28 @@ def main():
         "do_freeze_connector": training_args.do_freeze_connector,
         "connector_input_size": 384,
     }
-    model = TransactionQAModel(
+    # model = TransactionQAModel(
+    #     language_model=lm_model,
+    #     transaction_model=transactions_model,
+    #     tokenizer=tokenizer,
+    #     tasks=tasks,
+    #     **transactionsQA_model_config
+    # )
+    connector = make_linear_connector(
+        output_size=384,
+        input_size=lm_model.config.d_model if hasattr(lm_model.config, "d_model") else lm_model.config.hidden_size
+    )
+
+    encoder_model = EncoderSimpleModel(
         language_model=lm_model,
         transaction_model=transactions_model,
         tokenizer=tokenizer,
-        tasks=tasks,
-        **transactionsQA_model_config
+        connector=connector,
+        is_debug=True
     )
+
+    model = TransactionQAModel(model=encoder_model,
+                               tasks=tasks)
 
     # Datasets & Dataloader & Other utils
     if training_args.do_train and "train" in data_files:
