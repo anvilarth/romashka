@@ -32,7 +32,7 @@ class MeanAmountBinnedTaskBinary(NumericTaskAbstract):
     def __post_init__(self):
         self.task_name = "mean_binned_amount_binary"
         self.target_feature_name = 'amnt'  # [0, 1] range of values
-        # self.target_feature_index = num_features_names.index(self.target_feature_name)
+        self.task_special_token = "[mean_binned_AMNT_binary]"
         self.is_open_ended_task = False  # for a default for this task
         self.metrics = {
             "accuracy": BinaryAccuracy()
@@ -280,6 +280,7 @@ class MeanAmountNumericTaskBinary(NumericTaskAbstract):
     def __post_init__(self):
         self.task_name = "mean_numeric_amount_binary"
         self.target_feature_name = 'amnt'  # [0, 1] range of values
+        self.task_special_token = "[mean_numeric_AMNT_binary]"
         self.target_feature_index = num_features_names.index(self.target_feature_name)
         self.is_open_ended_task = False  # for a default for this task
         self.metrics = {
@@ -520,6 +521,7 @@ class MeanAmountBinnedTaskOpenEnded(NumericTaskAbstract):
     def __post_init__(self):
         self.task_name = "mean_binned_amount_open-ended"
         self.target_feature_name = 'amnt'  # [0, 1] range of values
+        self.task_special_token = "[mean_binned_AMNT_openended]"
         self.target_feature_index = num_features_names.index(self.target_feature_name)
         self.is_open_ended_task = True  # for a default for this task
 
@@ -743,6 +745,7 @@ class MeanAmountNumericTaskOpenEnded(NumericTaskAbstract):
     def __post_init__(self):
         self.task_name = "mean_numeric_amount_open-ended"
         self.target_feature_name = 'amnt'  # [0, 1] range of values
+        self.task_special_token = "[mean_numeric_AMNT_openended]"
         self.target_feature_index = num_features_names.index(self.target_feature_name)
         self.is_open_ended_task = True  # for a default for this task
         self.metrics = {

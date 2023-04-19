@@ -21,6 +21,7 @@ class MostFrequentDayOfWeekTaskMulti(CategoricalTaskAbstract):
     def __post_init__(self):
         self.task_name = "most_frequent_day_of_week_multi"
         self.target_feature_name = 'day_of_week'  # 7 unique values
+        self.task_special_token = "[most_freq_day_multichoice]"
         self.num_classes = 7
         self.is_open_ended_task = False  # for a default for this task
         self.metrics = nn.ModuleDict({
@@ -197,6 +198,7 @@ class MostFrequentDayOfWeekTaskBinary(AbstractTask):
     def __post_init__(self):
         self.task_name = "most_frequent_day_of_week_binary"
         self.target_feature_name = 'day_of_week'  # 7 unique values
+        self.task_special_token = "[most_freq_day_binary]"
         self.num_classes = 7
         self.is_open_ended_task = False  # for a default for this task
         self.metrics = nn.ModuleDict({
@@ -365,6 +367,7 @@ class MostFrequentDayOfWeekTaskOpenEnded(AbstractTask):
     def __post_init__(self):
         self.task_name = "most_frequent_day_of_week_open-ended"
         self.target_feature_name = 'day_of_week'  # 7 unique values
+        self.task_special_token = "[most_freq_day_openended]"
         self.num_classes = 7
         self.is_open_ended_task = True  # for a default for this task
         self.metrics = nn.ModuleDict({

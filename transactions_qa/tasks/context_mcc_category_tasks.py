@@ -20,7 +20,8 @@ class MostFrequentMCCCategoryTaskMulti(CategoricalTaskAbstract):
 
     def __post_init__(self):
         self.task_name = "most_frequent_mcc_category_multi"
-        self.target_feature_name = 'mcc_category'  # 108 unique values
+        self.target_feature_name = 'mcc_category'  # 28 unique values
+        self.task_special_token = "[most_freq_MCC_category_multichoice]"
         self.num_classes = 28
         self.is_open_ended_task = False  # for a default for this task
         self.metrics = nn.ModuleDict({
@@ -197,6 +198,7 @@ class MostFrequentMCCCategoryTaskBinary(AbstractTask):
     def __post_init__(self):
         self.task_name = "most_frequent_mcc_category_binary"
         self.target_feature_name = 'mcc_category'  # 28 unique values
+        self.task_special_token = "[most_freq_MCC_category_binary]"
         self.num_classes = 28
         self.is_open_ended_task = False  # for a default for this task
         self.metrics = nn.ModuleDict({
@@ -383,6 +385,7 @@ class MostFrequentMCCCategoryTaskOpenEnded(AbstractTask):
     def __post_init__(self):
         self.task_name = "most_frequent_mcc_category_open-ended"
         self.target_feature_name = 'mcc_category'  # 28 unique values
+        self.task_special_token = "[most_freq_MCC_category_openended]"
         self.num_classes = 28
         self.is_open_ended_task = True  # for a default for this task
         self.metrics = nn.ModuleDict({
