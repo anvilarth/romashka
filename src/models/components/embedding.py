@@ -3,41 +3,7 @@ import torch.nn as nn
 import sys
 
 from copy import deepcopy
-from .perceiver_pytorch import Perceiver
 
-class IdentityMapping(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.id = nn.Identity()
-    
-    def forward(self, x, attention_mask=None):
-        return  self.id(x)
-
-
-class LinearMapping(nn.Module):
-    def __init__(self, inp_size, out_size):
-        super().__init__()
-        
-        self.linear = nn.Linear(inp_size, out_size)
-        
-    def forward(self, x, attention_mask=None):
-        return self.linear(x)
-    
-    
-class PerceiverMapping(nn.Module):
-    def __init__(self, inp_size, out_size, num_latents=16):
-        super().__init__()
-        self.perceiver = Perceiver(
-                input_channels=inp_size,
-                depth = 1,                   # depth of net. The shape of the final attention mechanism will be:                                
-                num_latents = num_latents,           # number of latents, or induced set points, or centroids. different papers giving it different names
-                latent_dim = out_size,            # latent dimension
-                cross_heads = 1,             # number of heads for cross attention. paper said 1   
-                cross_dim_head = inp_size,         # number of dimensions per cross attention head       
-            )
-    
-    def forward(self, x, attention_mask=None):
-        return self.perceiver(x, mask=attention_mask)
 
 class EmbeddingLayer(nn.Module):
     def __init__(self, 

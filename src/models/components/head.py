@@ -1,6 +1,45 @@
 import torch
 import torch.nn as nn
 
+
+class TransactionHead(nn.Module):
+    def __init__(self, head_type, input_size, cat_embedding_projections, num_embedding_projections):
+        super().__init__()
+
+        if head_type == 'linear':
+            self.head = LinearHead(input_size)
+        elif head_type == 'rnn':
+            self.head = RNNClassificationHead(input_size)
+        elif head_type == 'mlp':
+            self.head = MLPHead(input_size)
+        elif head_type == 'transformer':
+            self.head = TransformerHead(input_size)
+        elif head_type == 'id':
+            self.head = IdentityHead(input_size)
+        elif head_type == 'next':
+            #TODO fix kwargs
+            self.head = NSPHead(input_size, cat_embedding_projections, num_embedding_projections)
+        elif head_type == 'next_time':
+            self.head = NextActionsHead(input_size)
+        elif head_type == 'last_output':
+            self.head = LastOutputHead()
+        else:
+            raise NotImplementedError
+    
+    def forward(self, x, mask=None):
+        self.head(x, mask)
+
+class LastOutputHead(nn.Module):
+    def __init__(self):
+        super().__init__()
+    
+    def forward(self, x, mask):
+        batch_size = mask.shape[0]
+        trx_index = mask.sum(1) - 1
+        output = x[torch.arange(batch_size), trx_index]
+        return output
+
+
 class LinearHead(nn.Module):
     def __init__(self, input_size):
         super().__init__()
