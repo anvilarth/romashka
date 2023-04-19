@@ -57,7 +57,7 @@ class TaskModule(LightningModule):
 
     def model_step(self, batch: Any):
         y = self.task.generate_target(batch)
-        if len(y) == 2:
+        if len(y) > 1:
             y = y[0]
 
         logits = self.forward(batch)
@@ -75,10 +75,10 @@ class TaskModule(LightningModule):
         return {"loss": loss}
 
     def validation_step(self, batch: Any, **kwargs: Any):
-        output = self.forward(batch)
+        # output = self.forward(batch)
 
-        self.log
-        return 
+        # self.log
+        # return 
 
 
     def configure_optimizers(self):

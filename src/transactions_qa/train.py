@@ -151,7 +151,6 @@ def main():
     # Load weights
     ckpt = torch.load(model_args.transactions_model_name_or_path, map_location='cpu')
     transactions_model.load_state_dict(ckpt)
-    transactions_model.to(device)
 
     # Configure and load from HF hub LM model
     logger.info(f"Loading Language model: `{model_args.language_model_name_or_path}`...")

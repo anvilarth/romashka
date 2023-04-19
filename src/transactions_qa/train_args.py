@@ -340,7 +340,7 @@ class TrainingArguments:
         default=1,
         metadata={"help": "Number of updates steps to accumulate before performing a backward/update pass."},
     )
-    learning_rate: Optional[float] = field(default=5e-5, metadata={"help": "The initial learning rate for AdamW."})
+    learning_rate: Optional[float] = field(default=1e-4, metadata={"help": "The initial learning rate for AdamW."})
     weight_decay: Optional[float] = field(default=0.0, metadata={"help": "Weight decay for AdamW if we apply some."})
     optimizer_name: Optional[str] = field(default='AdamW', metadata={"help": "The optimizer to use."})
     scale_parameter: Optional[bool] = field(default=True, metadata={"help": "Adafactor scaling parameter"})

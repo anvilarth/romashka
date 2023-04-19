@@ -82,9 +82,15 @@ class NextFeatureTask(AbstractTask):
         # Target's questions numeric/categorical answers as str
 
         target_batch, trx_index = self.generate_text_target(batch)
+        
+        if target_batch is None:
+            return dict()
 
         # Masking elements which we want to predict
-        transactions_embedding_mask[:, trx_index.flatten()] = 0
+
+        #TODO Fix this fast fix
+        if self.task_name != "next_transactions_30_days_binary" and self.task_name != "next_amnt_30_days_binary":
+            transactions_embedding_mask[:, trx_index.flatten()] = 0
 
         # Construct target sequences
         question_target_batch = self.generate_target_question(question_end, target_batch) # as strings
