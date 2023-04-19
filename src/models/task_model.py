@@ -75,6 +75,7 @@ class TaskModule(LightningModule):
         return {"loss": loss}
 
     def validation_step(self, batch: Any, **kwargs: Any):
+        pass
         # output = self.forward(batch)
 
         # self.log
