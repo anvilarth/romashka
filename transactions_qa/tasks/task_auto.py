@@ -12,6 +12,12 @@ from romashka.transactions_qa.tasks.context_amnt_tasks import (MeanAmountBinnedT
                                                                MeanAmountNumericTaskBinary,
                                                                MeanAmountBinnedTaskOpenEnded,
                                                                MeanAmountNumericTaskOpenEnded)
+from romashka.transactions_qa.tasks.context_mcc_category_tasks import (MostFrequentMCCCategoryTaskBinary,
+                                                                       MostFrequentMCCCategoryTaskMulti,
+                                                                       MostFrequentMCCCategoryTaskOpenEnded)
+from romashka.transactions_qa.tasks.context_weekday_tasks import (MostFrequentDayOfWeekTaskBinary,
+                                                                  MostFrequentDayOfWeekTaskOpenEnded,
+                                                                  MostFrequentDayOfWeekTaskMulti)
 
 from romashka.transactions_qa.tasks.next_feature_tasks import (NextMCCFeatureTaskBinary, 
                                                                NextAmntFeatureTaskBinary,
@@ -45,6 +51,14 @@ AUTO_TASKS = [
         ("mean_numeric_amount_binary", MeanAmountNumericTaskBinary),
         ("mean_binned_amount_open-ended", MeanAmountBinnedTaskOpenEnded),
         ("mean_numeric_amount_open-ended", MeanAmountNumericTaskOpenEnded),
+        # MCC category
+        ("most_frequent_mcc_category_multi", MostFrequentMCCCategoryTaskMulti),
+        ("most_frequent_mcc_category_binary", MostFrequentMCCCategoryTaskBinary),
+        ("most_frequent_mcc_category_open-ended", MostFrequentMCCCategoryTaskOpenEnded),
+        # Day of week
+        ("most_frequent_day_of_week_multi", MostFrequentDayOfWeekTaskMulti),
+        ("most_frequent_day_of_week_binary", MostFrequentDayOfWeekTaskBinary),
+        ("most_frequent_day_of_week_binary", MostFrequentDayOfWeekTaskOpenEnded),
         # Predictive
         ("default", DefaultTask),
         ("next_mcc_binary", NextMCCFeatureTaskBinary),

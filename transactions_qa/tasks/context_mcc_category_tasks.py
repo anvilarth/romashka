@@ -47,7 +47,7 @@ class MostFrequentMCCCategoryTaskMulti(CategoricalTaskAbstract):
             ("This is the client's transaction history ",
              ". Find out which MCC category is the most frequent in history?"),
             ("You are given the client's transaction history ",
-             ". Which MCC category is the most frequent within clients'transactions throughout the history?"),
+             ". Which MCC category is the most frequent within clients' transactions throughout the history?"),
             ("You are given the client's transaction history ",
              ". Identify which MCC category is the most frequent within clients' transactions?"),
             ("You are given the client's transaction history ",
@@ -213,7 +213,7 @@ class MostFrequentMCCCategoryTaskBinary(AbstractTask):
              ". Define whether the following statement is correct: the most frequent MCC category "
              "of all client's transactions is %s. Choose: Yes or No?"),
             ("This is the client's transaction history ",
-             ". Identify if the statement that the most frequent MCC category is %s is correct?  Yes or No?"),
+             ". Identify if the statement that the most frequent MCC category is %s is correct? Yes or No?"),
             ("This is the client's transaction history ",
              ". Determine whether the following statement is true: %s is the most frequent MCC category "
              "within all client's transactions. Choose: Yes or No?"),

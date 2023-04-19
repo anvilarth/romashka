@@ -188,6 +188,27 @@ class MostFrequentMCCCodeTaskBinary(AbstractTask):
                  ". Is %s MCC code is the most frequent? Yes or No?"),
                 ("You are given the client's transaction history ",
                  ". Is %s MCC code is the most frequent? Choose one: Yes or No?"),
+                ("This is the client's transaction history ",
+                 ". Is the most frequent MCC code of all client's transactions is %s? Yes or No?"),
+                ("You are given the client's transaction history ",
+                 ". Is it true or false: the most frequent MCC code of all client's transactions is %s? Yes or No?"),
+                ("This is the client's transaction history ",
+                 ". Define whether the following statement is correct: the most frequent MCC code "
+                 "of all client's transactions is %s. Choose: Yes or No?"),
+                ("You are given the client's transaction history ",
+                 " Identify if the statement that the most frequent MCC code is %s is correct? Yes or No?"),
+                ("This is the client's transaction history ",
+                 ". Determine whether the following statement is true: %s is the most frequent MCC code "
+                 "within all client's transactions. Choose: Yes or No?"),
+                ("You are given the client's transaction history ",
+                 ". Is the statement correct: the most frequent MCC code of all client's transactions is %s. " 
+                 "Choose one: Yes or No?"),
+                ("This is the client's transaction history ",
+                 ". Answer the question whether or not the following statement is true: the most frequent "
+                 "MCC code is %s. Yes or No?"),
+                ("You are given the client's transaction history ",
+                 ". Find out whether or not the following statement is true: the most frequent MCC code is %s. "
+                 "Answer only: Yes or No?"),
             ]
 
         # all options for a target feature
@@ -335,7 +356,6 @@ class MostFrequentMCCCodeTaskBinary(AbstractTask):
 @dataclass
 class MostFrequentMCCCodeTaskOpenEnded(AbstractTask):
 
-
     def __post_init__(self):
         self.task_name = "most_frequent_mcc_code_open-ended"
         self.target_feature_name = 'mcc'  # 108 unique values
@@ -349,6 +369,23 @@ class MostFrequentMCCCodeTaskOpenEnded(AbstractTask):
                  ". Which MCC code is the most frequent?"),
                 ("You are given the client's transaction history ",
                  ". Choose the most frequent MCC code."),
+                ("This is the client's transaction history ",
+                 ". Which MCC code is the most frequent in all clint's transactions?"),
+                ("You are given the client's transaction history ",
+                 ". Answer the question: which MCC code is the most frequent?"),
+                ("This is the client's transaction history ",
+                 ". Select the most frequent MCC code."),
+                ("You are given the client's transaction history ",
+                 ". Answer the question: which MCC code is the most frequent within "
+                 "clients' transactions throughout the history?"),
+                ("This is the client's transaction history ",
+                 ". Find out which MCC code is the most frequent in history?"),
+                ("You are given the client's transaction history ",
+                 ". Which MCC code is the most frequent within clients' transactions throughout the history?"),
+                ("This is the client's transaction history ",
+                 ". Identify which MCC code is the most frequent within clients' transactions?"),
+                ("You are given the client's transaction history ",
+                 ". Can you find out which MCC code is the most frequent?"),
             ]
 
         # all options for a target feature - it is not actually required here, but still
