@@ -64,7 +64,7 @@ class MeanAmountBinnedTaskBinary(NumericTaskAbstract):
         if self.buckets is None:
             # Load default buckets from assets folder
             self.buckets = get_buckets_info(self.target_feature_name,
-                                            "../../assets/dense_features_buckets.pkl")
+                                            "romashka/assets/dense_features_buckets.pkl")
         # Note: in this case are not str values!
         self.answers_options = self._get_buckets_ranges(self.buckets,
                                                         self.feature_min,
@@ -310,7 +310,7 @@ class MeanAmountNumericTaskBinary(NumericTaskAbstract):
         if self.buckets is None:
             # Load default buckets from assets folder
             self.buckets = get_buckets_info(self.target_feature_name,
-                                            "../../assets/dense_features_buckets.pkl")
+                                            "romashka/assets/dense_features_buckets.pkl")
         # Note: in this case are not str values!
         self.buckets_ranges = self._get_buckets_ranges(self.buckets,
                                                        self.feature_min,
@@ -522,12 +522,7 @@ class MeanAmountBinnedTaskOpenEnded(NumericTaskAbstract):
         self.target_feature_name = 'amnt'  # [0, 1] range of values
         self.target_feature_index = num_features_names.index(self.target_feature_name)
         self.is_open_ended_task = True  # for a default for this task
-        self.metrics = {
-            "accuracy": Accuracy(
-                task="multiclass",
-                num_classes=len(self.buckets)
-            )
-        }
+
         self.question_templates = [
             ("This is the client's transaction history: ",
              ". To which range of values does the mean amount of clients' transactions over the whole history belongs to?"),
@@ -563,7 +558,7 @@ class MeanAmountBinnedTaskOpenEnded(NumericTaskAbstract):
         if self.buckets is None:
             # Load default buckets from assets folder
             self.buckets = get_buckets_info(self.target_feature_name,
-                                            "../../assets/dense_features_buckets.pkl")
+                                            "romashka/assets/dense_features_buckets.pkl")
         # Note: in this case are not str values!
         self.buckets_ranges = self._get_buckets_ranges(self.buckets,
                                                        self.feature_min,
@@ -573,6 +568,13 @@ class MeanAmountBinnedTaskOpenEnded(NumericTaskAbstract):
                                                      self.feature_max)
         # Note: in this case are not str values!
         self.answers_options = [str(i) for i in range(1, len(self.buckets) + 1)]
+
+        self.metrics = {
+            "accuracy": Accuracy(
+                task="multiclass",
+                num_classes=len(self.buckets)
+            )
+        }
 
         super().__post_init__()
 
@@ -783,7 +785,7 @@ class MeanAmountNumericTaskOpenEnded(NumericTaskAbstract):
         if self.buckets is None:
             # Load default buckets from assets folder
             self.buckets = get_buckets_info(self.target_feature_name,
-                                            "../../assets/dense_features_buckets.pkl")
+                                            "romashka/assets/dense_features_buckets.pkl")
         # Note: in this case are not str values!
         self.buckets_ranges = self._get_buckets_ranges(self.buckets,
                                                        self.feature_min,

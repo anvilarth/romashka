@@ -17,6 +17,7 @@ from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 
 import transformers
 from transformers import (AutoModelForSeq2SeqLM,
+                          AutoModelForCausalLM,
                           AutoTokenizer,
                           AutoConfig,
                           HfArgumentParser)
@@ -191,10 +192,18 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(model_args.language_model_name_or_path, **tokenizer_kwargs)
 
     # Download model from huggingface.co and cache.
-    lm_model = AutoModelForSeq2SeqLM.from_pretrained(
-        model_args.language_model_name_or_path,
-        config=config
-    )
+    # Make encoder-decoder model for LM
+    if model_args.language_model_type == "encoder-decoder":
+        lm_model = AutoModelForSeq2SeqLM.from_pretrained(
+            model_args.language_model_name_or_path,
+            config=config
+        )
+    else:
+        # Otherwise try to cerate decoder-only model for CLM
+        lm_model = AutoModelForCausalLM.from_pretrained(
+            model_args.language_model_name_or_path,
+            config=config
+        )
 
     # Create tasks
     tasks = []
@@ -223,27 +232,29 @@ def main():
         "do_freeze_connector": training_args.do_freeze_connector,
         "connector_input_size": 384,
     }
-    # model = TransactionQAModel(
-    #     language_model=lm_model,
-    #     transaction_model=transactions_model,
-    #     tokenizer=tokenizer,
-    #     tasks=tasks,
-    #     **transactionsQA_model_config
-    # )
+
     connector = make_linear_connector(
         output_size=384,
         input_size=lm_model.config.d_model if hasattr(lm_model.config, "d_model") else lm_model.config.hidden_size
     )
+    if model_args.language_model_type == "encoder-decoder":
+        model_ = EncoderSimpleModel(
+            language_model=lm_model,
+            transaction_model=transactions_model,
+            tokenizer=tokenizer,
+            connector=connector,
+            is_debug=True
+        )
+    else:
+        model_ = DecoderSimpleModel(
+            language_model=lm_model,
+            transaction_model=transactions_model,
+            tokenizer=tokenizer,
+            connector=connector,
+            is_debug=True
+        )
 
-    encoder_model = EncoderSimpleModel(
-        language_model=lm_model,
-        transaction_model=transactions_model,
-        tokenizer=tokenizer,
-        connector=connector,
-        is_debug=True
-    )
-
-    model = TransactionQAModel(model=encoder_model,
+    model = TransactionQAModel(model=model_,
                                tasks=tasks)
 
     # Datasets & Dataloader & Other utils
@@ -336,8 +347,8 @@ if __name__ == '__main__':
 
     # Pretrained models are downloaded and locally cached at: ~/.cache/huggingface/transformers/.
     # This is the default directory given by the shell environment variable TRANSFORMERS_CACHE.
-    os.environ['TRANSFORMERS_CACHE'] = "/Users/abdullaeva/Documents/Projects/TransactionsQA/checkpoints/cache"
+    # os.environ['TRANSFORMERS_CACHE'] = "/Users/abdullaeva/Documents/Projects/TransactionsQA/checkpoints/cache"
     # or "/home/jovyan/.cache/huggingface/hub"
-    os.environ['HF_DATASETS_CACHE'] = "/Users/abdullaeva/Documents/Projects/TransactionsQA/checkpoints/cache"
+    # os.environ['HF_DATASETS_CACHE'] = "/Users/abdullaeva/Documents/Projects/TransactionsQA/checkpoints/cache"
     # or "/home/jovyan/.cache/huggingface/datasets"
     main()

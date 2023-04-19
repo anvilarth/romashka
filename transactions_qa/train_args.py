@@ -49,6 +49,15 @@ class ModelArguments:
         },
     )
 
+    language_model_type: Optional[str] = field(
+        default="decoder",
+        metadata={
+            "help": (
+                "The text model type for corresponding Hugging Face class creation: decoder or encoder-decoder."
+            )
+        },
+    )
+
     language_model_name_or_path: Optional[str] = field(
         default="google/flan-t5-small",
         metadata={
@@ -333,7 +342,7 @@ class TrainingArguments:
     )
     
     gradient_clip_val: float = field(
-        default=0,
+        default=None,
         metadata={"help": "Clipping norm of gradients. If ||g|| < val, g = val * g / ||g||."},
     )
     # -----------------
@@ -372,7 +381,8 @@ class TrainingArguments:
     )
     lr_scheduler_type: Union[SchedulerType, str] = field(
         default="linear",
-        metadata={"help": "The scheduler type to use."},
+        metadata={"help": "The scheduler type to use. Can be one from: `linear`, `cosine`, "
+                  "`cosine_with_restarts`, `polynomial`, `constant`, `constant_with_warmup`"},
     )
     warmup_ratio: float = field(
         default=0.0, metadata={"help": "Linear warmup over warmup_ratio fraction of total steps."}
