@@ -11,10 +11,14 @@ from romashka.transactions_qa.tasks.context_mcc_tasks import (MostFrequentMCCCod
 from romashka.transactions_qa.tasks.context_amnt_tasks import (MeanAmountBinnedTaskBinary,
                                                                MeanAmountNumericTaskBinary,
                                                                MeanAmountBinnedTaskOpenEnded,
-                                                               MeanAmountNumericTaskOpenEnded)
+                                                               MeanAmountNumericTaskOpenEnded,
+                                                               MinAmountNumericTaskOpenEnded,
+                                                               MaxAmountNumericTaskOpenEnded,
+                                                               LastAmountNumericTaskOpenEnded)
 from romashka.transactions_qa.tasks.context_mcc_category_tasks import (MostFrequentMCCCategoryTaskBinary,
                                                                        MostFrequentMCCCategoryTaskMulti,
-                                                                       MostFrequentMCCCategoryTaskOpenEnded)
+                                                                       MostFrequentMCCCategoryTaskOpenEnded,
+                                                                       LeastFrequentMCCCategoryTaskOpenEnded)
 from romashka.transactions_qa.tasks.context_weekday_tasks import (MostFrequentDayOfWeekTaskBinary,
                                                                   MostFrequentDayOfWeekTaskOpenEnded,
                                                                   MostFrequentDayOfWeekTaskMulti)
@@ -51,10 +55,14 @@ AUTO_TASKS = [
         ("mean_numeric_amount_binary", MeanAmountNumericTaskBinary),
         ("mean_binned_amount_open-ended", MeanAmountBinnedTaskOpenEnded),
         ("mean_numeric_amount_open-ended", MeanAmountNumericTaskOpenEnded),
+        ("min_numeric_amount_open-ended", MinAmountNumericTaskOpenEnded),
+        ("max_numeric_amount_open-ended", MaxAmountNumericTaskOpenEnded),
+        ("last_numeric_amount_open-ended", LastAmountNumericTaskOpenEnded),
         # MCC category
         ("most_frequent_mcc_category_multi", MostFrequentMCCCategoryTaskMulti),
         ("most_frequent_mcc_category_binary", MostFrequentMCCCategoryTaskBinary),
         ("most_frequent_mcc_category_open-ended", MostFrequentMCCCategoryTaskOpenEnded),
+        ("least_frequent_mcc_category_open-ended", LeastFrequentMCCCategoryTaskOpenEnded),
         # Day of week
         ("most_frequent_day_of_week_multi", MostFrequentDayOfWeekTaskMulti),
         ("most_frequent_day_of_week_binary", MostFrequentDayOfWeekTaskBinary),
