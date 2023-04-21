@@ -23,9 +23,9 @@ from romashka.transactions_qa.tasks.context_weekday_tasks import (MostFrequentDa
                                                                   MostFrequentDayOfWeekTaskOpenEnded,
                                                                   MostFrequentDayOfWeekTaskMulti)
 
-from romashka.transactions_qa.tasks.next_feature_tasks import (NextMCCFeatureTaskBinary, 
+from romashka.transactions_qa.tasks.next_feature_tasks import (NextMCCFeatureTaskBinary,
                                                                NextAmntFeatureTaskBinary,
-                                                               NextHourFeatureTaskBinary,
+                                                               NextHourDiffFeatureTaskBinary,
                                                                NextAmnt30DaysTaskBinary,
                                                                NextTransactions30DaysTaskBinary,
                                                                NextMCCFeatureTaskMulti)
@@ -71,7 +71,7 @@ AUTO_TASKS = [
         ("default", DefaultTask),
         ("next_mcc_binary", NextMCCFeatureTaskBinary),
         ("next_amnt_binary", NextAmntFeatureTaskBinary),
-        ("next_hour_binary", NextHourFeatureTaskBinary),
+        ("next_hour_diff_binary", NextHourDiffFeatureTaskBinary),
         ("next_amnt_30_days_binary", NextAmnt30DaysTaskBinary),
         ("next_transactions_30_days_binary", NextTransactions30DaysTaskBinary),
         ("next_mcc_multi", NextMCCFeatureTaskMulti)

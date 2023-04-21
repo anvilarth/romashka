@@ -1,13 +1,13 @@
 from .task_abstract import AbstractTask
 from .task_auto import AutoTask, AUTO_TASKS, help_task_selection
 from .context_mcc_tasks import (MostFrequentMCCCodeTaskMulti,
-                                MostFrequentMCCCodeTaskBinary
-                                )
+                                MostFrequentMCCCodeTaskBinary,
+                                MostFrequentMCCCodeTaskOpenEnded)
                                 
 from .default_task import DefaultTask
-from .next_feature_tasks import (NextMCCFeatureTaskBinary, 
+from .next_feature_tasks import (NextMCCFeatureTaskBinary,
                                  NextAmntFeatureTaskBinary,
-                                 NextHourFeatureTaskBinary,
+                                 NextHourDiffFeatureTaskBinary,
                                  NextAmnt30DaysTaskBinary,
                                  NextTransactions30DaysTaskBinary,
                                  NextMCCFeatureTaskMulti)
@@ -18,10 +18,10 @@ __all__ = [
     "AutoTask",
     "help_task_selection",
     "MostFrequentMCCCodeTaskMulti",
-    "MostFrequentMCCCodeTaskBinary"
+    "MostFrequentMCCCodeTaskBinary",
     "DefaultTask",
     "NextMCCFeatureTaskBinary",
-    "NextHourFeatureTaskBinary",
+    "NextHourDiffFeatureTaskBinary",
     "NextAmntFeatureTaskBinary",
     "NextAmnt30DaysTaskBinary",
     "NextTransactions30DaysTaskBinary",

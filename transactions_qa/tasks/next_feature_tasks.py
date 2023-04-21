@@ -20,7 +20,7 @@ from romashka.tools import make_time_batch
 class NextFeatureTask(AbstractTask):
 
     def __post_init__(self):
-        self.task_name = "next_cat_feature_binary"
+        self.task_name = "next_feature_binary"
         self.target_feature_name = 'mcc_category'
 
         self.threshold = 2
@@ -38,8 +38,9 @@ class NextFeatureTask(AbstractTask):
 
         self.positive_answer_word = "Yes"
         self.negative_answer_word = "No"
-        self.answers_options = ["Yes", "No"]
-        # all options, for a sample can be reduced to [true_mcc_code + 4 other codes]
+        self.answers_options = list(range(28))  # as mcc category has 28 unique values
+        # all options
+        self.binary_answer_options: Dict[str, str] = {"positive": "Yes", "negative": "No"}
 
         self.answer_template = ""  # left empty for a first time
         self.add_tokens_to_tokenizer = True
@@ -57,8 +58,8 @@ class NextFeatureTask(AbstractTask):
                                    new_tokens=new_tokens,
                                    special=False)
 
-        self.positive_token = self.tokenizer(self.positive_answer_word).input_ids[0]
-        self.negative_token = self.tokenizer(self.negative_answer_word).input_ids[0]
+        self.positive_token = self.tokenizer(self.binary_answer_options.get('positive', "Yes")).input_ids[0]
+        self.negative_token = self.tokenizer(self.binary_answer_options.get('negative', "No")).input_ids[0]
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         # Construct templates
@@ -127,9 +128,9 @@ class NextFeatureTask(AbstractTask):
 
         batch_answer_template_encoded = answer_template_encoded.repeat(batch_size, 1)
         batch_answer_encoded = torch.cat([batch_answer_template_encoded,
-                                          target_encoded_batch['input_ids']], dim=1).to(device)
+                                          target_encoded_batch['input_ids']], dim=1).long().to(device)
         
-        batch_answer_template_mask = torch.ones(batch_size, answer_template_encoded.shape[1]).to(device)
+        batch_answer_template_mask = torch.ones(batch_size, answer_template_encoded.shape[1]).long().to(device)
         batch_answer_mask = torch.cat([batch_answer_template_mask,
                                        target_encoded_batch['attention_mask']], dim=1)
 
@@ -152,6 +153,7 @@ class NextFeatureTask(AbstractTask):
 class NextCatFeatureTaskBinary(NextFeatureTask):
     def __post_init__(self):
         super().__post_init__()
+        self.binary_answer_options: Dict[str, str] = {"positive": "Yes", "negative": "No"}
 
     def generate_target_question(self, question_end: Any, target_batch: Any, **kwargs) -> Any:
         return [question_end for _ in range(len(target_batch))] 
@@ -207,6 +209,7 @@ class NextNumFeatureTaskBinary(NextFeatureTask):
 
     def __post_init__(self):
         super().__post_init__()
+        self.binary_answer_options: Dict[str, str] = {"positive": "Yes", "negative": "No"}
     
     def generate_target_question(self, question_end: Any, target_batch: Any, **kwargs) -> Any:
         return [question_end for _ in range(len(target_batch))] 
@@ -247,10 +250,11 @@ class NextNumFeatureTaskBinary(NextFeatureTask):
 class NextAmntFeatureTaskBinary(NextNumFeatureTaskBinary):
     def __post_init__(self):
         super().__post_init__()
-        self.task_name = "next_num_feature_binary"
+        self.task_name = "next_amnt_feature_binary"
         self.target_feature_name = 'amnt'
         self.is_open_ended_task = False  # for a default for this task
-        
+        self.task_special_token = "[next_thresholded_AMNT_binary]"
+
         self.update_feature_index()
 
         self.threshold = 0.41
@@ -260,12 +264,13 @@ class NextAmntFeatureTaskBinary(NextNumFeatureTaskBinary):
         ]
 
 @dataclass
-class NextHourFeatureTaskBinary(NextNumFeatureTaskBinary):
+class NextHourDiffFeatureTaskBinary(NextNumFeatureTaskBinary):
     def  __post_init__(self):
         super().__post_init__()
 
-        self.task_name = "next_hour_binary"
+        self.task_name = "next_hour_diff_binary"
         self.target_feature_name = 'hour_diff'
+        self.task_special_token = "[next_hour_diff_binary]"
 
         self.update_feature_index()
         
@@ -274,6 +279,7 @@ class NextHourFeatureTaskBinary(NextNumFeatureTaskBinary):
             "Will the next transaction be made in the next 36 hours? Yes or No?"),
         ]
         self.threshold = 36 / 95
+
 
 @dataclass
 class NextTransactions30DaysTaskBinary(AbstractTask):
