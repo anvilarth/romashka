@@ -495,7 +495,7 @@ class NextAmnt30DaysTaskBinary(AbstractTask):
             return None, None
 
         input_labels = torch.gather(labels, 1, trx_index)
-        text_answer = list(map(lambda x: self.positive_answer_word if x else self.negative_answer_word , (input_labels >= self.threshold)))
+        text_answer = list(map(lambda x: self.positive_answer_word if x else self.negative_answer_word, (input_labels >= self.threshold)))
 
         return text_answer, trx_index
 
