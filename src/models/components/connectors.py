@@ -16,6 +16,8 @@ class TransactionConnector(nn.Module):
             self.connector = PerceiverMapping(input_size, output_size)
         else:
             raise NotImplementedError
+            
+        self.output_size = output_size
 
     def forward(self, x, attention_mask=None):
         return self.connector(x, attention_mask)

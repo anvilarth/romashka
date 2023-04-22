@@ -332,7 +332,7 @@ class TrainingArguments:
     )
     
     gradient_clip_norm: float = field(
-        default=1.0,
+        default=0.0,
         metadata={"help": "Clipping norm of gradients. If ||g|| < val, g = val * g / ||g||."},
     )
     # -----------------

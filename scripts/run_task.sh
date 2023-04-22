@@ -45,7 +45,7 @@ python src/transactions_qa/train.py \
 --do_eval=True \
 --max_steps=200000 \
 --max_epochs=10 \
---warmup_steps=10000 \
+--warmup_steps=1000 \
 --project_name="Transactions" \
 --group_name="learning_rate_check" \
 --run_name="tqa_200k-steps_$2_$model_name"

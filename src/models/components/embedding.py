@@ -47,7 +47,7 @@ class EmbeddingLayer(nn.Module):
             res += self.time_embedding.get_embedding_size()
         return res
         
-    def forward(self, batch):
+    def forward(self, batch, mask=None):
         batch_size = batch['mask'].shape[0]
         seq_len = batch['cat_features'][0].shape[1]
 

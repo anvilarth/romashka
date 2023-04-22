@@ -55,31 +55,51 @@ class TaskModule(LightningModule):
     def forward(self, x: dict):
         return self.transactions_model(x)
 
-    def model_step(self, batch: Any):
+    def shared_step(self, batch: Any, batch_idx=None):
         y = self.task.generate_target(batch)
-        if len(y) > 1:
+        
+        if len(y) == 2:
+            if y[0] is None:
+                return  None,  None
             y = y[0]
 
         logits = self.forward(batch)
-        loss = self.criterion(logits, y)
-        return loss
+        return logits, y
 
     def training_step(self, batch: Any, batch_idx: int):
-        loss = self.model_step(batch)
+        outputs, answers = self.shared_step(batch)
+        if outputs is None:
+            return None
+
+        loss = self.criterion(outputs, answers)
 
         # update and log metrics
         self.log("train/loss",loss, on_step=True, prog_bar=True)
         # we can return here dict with any tensors
         # and then read it in some callback or in `training_epoch_end()` below
         # remember to always return loss from `training_step()` or backpropagation will fail!
-        return {"loss": loss}
+        return loss
 
-    def validation_step(self, batch: Any, **kwargs: Any):
-        pass
-        # output = self.forward(batch)
+    def validation_step(self, batch: Any, batch_idx=None, **kwargs: Any):
+        batch_size=batch['mask'].shape[0]
 
-        # self.log
-        # return 
+        outputs, answers = self.shared_step(batch)
+        if outputs is None:
+            return None
+
+        loss = self.criterion(outputs, answers)
+
+        metrics_scores = self.task.calculate_metrics(outputs, answers, self.metrics)
+
+        # update and log metrics
+        self.log("val/loss",loss, on_step=True, prog_bar=True)
+        self.log_dict(
+            metrics_scores,
+            batch_size=batch_size
+        )
+
+
+        return loss
 
 
     def configure_optimizers(self):

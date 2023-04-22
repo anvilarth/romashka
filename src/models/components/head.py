@@ -27,16 +27,17 @@ class TransactionHead(nn.Module):
             raise NotImplementedError
     
     def forward(self, x, mask=None):
-        self.head(x, mask)
+        return self.head(x, mask)
 
 class LastOutputHead(nn.Module):
     def __init__(self):
         super().__init__()
     
     def forward(self, x, mask):
+        device = mask.device
         batch_size = mask.shape[0]
         trx_index = mask.sum(1) - 1
-        output = x[torch.arange(batch_size), trx_index]
+        output = x[torch.arange(batch_size, device=device), trx_index]
         return output
 
 
@@ -48,7 +49,7 @@ class LinearHead(nn.Module):
     
     def forward(self, x, mask=None):
         x = x[:, -1]
-        return self.linear1(x).squeeze()
+        return self.linear1(x).squeeze(1)
 
 class MLPHead(nn.Module):
     def __init__(self, input_size, hidden_size=64):

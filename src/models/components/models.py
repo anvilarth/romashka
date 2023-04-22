@@ -79,14 +79,14 @@ class TransactionsModel(nn.Module):
                                                 num_layers,
         )
 
-        output_size = self.encoder_model.get_output_size()
-        connector_type = self.encoder_model.get_connector_type()
+        self.output_size = self.encoder_model.get_output_size()
+        self.connector_type = self.encoder_model.get_connector_type()
 
-        self.cls_token = nn.Parameter(torch.randn(1, 1, output_size))
-        self.connector = TransactionConnector(inp_size, output_size, connector_type)
+        self.cls_token = nn.Parameter(torch.randn(1, 1, self.output_size))
+        self.connector = TransactionConnector(inp_size, self.output_size, self.connector_type)
 
         self.head_type = head_type
-        self.head = TransactionHead(head_type,  output_size, cat_embedding_projections, num_embedding_projections)
+        self.head = TransactionHead(head_type,  self.output_size, cat_embedding_projections, num_embedding_projections)
 
         self.cutmix = cutmix
         self.mixup = mixup

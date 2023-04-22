@@ -172,7 +172,7 @@ class NextCatFeatureTaskBinary(NextFeatureTask):
         # Construct target values 
         # Target's questions numeric/categorical answers as str
         trx_index = batch['mask'].sum(1, keepdim=True) - 1
-        input_labels = (torch.gather(target_feature_batch, 1, trx_index) == self.threshold).float()
+        input_labels = (torch.gather(target_feature_batch, 1, trx_index) == self.threshold).float().squeeze(1)
         return input_labels, trx_index
 
     def generate_text_target(self, batch: Any, **kwargs) -> Any:
@@ -190,7 +190,10 @@ class NextCatFeatureTaskBinary(NextFeatureTask):
     def calculate_metrics(self, outputs, answers, task_metrics):
         metrics = {}
 
-        preds, targets = self.process_outputs(outputs, answers)
+        if self.task_type == 'text':
+            preds, targets = self.process_outputs(outputs, answers)
+        else:
+            preds, targets = torch.sigmoid(outputs), answers
 
         if 'auc' in task_metrics:
             task_metrics['auc'](preds, targets)
@@ -234,7 +237,7 @@ class NextNumFeatureTaskBinary(NextFeatureTask):
         # Construct target values 
         # Target's questions numeric/categorical answers as str
         trx_index = batch['mask'].sum(1, keepdim=True) - 1
-        input_labels = (torch.gather(target_feature_batch, 1, trx_index) >= self.threshold).flatten().float()
+        input_labels = (torch.gather(target_feature_batch, 1, trx_index) >= self.threshold).float().squeeze(1)
         return input_labels, trx_index
 
     def generate_text_target(self, batch: Any, **kwargs) -> Any:
@@ -347,7 +350,7 @@ class NextTransactions30DaysTaskBinary(NextCatFeatureTaskBinary):
         if any(trx_index == -1):
             return None, None
 
-        input_labels = torch.gather(labels, 1, trx_index)
+        input_labels = torch.gather(labels, 1, trx_index).float().squeeze(1)
         return input_labels, trx_index
 
     def generate_text_target(self, batch: Any, **kwargs) -> Any:
@@ -410,7 +413,7 @@ class NextAmnt30DaysTaskBinary(NextNumFeatureTaskBinary):
         if any(trx_index == -1):
             return None, None
 
-        input_labels = torch.gather(labels, 1, trx_index)
+        input_labels = torch.gather(labels, 1, trx_index).float().squeeze(1)
         return input_labels, trx_index
 
     def generate_text_target(self, batch: Any, **kwargs) -> Any:
@@ -456,7 +459,7 @@ class NextCatFeatureTaskMulti(NextFeatureTask):
         # Construct target values 
         # Target's questions numeric/categorical answers as str
         trx_index = batch['mask'].sum(1, keepdim=True) - 1
-        input_labels = torch.gather(target_feature_batch, 1, trx_index)
+        input_labels = torch.gather(target_feature_batch, 1, trx_index).float().squeeze(1)
 
         return input_labels, trx_index
 

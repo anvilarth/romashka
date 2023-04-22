@@ -3,7 +3,7 @@
 # TRANSFORMERS_OFFLINE=1
 # HF_DATASETS_OFFLINE=1
 learning_rate=0.0005;
-warmup_steps=1000;
+warmup_steps=100;
 
 WANDB_PROJECT=Transactions;
 WANDB_WATCH=all;

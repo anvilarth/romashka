@@ -32,7 +32,7 @@ python src/transactions_qa/train.py \
 --do_freeze_language_model=True \
 --do_freeze_transactions_model=False \
 --optimizer_name='AdamW' \
---task_names=$2 \
+--task_names='default' "next_mcc_binary" \
 --min_trx_seq_len=0 \
 --max_trx_seq_len=250 \
 --no_cuda=False \
@@ -44,7 +44,7 @@ python src/transactions_qa/train.py \
 --warmup_steps=$warmup_steps \
 --project_name="Transactions" \
 --group_name="predictive_tasks_single_mode" \
---run_name="tqa_200k-steps_ft=trx_$2_$model_name"
+--run_name="tqa_200k-steps_ft=all_default_next_mcc_binary_$model_name"
 
 
 

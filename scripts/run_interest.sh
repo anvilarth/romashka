@@ -3,7 +3,7 @@
 # TRANSFORMERS_OFFLINE=1
 # HF_DATASETS_OFFLINE=1
 learning_rate=0.0005;
-warmup_steps=100;
+warmup_steps=10000;
 
 WANDB_PROJECT=Transactions;
 WANDB_WATCH=all;
@@ -29,8 +29,8 @@ python src/transactions_qa/train.py \
 --preprocessing_num_workers=8 \
 --dataloader_pin_memory=True \
 --do_freeze_connector=False \
---do_freeze_language_model=True \
---do_freeze_transactions_model=False \
+--do_freeze_language_model=False \
+--do_freeze_transactions_model=True \
 --optimizer_name='AdamW' \
 --task_names=$2 \
 --min_trx_seq_len=0 \
@@ -43,8 +43,8 @@ python src/transactions_qa/train.py \
 --max_epochs=10 \
 --warmup_steps=$warmup_steps \
 --project_name="Transactions" \
---group_name="predictive_tasks_single_mode" \
---run_name="tqa_200k-steps_ft=trx_$2_$model_name"
+--group_name="learning_rate_check" \
+--run_name="check_warmup"
 
 
 

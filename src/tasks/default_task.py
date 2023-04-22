@@ -159,12 +159,15 @@ class DefaultTask(AbstractTask):
         targets = (answers[:, -2] == self.positive_token).long()
         preds = torch.sigmoid(outputs.logits[:, 0, self.positive_token] - outputs.logits[:, 0, self.negative_token])
 
-        return targets, preds
+        return preds, targets 
 
     def calculate_metrics(self, outputs, answers, task_metrics):
         metrics = {}
 
-        targets, preds = self.process_outputs(outputs, answers)
+        if self.task_type == 'text':
+            preds, targets = self.process_outputs(outputs, answers)
+        else:
+            preds, targets = torch.sigmoid(outputs), answers
 
         if 'auc' in task_metrics:
             task_metrics['auc'].update(preds, targets)
