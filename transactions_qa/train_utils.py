@@ -1,4 +1,5 @@
 import os
+import math
 from typing import Optional
 
 import torch
@@ -7,6 +8,18 @@ from typing import Sequence, Any
 
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import BasePredictionWriter
+
+
+def get_warmup_steps(num_training_steps: int,
+                     num_warmup_steps: Optional[int] = 0,
+                     warmup_ratio: Optional[float] = 0.0):
+    """
+    Get number of steps used for a linear warmup.
+    """
+    warmup_steps = (
+        num_warmup_steps if num_warmup_steps > 0 else math.ceil(num_training_steps * warmup_ratio)
+    )
+    return warmup_steps
 
 
 class CustomPredictionsWriter(BasePredictionWriter):

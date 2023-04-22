@@ -67,19 +67,39 @@ class ModelArguments:
             )
         },
     )
+
+    connector_type: Optional[str] = field(
+        default="linear",
+        metadata={
+            "help": (
+                "The Connector layer(-s) type. Can be one from: linear, recurrent, transformer."
+            )
+        },
+    )
+
+    connector_input_size: Optional[int] = field(
+        default=None,
+        metadata={"help": "A connector layer input size (as an embedding size of Transactions model)."},
+    )
+
+    connector_output_size: Optional[int] = field(
+        default=None,
+        metadata={"help": "A connector layer output size (as an embedding size of Language model)."},
+    )
+
     cache_dir: Optional[str] = field(
         default=None,
         metadata={"help": "Where do you want to store the pretrained models downloaded from huggingface.co"},
     )
-    use_fast_tokenizer: bool = field(
+    use_fast_tokenizer: Optional[bool] = field(
         default=False,
         metadata={"help": "Whether to use one of the fast tokenizer (backed by the tokenizers library) or not."},
     )
-    model_revision: str = field(
+    model_revision: Optional[str] = field(
         default="main",
         metadata={"help": "The specific model version to use (can be a branch name, tag name or commit id)."},
     )
-    use_auth_token: bool = field(
+    use_auth_token: Optional[bool] = field(
         default=False,
         metadata={
             "help": (
@@ -331,6 +351,7 @@ class TrainingArguments:
         default=8, metadata={"help": "Batch size per GPU/TPU core/CPU for evaluation."}
     )
     # -----------------
+
     do_freeze_language_model: Optional[bool] = field(
         default=False, metadata={"help": "Whether to freeze weights of Language model during training."}
     )

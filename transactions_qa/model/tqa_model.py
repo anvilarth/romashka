@@ -6,6 +6,7 @@ import wandb
 import torch
 import torch.nn as nn
 
+from transformers import Trainer
 import transformers
 import pytorch_lightning as pl
 from pytorch_lightning.utilities import rank_zero_info
@@ -485,7 +486,7 @@ class TransactionQAModel(pl.LightningModule):
         # Reset log counter
         self.log_eval_steps_counter = 0
 
-    def on_fit_end(self) -> None:
+    def on_train_end(self) -> None:
         # ✨ W&B: Log predictions table to wandb
         wandb.log({"val_predictions": self.log_eval_predictions_table})
         # was directly to W&B: wandb.log({"val_predictions": self.log_eval_predictions_table})

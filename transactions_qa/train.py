@@ -8,9 +8,6 @@ import wandb
 os.environ["WANDB_MODE"] = "online"
 
 import torch
-import torch.nn as nn
-from torch.utils.data import DataLoader
-
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
@@ -28,7 +25,7 @@ print(sys.path)
 
 from romashka.logging_handler import get_logger
 from romashka.tools import (make_time_batch,
-                   calculate_embedding_size)
+                            calculate_embedding_size)
 from romashka.transactions_qa.train_args import (ModelArguments, DataTrainingArguments,
                                                  TrainingArguments, TasksArguments)
 from romashka.transactions_qa.dataset.data_generator import (
@@ -45,8 +42,9 @@ from romashka.transactions_qa.model.decoder_model import DecoderSimpleModel
 from romashka.transactions_qa.model.tqa_model import TransactionQAModel
 from romashka.transactions_qa.layers.connector import (make_linear_connector,
                                                        make_recurrent_connector)
+from romashka.transactions_qa.train_utils import get_warmup_steps
 
-from romashka.transactions_qa.utils import get_projections_maps, get_buckets_info
+
 from romashka.transactions_qa.tasks import AutoTask
 from romashka.transactions_qa.utils import (get_last_checkpoint, get_projections_maps)
 
@@ -223,27 +221,59 @@ def main():
         tasks.append(task)
     logger.info(f"Created {len(tasks)} tasks.")
 
-    # Create general Tranactions QA model
-    transactionsQA_model_config = {
-        "warmup_steps": training_args.warmup_steps,
-        "training_steps": training_args.max_steps,
+    # Create connector
+    lm_input_size = None
+    if model_args.connector_output_size is not None:
+        lm_input_size = model_args.connector_output_size
+    elif hasattr(lm_model.config, "d_model"):
+        lm_input_size = lm_model.config.d_model
+    elif lm_model.config.hidden_size:
+        lm_input_size = lm_model.config.d_model
+    else:
+        raise AttributeError(f"Unable to estimate Language model input embeddings dimension!")
+
+    trns_output_size = None
+    if model_args.connector_input_size is not None:
+        trns_output_size = model_args.connector_input_size
+    else:
+        trns_output_size = 384
+        logger.warning(f"Unable to estimate Transactions model output embeddings dimension, "
+                       f"use default setting: {trns_output_size}")
+
+    if model_args.connector_type == "linear":
+        connector = make_linear_connector(
+            output_size=trns_output_size,
+            input_size=lm_input_size
+        )
+    elif model_args.connector_type == "recurrent":
+        # Connector args are hardcoded, should be changed here
+        connector_args = {
+            'num_recurrent_layers': 2,
+            'is_bidirectional': False
+        }
+        connector = make_recurrent_connector(
+            output_size=trns_output_size,
+            input_size=lm_input_size,
+            **connector_args
+        )
+    else:
+        raise AttributeError(f"Unknown connector type: {model_args.connector_type}")
+
+    # Create general LLM model
+    lm_model_config = {
         "do_freeze_tm": training_args.do_freeze_transactions_model,
         "do_freeze_lm": training_args.do_freeze_language_model,
         "do_freeze_connector": training_args.do_freeze_connector,
-        "connector_input_size": 384,
+        "is_debug": True
     }
 
-    connector = make_linear_connector(
-        output_size=384,
-        input_size=lm_model.config.d_model if hasattr(lm_model.config, "d_model") else lm_model.config.hidden_size
-    )
     if model_args.language_model_type == "encoder-decoder":
         model_ = EncoderSimpleModel(
             language_model=lm_model,
             transaction_model=transactions_model,
             tokenizer=tokenizer,
             connector=connector,
-            is_debug=True
+            **lm_model_config
         )
     else:
         model_ = DecoderSimpleModel(
@@ -251,11 +281,26 @@ def main():
             transaction_model=transactions_model,
             tokenizer=tokenizer,
             connector=connector,
-            is_debug=True
+            **lm_model_config
         )
 
+    # Create general Tranactions QA model
+    transactionsQA_model_config = {
+        "learning_rate": training_args.learning_rate,
+        "scheduler_type": training_args.lr_scheduler_type,
+        "adam_beta1": training_args.adam_beta1,
+        "adam_beta2": training_args.adam_beta2,
+        "adam_epsilon": training_args.adam_epsilon,
+        "warmup_steps": get_warmup_steps(
+            num_training_steps=training_args.max_steps,
+            num_warmup_steps=training_args.warmup_steps,
+            warmup_ratio=training_args.warmup_ratio),
+        "training_steps": training_args.max_steps
+    }
+
     model = TransactionQAModel(model=model_,
-                               tasks=tasks)
+                               tasks=tasks,
+                               **transactionsQA_model_config)
 
     # Datasets & Dataloader & Other utils
     if training_args.do_train and "train" in data_files:
@@ -263,7 +308,7 @@ def main():
             'dataset': data_files['train'],
             'min_seq_len': data_args.min_trx_seq_len,
             'max_seq_len': data_args.max_trx_seq_len,
-            'seed': training_args.seed, 
+            'seed': training_args.seed,
             'generator_batch_size': 1,
             'buffer_size': data_args.shuffle_buffer_size,
             'batch_size': training_args.per_device_train_batch_size,
@@ -278,7 +323,7 @@ def main():
             'dataset': data_files['validation'],
             'min_seq_len': data_args.min_trx_seq_len,
             'max_seq_len': data_args.max_trx_seq_len,
-            'seed': training_args.seed, 
+            'seed': training_args.seed,
             'buffer_size': 0,
             'generator_batch_size': 1,
             'batch_size': training_args.per_device_eval_batch_size,
@@ -291,7 +336,7 @@ def main():
     if (not training_args.do_train) and (not training_args.do_eval):
         logger.error("There is nothing to do. Please pass `do_train` and/or `do_eval`.")
         return 1
-    
+
     datamodule = TransactionQADataModule(train_dataset_config, val_dataset_config)
 
     # Training & Callbacks
@@ -334,13 +379,13 @@ def main():
         reload_dataloaders_every_n_epochs=1,
         gradient_clip_val=training_args.gradient_clip_val,
         accumulate_grad_batches=training_args.gradient_accumulation_steps,
-        logger=wb_logger,  #[tb_logger, wb_logger],
+        logger=wb_logger,  # [tb_logger, wb_logger],
         callbacks=[checkpoint_callback, lr_monitor_callback])
     trainer.fit(model=model, datamodule=datamodule)
 
-
 if __name__ == '__main__':
     import os
+
     # os.environ['HF_DATASETS_OFFLINE'] = '1'  # offline mode for HF datasets
     # os.environ['TRANSFORMERS_OFFLINE'] = '1'  # offline mode for HF Transformers
     # os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # disable DataParallel for test
