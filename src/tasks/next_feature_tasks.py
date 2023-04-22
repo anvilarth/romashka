@@ -306,7 +306,7 @@ class NextTransactions30DaysTaskBinary(NextCatFeatureTaskBinary):
         self.N = 30
         self.is_open_ended_task = False  # for a default for this task
         
-        self.threshold = 9
+        self.threshold = 2
 
         self.metrics = nn.ModuleDict({
             "auc": AUROC(task='binary'),
@@ -343,14 +343,14 @@ class NextTransactions30DaysTaskBinary(NextCatFeatureTaskBinary):
             self.negative_token = self.tokenizer(self.negative_answer_word).input_ids[0]
 
     def generate_target(self, batch: Any, **kwargs) -> Any:
-        labels, _, _, padding_mask = make_time_batch(batch, number_days=self.N)
+        _, labels, _, padding_mask = make_time_batch(batch, number_days=self.N)
         trx_index = padding_mask.sum(1, keepdim=True) - 1
         
         ### This is the case when we don't have target so we skip this step
         if any(trx_index == -1):
             return None, None
 
-        input_labels = torch.gather(labels, 1, trx_index).float().squeeze(1)
+        input_labels = (torch.gather(labels, 1, trx_index) == self.threshold).float().squeeze(1)
         return input_labels, trx_index
 
     def generate_text_target(self, batch: Any, **kwargs) -> Any:
@@ -358,7 +358,7 @@ class NextTransactions30DaysTaskBinary(NextCatFeatureTaskBinary):
         if input_labels is None:
             return None, None
 
-        text_answer = list(map(lambda x: self.positive_answer_word if x else self.negative_answer_word, (input_labels >= self.threshold)))
+        text_answer = list(map(lambda x: self.positive_answer_word if x else self.negative_answer_word, input_labels))
         return text_answer, trx_index
 
 @dataclass
@@ -406,14 +406,14 @@ class NextAmnt30DaysTaskBinary(NextNumFeatureTaskBinary):
             self.negative_token = self.tokenizer(self.negative_answer_word).input_ids[0]
 
     def generate_target(self, batch: Any, **kwargs) -> Any:
-        _, labels, _, padding_mask = make_time_batch(batch, number_days=self.N)
+        labels, _, _, padding_mask = make_time_batch(batch, number_days=self.N)
         trx_index = padding_mask.sum(1, keepdim=True) - 1
         
         ### This is the case when we don't have target so we skip this step
         if any(trx_index == -1):
             return None, None
 
-        input_labels = torch.gather(labels, 1, trx_index).float().squeeze(1)
+        input_labels = (torch.gather(labels, 1, trx_index) >= self.threshold).float().squeeze(1)
         return input_labels, trx_index
 
     def generate_text_target(self, batch: Any, **kwargs) -> Any:
@@ -421,7 +421,7 @@ class NextAmnt30DaysTaskBinary(NextNumFeatureTaskBinary):
         if input_labels is None:
             return None, None
 
-        text_answer = list(map(lambda x: self.positive_answer_word if x else self.negative_answer_word, (input_labels >= self.threshold)))
+        text_answer = list(map(lambda x: self.positive_answer_word if x else self.negative_answer_word, input_labels))
         return text_answer, trx_index
 
 @dataclass

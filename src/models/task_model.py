@@ -19,6 +19,7 @@ class TaskModule(LightningModule):
     def __init__(
         self,
         optimizer: torch.optim.Optimizer,
+        scheduler: torch.optim.lr_scheduler,
         task_name,
         encoder_type='whisper/tiny',
         head_type='linear',
@@ -67,6 +68,7 @@ class TaskModule(LightningModule):
         return logits, y
 
     def training_step(self, batch: Any, batch_idx: int):
+        batch_size=batch['mask'].shape[0]
         outputs, answers = self.shared_step(batch)
         if outputs is None:
             return None
@@ -74,7 +76,7 @@ class TaskModule(LightningModule):
         loss = self.criterion(outputs, answers)
 
         # update and log metrics
-        self.log("train/loss",loss, on_step=True, prog_bar=True)
+        self.log("train_loss",loss, on_step=True, prog_bar=True, batch_size=batch_size)
         # we can return here dict with any tensors
         # and then read it in some callback or in `training_epoch_end()` below
         # remember to always return loss from `training_step()` or backpropagation will fail!
@@ -90,14 +92,38 @@ class TaskModule(LightningModule):
         loss = self.criterion(outputs, answers)
 
         metrics_scores = self.task.calculate_metrics(outputs, answers, self.metrics)
+        for metric_key in metrics_scores:
+            metrics_scores['val_' + metric_key] = metrics_scores.pop(metric_key)
 
         # update and log metrics
-        self.log("val/loss",loss, on_step=True, prog_bar=True)
+        self.log("val_loss",loss, on_step=True, prog_bar=True, batch_size=batch_size)
         self.log_dict(
             metrics_scores,
             batch_size=batch_size
         )
 
+
+        return loss
+
+    def test_step(self, batch: Any, batch_idx, **kwargs: Any):
+        batch_size=batch['mask'].shape[0]
+
+        outputs, answers = self.shared_step(batch)
+        if outputs is None:
+            return None
+
+        loss = self.criterion(outputs, answers)
+
+        metrics_scores = self.task.calculate_metrics(outputs, answers, self.metrics)
+        for metric_key in metrics_scores:
+            metrics_scores['test_' + metric_key] = metrics_scores.pop(metric_key)
+
+        # update and log metrics
+        self.log("test_loss",loss, on_step=True, prog_bar=True, batch_size=batch_size)
+        self.log_dict(
+            metrics_scores,
+            batch_size=batch_size
+        )
 
         return loss
 
@@ -110,4 +136,9 @@ class TaskModule(LightningModule):
             https://pytorch-lightning.readthedocs.io/en/latest/common/lightning_module.html#configure-optimizers
         """
         optimizer = self.hparams.optimizer(params=self.parameters())
-        return {"optimizer": optimizer}
+        scheduler = self.hparams.scheduler(optimizer)
+
+        return {
+            "optimizer": optimizer,
+            "lr_scheduler": scheduler,
+        }

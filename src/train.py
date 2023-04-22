@@ -3,12 +3,13 @@ from typing import List, Optional, Tuple
 import hydra
 import pyrootutils
 import pytorch_lightning as pl
-from omegaconf import DictConfig
+from omegaconf import DictConfig, OmegaConf
 
 from tasks.task_abstract import AbstractTask
 from pytorch_lightning import Callback, LightningDataModule, LightningModule, Trainer
 from pytorch_lightning.loggers import Logger
 
+OmegaConf.register_new_resolver("eval", eval)
 pyrootutils.setup_root(__file__, indicator="setup.py", pythonpath=True)
 # ------------------------------------------------------------------------------------ #
 # the setup_root above is equivalent to:
@@ -56,8 +57,6 @@ def train(cfg: DictConfig) -> Tuple[dict, dict]:
 
     log.info(f"Instantiating model <{cfg.model._target_}>")
     model: LightningModule = hydra.utils.instantiate(cfg.model, task_name=cfg.task.task_name)
-
-    log.info("Instantiating callbacks...")
     callbacks: List[Callback] = utils.instantiate_callbacks(cfg.get("callbacks"))
 
     log.info("Instantiating loggers...")

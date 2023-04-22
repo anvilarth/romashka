@@ -79,6 +79,12 @@ class AlfaDataModule(pl.LightningDataModule):
                             num_workers=self.num_workers, 
                             collate_fn=self.collate_fn)
 
+    def test_dataloader(self):
+        return DataLoader(self.val_ds, 
+                            batch_size=self.batch_size,
+                            num_workers=self.num_workers, 
+                            collate_fn=self.collate_fn)
+
     
     @staticmethod
     def collate_fn(batch):
