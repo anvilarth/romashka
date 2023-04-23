@@ -228,7 +228,7 @@ def main():
     elif hasattr(lm_model.config, "d_model"):
         lm_input_size = lm_model.config.d_model
     elif lm_model.config.hidden_size:
-        lm_input_size = lm_model.config.d_model
+        lm_input_size = lm_model.config.hidden_size
     else:
         raise AttributeError(f"Unable to estimate Language model input embeddings dimension!")
 
