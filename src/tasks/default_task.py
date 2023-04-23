@@ -61,6 +61,9 @@ class DefaultTask(AbstractTask):
             self.positive_token = self.tokenizer(self.positive_answer_word).input_ids[0]
             self.negative_token = self.tokenizer(self.negative_answer_word).input_ids[0]
         self.criterion = nn.BCEWithLogitsLoss()
+    
+    def prepare_task_batch(self, batch: Dict[str, Any], **kwargs):
+        return batch['label'].float()
 
     def generate_target(self, batch: Any, **kwargs) -> Any:
         target_feature_batch = batch['label']  # Tensor [batch_size]

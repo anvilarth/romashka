@@ -4,6 +4,6 @@ batch_size: 32
 min_seq_len: 0
 max_seq_len: 250
 buffer_size: 1000
-num_workers: 8
+num_workers: 10
 pin_memory: True
 seed: 42

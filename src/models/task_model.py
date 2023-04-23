@@ -57,14 +57,11 @@ class TaskModule(LightningModule):
         return self.transactions_model(x)
 
     def shared_step(self, batch: Any, batch_idx=None):
-        y = self.task.generate_target(batch)
-        
-        if len(y) == 2:
-            if y[0] is None:
-                return  None,  None
-            y = y[0]
-
+        batch = self.task.prepare_task_batch(batch)
+        if not batch:
+            return None, None
         logits = self.forward(batch)
+        y = batch['label']
         return logits, y
 
     def training_step(self, batch: Any, batch_idx: int):
@@ -93,10 +90,10 @@ class TaskModule(LightningModule):
 
         metrics_scores = self.task.calculate_metrics(outputs, answers, self.metrics)
         for metric_key in metrics_scores:
-            metrics_scores['val_' + metric_key] = metrics_scores.pop(metric_key)
+            metrics_scores[metric_key] = metrics_scores.pop(metric_key)
 
         # update and log metrics
-        self.log("val_loss",loss, on_step=True, prog_bar=True, batch_size=batch_size)
+        self.log("val_loss",loss, on_step=False, on_epoch=True, prog_bar=True, batch_size=batch_size)
         self.log_dict(
             metrics_scores,
             batch_size=batch_size
@@ -116,10 +113,10 @@ class TaskModule(LightningModule):
 
         metrics_scores = self.task.calculate_metrics(outputs, answers, self.metrics)
         for metric_key in metrics_scores:
-            metrics_scores['test_' + metric_key] = metrics_scores.pop(metric_key)
+            metrics_scores[metric_key] = metrics_scores.pop(metric_key)
 
         # update and log metrics
-        self.log("test_loss",loss, on_step=True, prog_bar=True, batch_size=batch_size)
+        self.log("test_loss",loss, on_step=False, on_epoch=True, prog_bar=True, batch_size=batch_size)
         self.log_dict(
             metrics_scores,
             batch_size=batch_size

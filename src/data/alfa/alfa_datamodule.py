@@ -65,8 +65,10 @@ class AlfaDataModule(pl.LightningDataModule):
         
         return dataset.with_format('torch')
 
-    def train_dataloader(self):
-        self.train_ds.set_epoch(self.trainer.current_epoch)
+    def train_dataloader(self, pl_training=True):
+        if pl_training:
+            self.train_ds.set_epoch(self.trainer.current_epoch)
+        
         return DataLoader(self.train_ds, 
                             batch_size=self.batch_size,
                             num_workers=self.num_workers, 

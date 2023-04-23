@@ -84,18 +84,17 @@ class AbstractTask(ABC):
         Apply task-specific processing for a batch of data.
         """
         raise NotImplementedError
+    
+    def prepare_task_batch(self, batch: Dict[str, Any], **kwargs):
+        """
+        Add task label to batch and update padding mask
+        """
+        raise NotImplementedError
 
     # @abstractmethod  todo: later add this for muli-task inside a single batch
     def process_input_sample(self, sample: Any, **kwargs) -> Any:
         """
         Apply task-specific processing for a single data sample.
-        """
-        raise NotImplementedError
-
-    # @abstractmethod  todo: later add this to separate functionality of target generation
-    def generate_target(self, sample: Any, **kwargs) -> Any:
-        """
-        Generated question/answer-specific target sequence.
         """
         raise NotImplementedError
 

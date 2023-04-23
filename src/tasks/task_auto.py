@@ -16,7 +16,8 @@ from .next_feature_tasks import (NextMCCFeatureTaskBinary,
                                                                NextHourFeatureTaskBinary,
                                                                NextAmnt30DaysTaskBinary,
                                                                NextTransactions30DaysTaskBinary,
-                                                               NextMCCFeatureTaskMulti)
+                                                               NextMCCFeatureTaskMulti,
+                                                               NextMCCFeatureOpenEnded)
                                                                
 from .default_task import DefaultTask
 from .next_pred import NextFeatureStandardTask
@@ -45,7 +46,6 @@ AUTO_TASKS = [
         ("mean_binned_amount_binary", MeanAmountBinnedTaskBinary),
         ("mean_numeric_amount_binary", MeanAmountNumericTaskBinary),
         # Predictive
-        ("default", DefaultTask),
         ("next_mcc_binary", NextMCCFeatureTaskBinary),
         ("next_amnt_binary", NextAmntFeatureTaskBinary),
         ("next_hour_binary", NextHourFeatureTaskBinary),
@@ -53,6 +53,7 @@ AUTO_TASKS = [
         ("next_transactions_30_days_binary", NextTransactions30DaysTaskBinary),
         ("next_mcc_multi", NextMCCFeatureTaskMulti),
         ("next_transaction", NextFeatureStandardTask),
+        ("next_mcc_open_ended", NextMCCFeatureOpenEnded),
         ("default", DefaultTask)
     ]
 AUTO_TASKS = OrderedDict(AUTO_TASKS)

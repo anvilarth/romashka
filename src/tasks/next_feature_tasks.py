@@ -62,7 +62,7 @@ class NextFeatureTask(AbstractTask):
 
             self.positive_token = self.tokenizer(self.positive_answer_word).input_ids[0]
             self.negative_token = self.tokenizer(self.negative_answer_word).input_ids[0]
-
+    
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         # Construct templates
         question_start, question_end = random.choice(self.question_templates)
@@ -76,21 +76,19 @@ class NextFeatureTask(AbstractTask):
         device = batch['mask'].device
         batch_size = batch['mask'].shape[0]
 
-        transactions_embedding_mask = batch['mask']  # bool Tensor [batch_size, seq_len]
+
 
         # Construct target values 
         # Target's questions numeric/categorical answers as str
 
-        target_batch, trx_index = self.generate_text_target(batch)
-        
-        if target_batch is None:
+        task_batch = self.generate_text_target(batch)
+        if not task_batch:
             return dict()
 
+        target_batch = task_batch['label']
+        
+        transactions_embedding_mask = task_batch['mask']  # bool Tensor [batch_size, seq_len]
         # Masking elements which we want to predict
-
-        #TODO Fix this fast fix
-        if self.task_name != "next_transactions_30_days_binary" and self.task_name != "next_amnt_30_days_binary":
-            transactions_embedding_mask[:, trx_index.flatten()] = 0
 
         # Construct target sequences
         question_target_batch = self.generate_target_question(question_end, target_batch) # as strings
@@ -163,23 +161,25 @@ class NextCatFeatureTaskBinary(NextFeatureTask):
         super().__post_init__()
         self.criterion = nn.BCEWithLogitsLoss()
 
-    def generate_target_question(self, question_end: Any, target_batch: Any, **kwargs) -> Any:
-        return [question_end for _ in range(len(target_batch))] 
-
-    def generate_target(self, batch: Any, **kwargs) -> Any:
+    def prepare_task_batch(self, batch: Dict[str, Any], **kwargs):
         target_feature_batch = batch[self.target_feature_type][self.target_feature_index]  # Tensor [batch_size, seq_len]
 
         # Construct target values 
         # Target's questions numeric/categorical answers as str
         trx_index = batch['mask'].sum(1, keepdim=True) - 1
-        input_labels = (torch.gather(target_feature_batch, 1, trx_index) == self.threshold).float().squeeze(1)
-        return input_labels, trx_index
+        batch['label'] = (torch.gather(target_feature_batch, 1, trx_index) == self.threshold).float().squeeze(1)
+        batch['mask'][:, trx_index.flatten()] = 0
+        return batch
+
+    def generate_target_question(self, question_end: Any, target_batch: Any, **kwargs) -> Any:
+        return [question_end for _ in range(len(target_batch))] 
 
     def generate_text_target(self, batch: Any, **kwargs) -> Any:
 
-        input_labels, trx_index = self.generate_target(batch, **kwargs)
-        target_batch = list(map(lambda x: 'Yes' if x else 'No', input_labels))
-        return target_batch, trx_index
+        batch = self.prepare_task_batch(batch, **kwargs)
+        input_labels = batch['label']
+        batch['label'] = list(map(lambda x: 'Yes' if x else 'No', input_labels))
+        return batch
     
     def process_outputs(self, outputs, answers: torch.Tensor):
         targets = (answers[:, -2] == self.positive_token).long()
@@ -228,22 +228,26 @@ class NextNumFeatureTaskBinary(NextFeatureTask):
         super().__post_init__()
         self.criterion = nn.BCEWithLogitsLoss()
     
-    def generate_target_question(self, question_end: Any, target_batch: Any, **kwargs) -> Any:
-        return [question_end for _ in range(len(target_batch))] 
-
-    def generate_target(self, batch: Any, **kwargs) -> Any:
+    def prepare_task_batch(self, batch: Dict[str, Any], **kwargs):
         target_feature_batch = batch[self.target_feature_type][self.target_feature_index]  # Tensor [batch_size, seq_len]
 
         # Construct target values 
         # Target's questions numeric/categorical answers as str
         trx_index = batch['mask'].sum(1, keepdim=True) - 1
-        input_labels = (torch.gather(target_feature_batch, 1, trx_index) >= self.threshold).float().squeeze(1)
-        return input_labels, trx_index
+        batch['label'] = (torch.gather(target_feature_batch, 1, trx_index) >= self.threshold).float().squeeze(1)
+        batch['mask'][:, trx_index.flatten()] = 0
+
+        return batch
+
+    def generate_target_question(self, question_end: Any, target_batch: Any, **kwargs) -> Any:
+        return [question_end for _ in range(len(target_batch))] 
 
     def generate_text_target(self, batch: Any, **kwargs) -> Any:
-        input_labels, trx_index = self.generate_target(batch, **kwargs)
-        target_batch = list(map(lambda x: 'Yes' if x else 'No', input_labels))
-        return target_batch, trx_index
+
+        batch = self.prepare_task_batch(batch, **kwargs)
+        input_labels = batch['label']
+        batch['label'] = list(map(lambda x: 'Yes' if x else 'No', input_labels))
+        return batch
     
     def process_outputs(self, outputs, answers: torch.Tensor):
         targets = (answers[:, -2] == self.positive_token).long()
@@ -301,12 +305,13 @@ class NextHourFeatureTaskBinary(NextNumFeatureTaskBinary):
 @dataclass
 class NextTransactions30DaysTaskBinary(NextCatFeatureTaskBinary):
     def __post_init__(self):
+        super().__post_init__()
         self.task_name = "next_transactions_30_days_binary"
         self.target_feature_name = 'mcc_category'
         self.N = 30
         self.is_open_ended_task = False  # for a default for this task
         
-        self.threshold = 2
+        self.threshold = 6
 
         self.metrics = nn.ModuleDict({
             "auc": AUROC(task='binary'),
@@ -315,7 +320,7 @@ class NextTransactions30DaysTaskBinary(NextCatFeatureTaskBinary):
 
         self.question_templates = [
             ("This is the client's transaction history ",
-             "Will there be more than 9 transactions in the next 30 days? Yes or No?"),
+             "Will there be more than 6 transactions in the next 30 days? Yes or No?"),
         ]
 
         self.positive_answer_word = "Yes"
@@ -326,7 +331,6 @@ class NextTransactions30DaysTaskBinary(NextCatFeatureTaskBinary):
         self.answer_template = ""  # left empty for a first time
         self.add_tokens_to_tokenizer = True
 
-        super().__post_init__()
         if self.task_type == 'text':
             if self.tokenizer is None:
                 raise AttributeError("This task requires tokenizer to be set!")
@@ -342,28 +346,30 @@ class NextTransactions30DaysTaskBinary(NextCatFeatureTaskBinary):
             self.positive_token = self.tokenizer(self.positive_answer_word).input_ids[0]
             self.negative_token = self.tokenizer(self.negative_answer_word).input_ids[0]
 
-    def generate_target(self, batch: Any, **kwargs) -> Any:
+    def prepare_task_batch(self, batch: Dict[str, Any], **kwargs):
         _, labels, _, padding_mask = make_time_batch(batch, number_days=self.N)
         trx_index = padding_mask.sum(1, keepdim=True) - 1
-        
-        ### This is the case when we don't have target so we skip this step
-        if any(trx_index == -1):
-            return None, None
 
-        input_labels = (torch.gather(labels, 1, trx_index) == self.threshold).float().squeeze(1)
-        return input_labels, trx_index
+        if any(trx_index == -1):
+            return {}
+
+        batch['label'] = (torch.gather(labels, 1, trx_index) >= self.threshold).float().squeeze(1)
+        batch['mask'] = padding_mask
+        return batch
 
     def generate_text_target(self, batch: Any, **kwargs) -> Any:
-        input_labels, trx_index = self.generate_target(batch, **kwargs)
-        if input_labels is None:
-            return None, None
-
-        text_answer = list(map(lambda x: self.positive_answer_word if x else self.negative_answer_word, input_labels))
-        return text_answer, trx_index
+        batch = self.prepare_task_batch(batch, **kwargs)
+        if not batch:
+            return {}
+            
+        input_labels = batch['label']
+        batch['label'] = list(map(lambda x: 'Yes' if x else 'No', input_labels))
+        return batch
 
 @dataclass
 class NextAmnt30DaysTaskBinary(NextNumFeatureTaskBinary):
     def __post_init__(self):
+        super().__post_init__()
         self.task_name = "next_amount_30_days_binary"
         self.target_feature_name = 'mcc_category'
         self.N = 30
@@ -374,10 +380,10 @@ class NextAmnt30DaysTaskBinary(NextNumFeatureTaskBinary):
             "accuracy": BinaryAccuracy()
         })
 
-        self.threshold = 2.66
+        self.threshold = 2.27
         self.question_templates = [
             ("This is the client's transaction history ",
-             "Will there be more transactions of more than 2.66 in the next 30 days? Yes or No?"),
+             "Will there be more transactions of more than 2.27 in the next 30 days? Yes or No?"),
         ]
 
         self.positive_answer_word = "Yes"
@@ -388,7 +394,7 @@ class NextAmnt30DaysTaskBinary(NextNumFeatureTaskBinary):
         self.answer_template = ""  # left empty for a first time
         self.add_tokens_to_tokenizer = True
 
-        super().__post_init__()
+
 
         if self.task_type == 'text':
             if self.tokenizer is None:
@@ -404,25 +410,28 @@ class NextAmnt30DaysTaskBinary(NextNumFeatureTaskBinary):
 
             self.positive_token = self.tokenizer(self.positive_answer_word).input_ids[0]
             self.negative_token = self.tokenizer(self.negative_answer_word).input_ids[0]
-
-    def generate_target(self, batch: Any, **kwargs) -> Any:
+    
+    def prepare_task_batch(self, batch):
         labels, _, _, padding_mask = make_time_batch(batch, number_days=self.N)
         trx_index = padding_mask.sum(1, keepdim=True) - 1
         
         ### This is the case when we don't have target so we skip this step
         if any(trx_index == -1):
-            return None, None
+            return {}
 
         input_labels = (torch.gather(labels, 1, trx_index) >= self.threshold).float().squeeze(1)
-        return input_labels, trx_index
+        batch['label'] = input_labels
+        batch['mask'] = padding_mask
+        return batch
 
     def generate_text_target(self, batch: Any, **kwargs) -> Any:
-        input_labels, trx_index = self.generate_target(batch, **kwargs)
-        if input_labels is None:
-            return None, None
+        task_batch = self.prepare_task_batch(batch, **kwargs)
+        if not task_batch:
+            return None
 
-        text_answer = list(map(lambda x: self.positive_answer_word if x else self.negative_answer_word, input_labels))
-        return text_answer, trx_index
+        input_labels = batch['label']
+        batch['label'] = list(map(lambda x: 'Yes' if x else 'No', input_labels))
+        return batch
 
 @dataclass
 class NextCatFeatureTaskMulti(NextFeatureTask):
@@ -507,6 +516,82 @@ class NextCatFeatureTaskMulti(NextFeatureTask):
             metrics[self.task_name + '_accuracy'] = task_metrics['accuracy']
 
         return metrics 
+
+@dataclass
+class NextCatFeatureOpenEnded(NextFeatureTask):
+    def __post_init__(self):
+        super().__post_init__()
+        self.num_classes = -1
+        self.criterion = nn.CrossEntropyLoss()
+
+    def generate_target_question(self, question_end: Any, target_batch: Any, **kwargs) -> Any:
+        return [question_end for _ in range(len(target_batch))] 
+
+    def generate_target(self, batch: Any, **kwargs) -> Any:
+        target_feature_batch = batch[self.target_feature_type][self.target_feature_index]  # Tensor [batch_size, seq_len]
+
+        # Construct target values 
+        # Target's questions numeric/categorical answers as str
+        trx_index = batch['mask'].sum(1, keepdim=True) - 1
+        input_labels = torch.gather(target_feature_batch, 1, trx_index).float().squeeze(1)
+        return input_labels, trx_index
+
+    def generate_text_target(self, batch: Any, **kwargs) -> Any:
+
+        input_labels, trx_index = self.generate_target(batch, **kwargs)
+        target_batch = list(map(lambda x: str(x.item()), input_labels))
+        return target_batch, trx_index
+
+    def filter_range(self, value):
+        return value if 0 <= value <= self.num_classes else -1 
+    
+    def process_outputs(self, outputs, answers: torch.Tensor):
+        predictions_decoded = self.tokenizer.batch_decode(outputs.logits.argmax(2),
+                                                          skip_special_tokens=True)
+        
+        answers_decoded = self.tokenizer.batch_decode(answers, skip_special_tokens=True)
+        processed_answers =  torch.tensor(list(map(lambda x: convert_to_numeric(x, -1, verbose=False), answers_decoded)), device=answers.device)
+
+        processed = torch.tensor(list(map(lambda x: self.filter_range(convert_to_numeric(x, -1, verbose=False)), predictions_decoded)), device=answers.device)
+        
+        return processed, processed_answers
+
+    def calculate_metrics(self, outputs, answers, task_metrics):
+        metrics = {}
+
+        if self.task_type == 'text':
+            preds, targets = self.process_outputs(outputs, answers)
+        else:
+            preds, targets = torch.sigmoid(outputs), answers
+
+
+        if 'accuracy' in task_metrics:
+            task_metrics['accuracy'](preds, targets)
+            metrics[self.task_name + '_accuracy'] = task_metrics['accuracy']
+
+        return metrics 
+
+@dataclass
+class NextMCCFeatureOpenEnded(NextCatFeatureOpenEnded):
+    def __post_init__(self):
+        super().__post_init__()
+        
+        self.task_name = "next_mcc_open_ended"
+        self.target_feature_name = 'mcc_category'
+        self.num_classes = 28
+
+        self.metrics = nn.ModuleDict({
+            "accuracy": Accuracy(task='multiclass',
+            num_classes=self.num_classes,
+            average='weighted' )
+        })
+
+        self.update_feature_index()
+
+        self.question_templates = [
+            ("This is the client's transaction history ",
+             "What merchant category code will the next transactions have?"),
+        ]
 
 @dataclass
 class NextMCCFeatureTaskMulti(NextCatFeatureTaskMulti):

@@ -2,12 +2,8 @@
 # CUDA_VISIBLE_DEVICES="0,1,2,3"
 # TRANSFORMERS_OFFLINE=1
 # HF_DATASETS_OFFLINE=1
-learning_rate=0.003;
-
-if [ $# -eq 3 ]
-  then
-    learning_rate=$3;
-fi
+learning_rate=0.0005;
+warmup_steps=100;
 
 WANDB_PROJECT=Transactions;
 WANDB_WATCH=all;
@@ -16,9 +12,8 @@ WANDB_WATCH=all;
 model_name=$(basename $1);
 
 
-
 python src/transactions_qa/train.py \
---transactions_model_name_or_path="/home/jovyan/checkpoints/transactions_model/final_model.ckpt" \
+--transactions_model_name_or_path="/home/jovyan/checkpoints/transactions_model/final_model_v2.ckpt" \
 --transactions_model_encoder_type="whisper/tiny" \
 --transactions_model_head_type="next" \
 --language_model_name_or_path=$1 \
@@ -45,7 +40,7 @@ python src/transactions_qa/train.py \
 --do_eval=True \
 --max_steps=200000 \
 --max_epochs=10 \
---warmup_steps=1000 \
+--warmup_steps=$warmup_steps \
 --project_name="Transactions" \
 --group_name="learning_rate_check" \
 --run_name="tqa_200k-steps_$2_$model_name"

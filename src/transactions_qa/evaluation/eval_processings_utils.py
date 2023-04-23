@@ -136,7 +136,7 @@ def normalize_numeric_answer(s,
                 remove_punc(lower(s), punktuation))), lang)
 
 
-def check_if_numeric(val: str) -> bool:
+def check_if_numeric(val: str, verbose=True) -> bool:
     """
     Checks whether a given value is:
     - a digit;
@@ -158,11 +158,12 @@ def check_if_numeric(val: str) -> bool:
             _ = float(val)
             return True
         except Exception as e:
-            print(f"Value is not a number: {val}")
+            if verbose:
+                print(f"Value is not a number: {val}")
             return False
 
 
-def convert_to_numeric(val: str, default_value=None) -> Optional[Union[int, float]]:
+def convert_to_numeric(val: str, default_value=None, verbose=True) -> Optional[Union[int, float]]:
     """
     Converts a given value to:
     - a digit;
@@ -170,7 +171,7 @@ def convert_to_numeric(val: str, default_value=None) -> Optional[Union[int, floa
     - a floating point number;
     (if it is possible).
     """
-    if not check_if_numeric(val):
+    if not check_if_numeric(val, verbose):
         return default_value
     try:
         return int(val)
