@@ -25,6 +25,8 @@ class DecoderRetrievalModel(DecoderSimpleModel):
                  max_ret_tokens: Optional[int] = 150,  # equals to min transactions history size
                  n_retrieval_layers: Optional[List[int]] = None,
                  embeddings_dropout_p: Optional[float] = 0.1,
+                 transactions_embeddings_start_token: Optional[str] = r"[trx]",
+                transactions_embeddings_end_token: Optional[str] = r"[/trx]",
                  generation_config: Optional[Dict[str, Any]] = None,
                  is_debug: Optional[bool] = False):
         super().__init__(language_model=language_model,
@@ -45,11 +47,35 @@ class DecoderRetrievalModel(DecoderSimpleModel):
         self.projection_layers = nn.ModuleList([])
         self._n_retrieval_layers = n_retrieval_layers
         self._embeddings_dropout_p = embeddings_dropout_p
+        self._transactions_embeddings_start_token = transactions_embeddings_start_token
+        self._transactions_embeddings_end_token = transactions_embeddings_end_token
 
     def _prepare_model(self):
         super()._prepare_model()
         self._create_projection_layers()
         self._add_retrieval_tokens()
+
+    def _create_retrieval_parameters(self):
+        """
+        Creates trainable parameters for:
+            - retrieval tokens: RET_0 ... RET_N;
+            - transactions embeddings start/end tokens: [trx] / [/trx];
+        Note: those parameters need to be passed to separate optimizer (with connector & projections layers)!
+        i.e:
+            opt = Adafactor(
+                list(projection.parameters())
+                + [trns_start_embedding, trns_end_embedding]
+                + [ret_embeddings], lr=1e-2, relative_step=False)
+        """
+        # Check if:
+        #   - transactions embeddings start/end tokens
+        #   - retrieval tokens
+        # exists in tokenizers' vocabulary, add them if not exist
+
+        # Create randomly initialized embeddings for each of them, of size [n_embeddings, hidden_dim]
+
+        # Get their ids in tokenizers' vocabulary
+        # and put in LLM embeddings matrix their created embeddings
 
     def _create_projection_layers(self):
         """
