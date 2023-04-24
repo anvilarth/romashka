@@ -6,7 +6,6 @@ import wandb
 import torch
 import torch.nn as nn
 
-from transformers import Trainer
 import transformers
 import pytorch_lightning as pl
 from pytorch_lightning.utilities import rank_zero_info
@@ -261,7 +260,7 @@ class TransactionQAModel(pl.LightningModule):
         )
 
         # Log predictions on validation set
-        if self.num_eval_batches_to_log != -1:  # log all validation data
+        if self.num_eval_batches_to_log == -1:  # log all validation data
             questions = outputs.question_encoded.detach().cpu() if hasattr(outputs, "question_encoded") else ""
             transactions_history_lengths = outputs['transactions_history_lengths'].detach().cpu() \
                 if hasattr(outputs, "transactions_history_lengths") else [0]
@@ -284,6 +283,7 @@ class TransactionQAModel(pl.LightningModule):
                                  predictions_table=self.log_eval_predictions_table,
                                  log_counter=self.log_eval_steps_counter,
                                  task_name=task.task_name)
+            self.log_eval_steps_counter += 1
 
         return loss
 
@@ -491,7 +491,7 @@ class TransactionQAModel(pl.LightningModule):
         wandb.log({"val_predictions": self.log_eval_predictions_table})
         # was directly to W&B: wandb.log({"val_predictions": self.log_eval_predictions_table})
         # ✨ W&B: Mark the run as complete (useful for multi-cell notebook)
-        wandb.finish()
+        # wandb.finish()
 
     def log_predictions(self,
                         logits: torch.Tensor,
