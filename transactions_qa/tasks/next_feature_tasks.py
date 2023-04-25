@@ -16,6 +16,7 @@ from .task_abstract import AbstractTask
 
 from romashka.tools import make_time_batch 
 
+
 @dataclass
 class NextFeatureTask(AbstractTask):
 
@@ -205,22 +206,25 @@ class NextCatFeatureTaskBinary(NextFeatureTask):
 
         return metrics 
 
+
 @dataclass
 class NextMCCFeatureTaskBinary(NextCatFeatureTaskBinary):
-    def __post_init__(self):
-        super().__post_init__()
 
+    def __post_init__(self):
         self.task_name = "next_mcc_binary"
         self.target_feature_name = 'mcc_category'
         self.task_special_token = "[next_MCC_category_binary]"
         self.threshold = 2
 
+        super().__post_init__()
+
         self.update_feature_index()
 
         self.question_templates = [
             ("This is the client's transaction history ",
-             "Will the next transactions have merchant category code 2? Yes or No?"),
+             "Will the next transaction has MCC category code 2? Yes or No?"),
         ]
+
 
 @dataclass
 class NextNumFeatureTaskBinary(NextFeatureTask):
@@ -273,15 +277,18 @@ class NextNumFeatureTaskBinary(NextFeatureTask):
             metrics[self.task_name + '_accuracy'] = task_metrics['accuracy']
 
         return metrics 
-  
+
+
 @dataclass
 class NextAmntFeatureTaskBinary(NextNumFeatureTaskBinary):
+
     def __post_init__(self):
-        super().__post_init__()
         self.task_name = "next_amnt_binary"
         self.target_feature_name = 'amnt'
         self.is_open_ended_task = False  # for a default for this task
         self.task_special_token = "[next_thresholded_AMNT_binary]"
+
+        super().__post_init__()
 
         self.update_feature_index()
 
@@ -291,14 +298,15 @@ class NextAmntFeatureTaskBinary(NextNumFeatureTaskBinary):
              f"Will the next transactions have amount more than {self.threshold}? Yes or No?"),
         ]
 
+
 @dataclass
 class NextHourDiffFeatureTaskBinary(NextNumFeatureTaskBinary):
-    def  __post_init__(self):
-        super().__post_init__()
-
+    def __post_init__(self):
         self.task_name = "next_hour_diff_binary"
         self.target_feature_name = 'hour_diff'
         self.task_special_token = "[next_hour_diff_binary]"
+
+        super().__post_init__()
 
         self.update_feature_index()
         
@@ -312,11 +320,13 @@ class NextHourDiffFeatureTaskBinary(NextNumFeatureTaskBinary):
 @dataclass
 class NextTransactions30DaysTaskBinary(NextCatFeatureTaskBinary):
     def __post_init__(self):
-        super().__post_init__()
         self.task_name = "next_transactions_30_days_binary"
         self.target_feature_name = 'mcc_category'
+        self.task_special_token = "[next_transactions_30_days_binary]"
         self.N = 30
         self.is_open_ended_task = False  # for a default for this task
+
+        super().__post_init__()
         
         self.threshold = 6
 
@@ -375,15 +385,19 @@ class NextTransactions30DaysTaskBinary(NextCatFeatureTaskBinary):
                                   else self.binary_answer_options.get("negative", "No"), input_labels))
         return batch
 
+
 @dataclass
 class NextAmnt30DaysTaskBinary(NextNumFeatureTaskBinary):
+
     def __post_init__(self):
-        super().__post_init__()
         self.task_name = "next_amount_30_days_binary"
         self.target_feature_name = 'mcc_category'
         self.N = 30
+        self.task_special_token = "[next_amount_30_days_binary]"
         self.is_open_ended_task = False  # for a default for this task
-        
+
+        super().__post_init__()
+
         self.metrics = nn.ModuleDict({
             "auc": AUROC(task='binary'),
             "accuracy": BinaryAccuracy()
@@ -442,8 +456,10 @@ class NextAmnt30DaysTaskBinary(NextNumFeatureTaskBinary):
                                   else self.binary_answer_options.get("negative", "No"), input_labels))
         return batch
 
+
 @dataclass
 class NextCatFeatureTaskMulti(NextFeatureTask):
+
     def __post_init__(self):
 
         super().__post_init__()
@@ -526,8 +542,10 @@ class NextCatFeatureTaskMulti(NextFeatureTask):
 
         return metrics
 
+
 @dataclass
 class NextCatFeatureOpenEnded(NextFeatureTask):
+
     def __post_init__(self):
         super().__post_init__()
         self.num_classes = -1
@@ -580,14 +598,17 @@ class NextCatFeatureOpenEnded(NextFeatureTask):
 
         return metrics
 
+
 @dataclass
 class NextMCCFeatureOpenEnded(NextCatFeatureOpenEnded):
-    def __post_init__(self):
-        super().__post_init__()
 
+    def __post_init__(self):
         self.task_name = "next_mcc_open_ended"
         self.target_feature_name = 'mcc_category'
+        self.task_special_token = "[next_MCC_category_open-ended]"
         self.num_classes = 28
+
+        super().__post_init__()
 
         self.metrics = nn.ModuleDict({
             "accuracy": Accuracy(task='multiclass',
@@ -602,14 +623,17 @@ class NextMCCFeatureOpenEnded(NextCatFeatureOpenEnded):
              "What merchant category code will the next transactions have?"),
         ]
 
+
 @dataclass
 class NextMCCFeatureTaskMulti(NextCatFeatureTaskMulti):
-    def __post_init__(self):
 
-        super().__post_init__()
+    def __post_init__(self):
         self.task_name = "next_mcc_multi"
         self.target_feature_name = 'mcc_category'
+        self.task_special_token = "[next_MCC_category_multi]"
         self.num_classes = 28
+
+        super().__post_init__()
 
         self.metrics = nn.ModuleDict({
             'accuracy': Accuracy(task='multiclass',
@@ -626,13 +650,15 @@ class NextMCCFeatureTaskMulti(NextCatFeatureTaskMulti):
 
         self.answers_options = [str(i) for i in range(self.num_classes)]
 
+
 @dataclass
 class NextNumFeatureTaskMulti(NextFeatureTask):
+
     def __post_init__(self):
 
         super().__post_init__()
         self.task_name = "next_num_feature_multi"
-        self.target_feature_name = 'amnt'  # 108 unique values
+        self.target_feature_name = 'amnt'  # inf unique values
         self.is_open_ended_task = False  # for a default for this task
 
         self.update_feature_index()

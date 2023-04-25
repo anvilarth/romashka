@@ -287,7 +287,9 @@ class TransactionQAModel(pl.LightningModule):
 
         return loss
 
-    def predict_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0) -> Any:
+    def predict_step(self, batch: Any, batch_idx: int,
+                     dataloader_idx: int = 0,
+                     verbose: Optional[bool] = False) -> Any:
         """
         Step function called during Trainer.predict().
 
@@ -311,14 +313,14 @@ class TransactionQAModel(pl.LightningModule):
                     predictions = self._predict_step_task(batch,
                                                           batch_idx=batch_idx,
                                                           task_idx=task_idx,
-                                                          verbose=True,
+                                                          verbose=verbose,
                                                           calculate_metrics=False)
                 else:
                     # For decoder-only models run generate() on questions
                     predictions = self._predict_with_generate_step_task(batch,
                                                                         batch_idx=batch_idx,
                                                                         task_idx=task_idx,
-                                                                        verbose=False,
+                                                                        verbose=verbose,
                                                                         calculate_metrics=False,
                                                                         return_embeddings=False,
                                                                         return_logits=False)
@@ -351,18 +353,18 @@ class TransactionQAModel(pl.LightningModule):
             return dict()
 
         # as list of strings
-        predictions_decoded = self.tokenizer.batch_decode(outputs.logits.argmax(2),
+        predictions_decoded = self.model.tokenizer.batch_decode(outputs.logits.argmax(2),
                                                           skip_special_tokens=True)
-        batch_answers_decoded = self.tokenizer.batch_decode(batch_answers,
+        batch_answers_decoded = self.model.tokenizer.batch_decode(batch_answers,
                                                             skip_special_tokens=True)
-        batch_questions_decoded = self.tokenizer.batch_decode(outputs.question_encoded.detach().cpu(),
+        batch_questions_decoded = self.model.tokenizer.batch_decode(outputs.question_encoded.detach().cpu(),
                                                               skip_special_tokens=True)
 
         if verbose:
             print("----- Prediction step -----")
             for i, (pred, answer, question) in enumerate(
                     zip(predictions_decoded, batch_answers_decoded, batch_questions_decoded)):
-                print(f"\t#{i}{question}:\tpredicted: {pred}, answer: {answer}")
+                print(f"\t#{i} {question}:\n\tpredicted: {pred},\n\tanswer: {answer}")
 
         # Calc metrics
         metrics_scores = {}
@@ -491,7 +493,7 @@ class TransactionQAModel(pl.LightningModule):
         wandb.log({"val_predictions": self.log_eval_predictions_table})
         # was directly to W&B: wandb.log({"val_predictions": self.log_eval_predictions_table})
         # ✨ W&B: Mark the run as complete (useful for multi-cell notebook)
-        # wandb.finish()
+        wandb.finish()
 
     def log_predictions(self,
                         logits: torch.Tensor,
