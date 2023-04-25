@@ -303,8 +303,8 @@ class TasksArguments:
     Arguments for tasks creation.
     """
     task_names: Optional[List[str]] = field(
-        default_factory=list,
-        metadata={"help": "A list of task names, that would be used during training."},
+        default=None,
+        metadata={"help": "A list of comma-separated task names, that would be used during training."},
     )
     task_kwargs: Optional[List[Dict[str, Any]]] = field(
         default_factory=list,
@@ -312,6 +312,14 @@ class TasksArguments:
     )
 
     def __post_init__(self):
+        if self.task_names is None:
+            raise ValueError("No tasks provided for training!")
+        elif isinstance(self.task_names, list):
+            if (len(self.task_names) == 1) and isinstance(self.task_names[0], str):
+                self.task_names = [task_name.strip() for task_name in self.task_names[0].split(",")]
+            else:
+                raise ValueError(f"Unable to handle task_names provided in this format!")
+
         if (len(self.task_names) > 0) and (len(self.task_kwargs) > 0):
             if len(self.task_names) != len(self.task_kwargs):
                 raise ValueError("Provided tasks list does not match length with given tasks kwargs."

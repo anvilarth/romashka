@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from typing import Optional, Union
+from typing import Optional, Union, List
 from ..utils import init_layers
 
 
@@ -180,3 +180,78 @@ class ReccurrentConnector(nn.Module):
 
         # get only the last layer output for the last step
         return torch.unsqueeze(outputs[:, -1, :], 1)
+
+
+def make_complex_linear_connector(output_size: Optional[int] = None,
+                                  input_size: Optional[int] = None,
+                                  n_layers: Optional[int] = 2,
+                                  hidden_dims: Optional[List[int]] = None,
+                                  device: Optional[Union[torch.device, str]] = 'cpu'):
+    """
+    Creates more complex, but still linear connector by stacking with non-linearity few linear layers.
+
+    Args:
+        output_size:
+        input_size:
+        device:
+
+    Returns:
+
+    """
+    print(f"Output dimension of embedding model: {required_output_size}")
+    print(f"Input dimension of autoregressive model: {required_input_size}")
+    print(f"Creating linear connector from {required_output_size} to {required_input_size} "
+          f"and move to device: {device}.")
+
+    return LinearConnector(
+        output_size=required_output_size,
+        input_size=required_input_size
+    )
+
+
+class ComplexLinearConnector(nn.Module):
+    def __init__(self,
+                 output_size: int,
+                 input_size: int,
+                 n_layers: Optional[int] = 2,
+                 hidden_dims: Optional[List[int]] = None,
+                 add_normalizations: Optional[List[bool]] = None,
+                 add_activations: Optional[List[bool]] = None,
+                 device: Optional[Union[torch.device, str]] = 'cpu'):
+
+        super().__init__()
+        self.output_size = output_size  # output size of embedder model
+        self.input_size = input_size  # input size of second model / -> output shape for last linear layer
+        self.n_layers = n_layers
+        self.hidden_dims = hidden_dims if hidden_dims is not None else [input_size] * (self.n_layers - 1)
+        self.add_normalizations = add_normalizations if add_normalizations is not None else [False] * self.n_layers
+        self.add_activations = add_activations if add_activations is not None else [False] * self.n_layers
+        self.device = device
+        self.layers = nn.Sequential()
+        self._create_layers()
+
+    def _create_layers(self):
+        try:
+            input_dim = self.output_size
+            output_dim = None
+            final_output_dim = self.input_size
+
+            for layer_n in range(self.n_layers):
+                if layer_n >= (self.n_layers - 1):
+                    output_dim = final_output_dim
+                else:
+                    output_dim = self.hidden_dims[layer_n]
+                self.layers.append(init_layers(nn.Linear(input_dim, output_dim)))
+                if self.add_normalizations[layer_n]:
+                    self.layers.append(nn.LayerNorm(output_dim))
+                if self.add_activations[layer_n]:
+                    self.layers.append(nn.ELU())
+                input_dim = output_dim
+
+            self.layers.to(self.device)
+        except Exception as e:
+            print(f"Error occurred during complex connector creation:\n{e}")
+            raise AttributeError(f"Error occurred during complex connector creation:\n{e}")
+
+    def forward(self, x: torch.Tensor, *args, **kwargs) -> torch.Tensor:
+        return self.layers(x)
