@@ -79,7 +79,7 @@ class MeanAmountBinnedTaskBinary(NumericTaskAbstract):
             raise AttributeError("This task requires tokenizer to be set!")
         if self.add_tokens_to_tokenizer:
             self.extend_vocabulary(tokenizer=self.tokenizer,
-                                   new_tokens=self.special_tokens,
+                                   new_tokens=self.speciaxl_tokens,
                                    special=False)
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:

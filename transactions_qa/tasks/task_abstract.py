@@ -170,7 +170,8 @@ class AbstractTask(ABC):
             tokenizer: transformers.PreTrainedTokenizerBase,
             new_tokens: List[str],
             special: Optional[bool] = True,
-            model: Optional[transformers.PreTrainedModel] = None):
+            return_ids: Optional[bool] = False,
+            model: Optional[transformers.PreTrainedModel] = None) -> Optional[Dict[str, int]]:
         """
         Add a list of new tokens to the tokenizer class. If the new tokens are not in the vocabulary, they are added to
         it with indices starting from length of the current vocabulary.
@@ -184,6 +185,12 @@ class AbstractTask(ABC):
             model.resize_token_embeddings(len(tokenizer))
         else:
             logger.info(f"Notice: resize_token_embeddings of a model to adapt to the size of the new vocabulary!")
+
+        # get new tokens ids in tokenizers' vocabulary
+        if return_ids:
+            return {token: tokenizer(token)['input_ids'][0] for token in new_tokens}
+
+
 
     def custom_tokenize(self, sequence: Union[str, List[str]],
                         **kwargs) -> Dict[str, Union[List[int], torch.Tensor]]:
