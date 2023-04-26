@@ -24,6 +24,47 @@ def seed_everything(seed):
     torch.backends.cudnn.benchmark = True
 
 
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+
+def masked_mean(inp, mask, axis=1):
+    down = mask.sum(axis)
+    out = (inp * mask).sum(axis) / down
+    return out
+
+
+def zero_function(_) -> int:
+    """
+    Returns zero on any input.
+    Args:
+        _: any,
+    Returns:
+        int, 0.
+    """
+    return 0
+
+
+def calculate_embedding_size(model) -> Optional[int]:
+    """
+    Calculates embedding size.
+    Assumes, that the model ends with Layer Normalization!
+    Args:
+        model: nn.Module, the model to calculate output embeddings;
+
+    Returns:
+
+    """
+    size = 0
+    for module in model.modules():
+        if type(module) == nn.LayerNorm:
+            size = module.weight.shape[0]
+
+    if size == 0:
+        raise AttributeError(f"Provided model configuration is not supported by currect function!")
+
+    return size
+
 def preprocess_logits_for_metrics(logits: Any, labels: Any):
     if isinstance(logits, tuple):
         # Depending on the model and config, logits may contain extra tensors,

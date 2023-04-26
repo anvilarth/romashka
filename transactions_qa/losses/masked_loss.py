@@ -9,7 +9,7 @@ class MaskedMSELoss(nn.Module):
         mse_loss = nn.MSELoss(reduction='none')
 
         loss = mse_loss(pred, true)
-        loss = (loss * mask.float()).sum() # gives \sigma_euclidean over unmasked elements
+        loss = (loss * mask.float()).sum()  # gives \sigma_euclidean over unmasked elements
 
         non_zero_elements = mask.sum()
         mse_loss_val = loss / non_zero_elements

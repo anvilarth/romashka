@@ -24,8 +24,6 @@ sys.path.insert(1, '/home/jovyan/abdullaeva/transactionsQA')
 print(sys.path)
 
 from romashka.logging_handler import get_logger
-from romashka.tools import (make_time_batch,
-                            calculate_embedding_size)
 from romashka.transactions_qa.train_args import (ModelArguments, DataTrainingArguments,
                                                  TrainingArguments, TasksArguments)
 from romashka.transactions_qa.dataset.data_generator import (
@@ -36,7 +34,7 @@ from romashka.transactions_qa.dataset.data_generator import (
 
 from romashka.transactions_qa.dataset.dataloader import (TransactionQADataset, TransactionQADataModule)
 
-from romashka.models import TransactionsModel
+from romashka.transactions_qa.transactions_model.model import TransactionsModel
 from romashka.transactions_qa.model.encoder_model import EncoderSimpleModel
 from romashka.transactions_qa.model.decoder_model import DecoderSimpleModel
 from romashka.transactions_qa.model.tqa_model import TransactionQAModel

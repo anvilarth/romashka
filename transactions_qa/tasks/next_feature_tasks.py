@@ -12,9 +12,8 @@ from torchmetrics import AUROC
 from torchmetrics.classification import BinaryAccuracy, Accuracy
 from romashka.transactions_qa.evaluation.eval_processings_utils import convert_to_numeric
 
-from .task_abstract import AbstractTask
-
-from romashka.tools import make_time_batch 
+from romashka.transactions_qa.tasks.task_abstract import AbstractTask
+from romashka.data.transactions_data_utils import make_time_batch
 
 
 @dataclass

@@ -2,6 +2,7 @@ import torch
 import torch.nn 
 import torch.nn.functional as F
 
+
 def InfoNCELoss(original_view, corrupted_view):
     # InfoNCE loss
 
