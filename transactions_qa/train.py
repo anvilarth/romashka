@@ -3,6 +3,7 @@ import sys
 import shutil
 import yaml
 from pathlib import Path
+from collections import OrderedDict
 
 import wandb
 os.environ["WANDB_MODE"] = "online"
@@ -37,6 +38,7 @@ from romashka.transactions_qa.dataset.dataloader import (TransactionQADataset, T
 from romashka.transactions_qa.transactions_model.model import TransactionsModel
 from romashka.transactions_qa.model.encoder_model import EncoderSimpleModel
 from romashka.transactions_qa.model.decoder_model import DecoderSimpleModel
+from romashka.transactions_qa.model.decoder_frozen_model import DecoderFrozenModel
 from romashka.transactions_qa.model.tqa_model import TransactionQAModel
 from romashka.transactions_qa.layers.connector import (make_linear_connector,
                                                        make_recurrent_connector)
@@ -157,8 +159,20 @@ def main():
 
     # Load weights
     ckpt = torch.load(model_args.transactions_model_name_or_path, map_location='cpu')
-    transactions_model.load_state_dict(ckpt)
-    # transactions_model.to(device)
+    renamed_state_dict = OrderedDict()
+    for key, param in ckpt.items():
+        key_ = key
+        if key.startswith("head"):
+            key_ = ".".join(["head", key])
+        elif key.startswith("encoder"):
+            key_ = ".".join(["encoder_model", key])
+        elif key.startswith("mapping_embedding"):
+            key_ = ".".join(['connector', 'connector'] + key.split(".")[1:])
+        renamed_state_dict[key_] = param
+
+    logger.info(f"Renaming & loading transactions model...")
+    transactions_model.load_state_dict(renamed_state_dict)
+
 
     # Configure and load from HF hub LM model
     logger.info(f"Loading Language model: `{model_args.language_model_name_or_path}`...")
@@ -274,7 +288,7 @@ def main():
             **lm_model_config
         )
     else:
-        model_ = DecoderSimpleModel(
+        model_ = DecoderFrozenModel(
             language_model=lm_model,
             transaction_model=transactions_model,
             tokenizer=tokenizer,
