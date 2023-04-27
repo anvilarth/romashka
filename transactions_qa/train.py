@@ -357,6 +357,12 @@ def main():
         group=training_args.group_name,
         name=training_args.run_name
     )
+    # log gradients, parameter histogram and model topology
+    # wb_logger.watch(model, log="all")
+
+    # log gradients and model topology
+    wb_logger.watch(model, log_graph=False)
+
     tb_logger = TensorBoardLogger(name=training_args.run_name,
                                   save_dir="./tb_logs",
                                   default_hp_metric=False)
@@ -394,6 +400,7 @@ def main():
         logger=wb_logger,  # [tb_logger, wb_logger],
         callbacks=[checkpoint_callback, lr_monitor_callback])
     trainer.fit(model=model, datamodule=datamodule)
+
 
 if __name__ == '__main__':
     import os

@@ -10,9 +10,12 @@ from romashka.logging_handler import get_logger
 from romashka.transactions_qa.utils import seed_everything
 from romashka.transactions_qa.layers.connector import (make_linear_connector,
                                                        make_recurrent_connector)
+from romashka.transactions_qa.model.encoder_model import EncoderSimpleModel
+from romashka.transactions_qa.tasks.task_abstract import AbstractTask
+from romashka.transactions_qa.utils import (mask_padding, mask_lm_labels_padding)
 
 
-class EncoderSimpleModel(nn.Module):
+class EncoderFrozenModel(EncoderSimpleModel):
     def __init__(self,
                  language_model: nn.Module,
                  transaction_model: nn.Module,
@@ -23,134 +26,133 @@ class EncoderSimpleModel(nn.Module):
                  do_freeze_tm: Optional[bool] = True,
                  do_freeze_lm: Optional[bool] = False,
                  do_freeze_connector: Optional[bool] = False,
+                 transactions_embeddings_start_token: Optional[str] = r"[trx]",
+                 transactions_embeddings_end_token: Optional[str] = r"[/trx]",
                  generation_config: Optional[Dict[str, Any]] = None,
                  is_debug: Optional[bool] = False):
-        super().__init__()
-        self._logger = get_logger(
-            name=self.__class__.__name__,
-            logging_level="INFO"
-        )
-        self.tokenizer = tokenizer
-        self.language_model = language_model
-        self.transaction_model = transaction_model
-        self.connector = make_linear_connector(
-            input_size=connector_output_size,
-            output_size=connector_input_size,
-            embedding_model=self.transaction_model,
-            autoregressive_model=self.language_model) \
-            if connector is None else connector
 
-        self.language_model_arch_type = None
-        self.language_model_tokens_embedding_func = None
-        self.do_freeze_tm: bool = do_freeze_tm
-        self.do_freeze_lm: bool = do_freeze_lm
-        self.do_freeze_connector: bool = do_freeze_connector
-        self.generation_config = generation_config
+        self._transactions_embeddings_start_token = transactions_embeddings_start_token
+        self._transactions_embeddings_end_token = transactions_embeddings_end_token
 
-        self._is_debug: bool = is_debug
-        self._prepare_model()
-
-    def _set_language_model_arch_type(self):
-        # In case if architecture is passed directly through the config
-        if len(self.language_model.config.architectures):
-            if "T5" in self.language_model.config.architectures[0]:
-                self.language_model_arch_type = "T5"
-            else:
-                self._logger.warning(f"Provided language model architecture is not currently supported "
-                                     f"`{self.language_model.config.architectures[0]}`. "
-                                     "Try running on your own risk.")
-        else:
-            raise AttributeError(
-                f"Provided language model doesn't have `architecture` attribute set correctly in configuration. "
-                "Try again with different language model.")
-
-    def _set_language_model_embedding_func(self):
-        """
-        Sets inner text tokens embedding function to separate it from HF model architecture.
-        Note: should be called AFTER changing model embedding layer size!
-        """
-        if self.language_model_arch_type == "T5":  # has a .encoder.embed_tokens(...) Embedding layer
-            self.language_model_tokens_embedding_func = self.language_model.encoder.embed_tokens
-        else:
-            self.language_model_tokens_embedding_func = self.language_model.encoder.embed_tokens
-            self._logger.warning(f"Provided language model architecture is not currently supported "
-                                 f"`{self.language_model.config.architectures[0]}`. "
-                                 "Try running on your own risk.")
+        super().__init__(language_model=language_model,
+                         transaction_model=transaction_model,
+                         tokenizer=tokenizer,
+                         connector=connector,
+                         connector_input_size=connector_input_size,
+                         connector_output_size=connector_output_size,
+                         do_freeze_tm=do_freeze_tm,
+                         do_freeze_lm=do_freeze_lm,
+                         do_freeze_connector=do_freeze_connector,
+                         generation_config=generation_config,
+                         is_debug=is_debug)
 
     def _prepare_model(self):
-        # Set language model architecture type / family (i.e. T5/...)
-        self._set_language_model_arch_type()
+        super()._prepare_model()
+        self._create_trainable_parameters()
 
-        # Prepare tokenizer
-        self._configure_tokenizer()
+        # Check if language model is frozen, optionally freeze
+        self._logger.info(f"Check language model's parameters to be frozen...")
+        for param_name, param in self.language_model.named_parameters():
+            if param.requires_grad:
+                self._logger.warning(f"Parameter `{param_name}` of LM requires grad, freezing..")
+                param.requires_grad = False
 
-        # In case any of tasks extends initial tokenizer vocab with additional tokens
+        # Check total trainable parameters
+        parameters = list(self.parameters())
+        trainable_parameters = list(filter(lambda p: p.requires_grad, parameters))
+        self._logger.info(f"Totally trainable parameters: {len(trainable_parameters)} from {len(parameters)}")
+
+    def _prepare_model(self):
+        super()._prepare_model()
+        self._create_trainable_parameters()
+
+        # Check if language model is frozen, optionally freeze
+        self._logger.info(f"Check language model's parameters to be frozen...")
+        for param_name, param in self.language_model.named_parameters():
+            if param.requires_grad:
+                self._logger.warning(f"Parameter `{param_name}` of LM requires grad, freezing..")
+                param.requires_grad = False
+
+        # Check total trainable parameters
+        parameters = list(self.parameters())
+        trainable_parameters = list(filter(lambda p: p.requires_grad, parameters))
+        self._logger.info(f"Totally trainable parameters: {len(trainable_parameters)} from {len(parameters)}")
+
+    def _create_trainable_parameters(self):
+        """
+        Creates trainable parameters for:
+            - transactions embeddings start/end tokens: [trx] / [/trx];
+        Note: those parameters need to be passed to separate optimizer (with connector & projections layers)!
+        i.e:
+            opt = Adafactor(
+                list(projection.parameters())
+                + [trns_start_embedding, trns_end_embedding], lr=1e-2, relative_step=False)
+        """
+        # Check if transactions embeddings start/end tokens, exists in tokenizers' vocabulary,
+        # add them if not exist and get their indexes
+        self.transactions_special_tokens_ids_mapping = AbstractTask.extend_vocabulary(
+            new_tokens=[self._transactions_embeddings_start_token,
+                        self._transactions_embeddings_end_token],
+            tokenizer=self.tokenizer,
+            # model=self.language_model,  # -> optionally
+            return_ids=True
+        )
+
+        # Init transactions injection tokens ids
+        self.transactions_start_token_id = self.transactions_special_tokens_ids_mapping.get(
+            self._transactions_embeddings_start_token
+        )
+        self.transactions_end_token_id = self.transactions_special_tokens_ids_mapping.get(
+            self._transactions_embeddings_end_token
+        )
+
+        # Additionally call to re-init embedding function reference to resized (maybe) embeddings
         self._resize_text_embeddings()
 
-        # Set embedding func
-        self._set_language_model_embedding_func()
+        params_dim = None
+        if hasattr(self.language_model.config, "hidden_size"):
+            params_dim = self.language_model.config.hidden_size
+        elif hasattr(self.language_model.config, "d_model"):  # may occur in encoder-decoder models (like T5)
+            params_dim = self.language_model.config.d_model
+        else:
+            raise AttributeError(f"The default setting, where parameters embeddings dimensionality "
+                                 "equals to LLM hidden dimensionality can not be run because "
+                                 "model do not have required attribute: `hidden_size` or `d_model` in config.")
 
-        # Freezing some weights
-        if self.do_freeze_tm:
-            self.transaction_model.eval()
-            self._logger.info(f"Freezing transaction model's parameters...")
-            for param in self.transaction_model.parameters():
-                param.requires_grad = False
+        # Transactions embeddings start/end
+        self.transactions_start_embedding = nn.Parameter(
+            torch.normal(mean=torch.zeros(params_dim), std=torch.ones(params_dim)), requires_grad=True)
+        self.transactions_end_embedding = nn.Parameter(
+            torch.normal(mean=torch.zeros(params_dim), std=torch.ones(params_dim)), requires_grad=True)
+        self._logger.info(f"Initialized trainable parameters for transactions embeddings start/end tokens.")
 
-        if self.do_freeze_lm:
-            self.language_model.eval()
-            self._logger.info(f"Freezing language model's parameters...")
-            for param in self.language_model.parameters():
-                param.requires_grad = False
-
-        if self.do_freeze_connector:
-            self.connector.eval()
-            self._logger.info(f"Freezing connector layer's parameters...")
-            for param in self.connector.parameters():
-                param.requires_grad = False
-
-    def _resize_text_embeddings(self):
-        # For encoder-decoder-based models
-        init_embeddings = self.language_model.encoder.get_input_embeddings()
-        self._logger.info(f"Language model initial `num_embeddings`: {init_embeddings.num_embeddings}, "
-                          f"`embedding_dim`: {init_embeddings.embedding_dim}")
-
-        self.language_model.resize_token_embeddings(len(self.tokenizer))
-
-        # For encoder-decoder-based models
-        resized_embedds = self.language_model.encoder.get_input_embeddings()
-        self._logger.info(f"Language model resized `num_embeddings`: {resized_embedds.num_embeddings}, "
-                          f"`embedding_dim`: {resized_embedds.embedding_dim}")
-
-    def _configure_tokenizer(self):
+    def has_start_token(self, input_tokens_ids: Union[List[int], torch.Tensor]) -> bool:
         """
-        Configures the tokenizer for the model (optionally,
-        can be performed before passing tokenizer instance to the model).
+        Checks whether transactions injection start token id already contained in given ids.
         """
-        self.register_buffer("whitespace_token_id", torch.Tensor(self.tokenizer.encode(' ')).long())
-        # self.whitespace_token_id = torch.Tensor(self.tokenizer.encode(' ')).long()
-        # todo: here any number of extra/additional tokens can be added to tokenizer's vocab
+        return (input_tokens_ids == self.transactions_start_token_id).sum() > 0
 
-    def _set_generation_config(self):
+    def replace_start_token(self, input_tokens_ids: Union[List[int], torch.Tensor],
+                            input_embeddings: torch.Tensor):
         """
-        Configure model's parameters for generation (if generation config was not specified on init() stage).
+        Replace transactions injection start tokens' embedding with trainable parameter.
         """
-        if self.generation_config is None:
-            self.generation_config = {
-                "max_new_tokens": 3,
-                "min_new_tokens": 1,
-                "top_p": 1.0,
-                "temperature": 0.0,  # 0.0 - greedy decoding
-                "hidden_dims_indexes": [-1],  # Which hidden dims to take
-                "filter_value": -float('Inf'),  # Value to assign to tokens that should never be generated.
-                "create_allowed_token_ids": False,
-                "allowed_token_ids": None,
-                "create_stopping_criteria": False,
-                "stopping_criteria": None,
-                "seed": 42
-            }
-            self._logger.info(f"Created default generation configration for a model:\n"
-                              f"{self.generation_config}")
+        mask = input_tokens_ids == self.transactions_start_token_id
+        input_embeddings[mask] = self.transactions_start_embedding
+
+    def has_end_token(self, input_tokens_ids: Union[List[int], torch.Tensor]) -> bool:
+        """
+        Checks whether transactions injection end token id already contained in given ids.
+        """
+        return (input_tokens_ids == self.transactions_end_token_id).sum() > 0
+
+    def replace_end_token(self, input_tokens_ids: Union[List[int], torch.Tensor],
+                          input_embeddings: torch.Tensor):
+        """
+        Replace transactions injection end tokens' embedding with trainable parameter.
+        """
+        mask = input_tokens_ids == self.transactions_end_token_id
+        input_embeddings[mask] = self.transactions_end_embedding
 
     def forward(self, batch: Union[Dict[str, torch.Tensor], Any],
                 is_train: Optional[bool] = True) -> Any:
@@ -185,25 +187,58 @@ class EncoderSimpleModel(nn.Module):
         # torch.Size([1, len(question_start_tokens))
         question_start_embeddings = self.language_model_tokens_embedding_func(
             batch['question_start_tokens'])  # call for (embed_tokens): Embedding(vocab_size, model_hidden_dim)
+        question_start_attention_mask = batch['question_start_tokens_mask']
+
+        # if it already ends with [trx]
+        if self.has_start_token(batch['question_start_tokens']):
+            self.replace_start_token(batch['question_start_tokens'], question_start_embeddings)
+        # otherwise append it to the end of starting sequence
+        else:
+            question_start_embeddings = torch.cat([question_start_embeddings,
+                                                   self.transactions_start_embedding[None, None]], dim=1)
+            # add one more sample to attentions also
+            question_start_attention_mask = torch.cat([
+                torch.ones((1,)).long().repeat(batch_size, 1).to(batch['question_start_tokens_mask'].device),
+                batch['question_start_tokens_mask']
+            ], dim=1)
+
         question_start_embeddings_batch = question_start_embeddings.repeat(batch_size, 1, 1)
 
         # question_end_tokens: torch.Size([batch_size, len(max_question_end_tokens)])
         question_end_embeddings_batch = self.language_model_tokens_embedding_func(
             batch['question_end_tokens'])  # call for (embed_tokens): Embedding(vocab_size, model_hidden_dim)
+        question_end_attention_mask = batch['question_end_attention_mask']
+
+        # Fill injection ending tokens embeddings with trainable parameters
+        # if it already starts with [/trx]
+        if self.has_end_token(batch['question_end_tokens']):
+            self.replace_end_token(batch['question_end_tokens'], question_end_embeddings_batch)
+        # otherwise prepend it to the start of question sequence
+        else:
+            # todo: add trns ending token to the end before paddings!!!
+            question_end_embeddings_batch = torch.cat([
+                self.transactions_end_embedding[None, None].repeat(batch_size, 1, 1),
+                question_end_embeddings_batch], dim=1)
+            # add one more sample to attentions also
+            question_end_attention_mask = torch.cat([
+                batch['question_end_attention_mask'],
+                torch.ones((1,)).long().repeat(batch_size, 1).to(batch['question_end_attention_mask'].device)
+            ], dim=1)
 
         # Get general LM's encoder input as:
         # Q_start_tokens + TRNS_embeddings + Q_end_tokens
         encoder_input = torch.cat([question_start_embeddings_batch,
                                    transactions_embeddings,
                                    question_end_embeddings_batch], dim=1)
-        if 'encoder_input_mask' in batch:
+        if ('encoder_input_mask' in batch) \
+                and (batch['encoder_input_mask'].size(1) == encoder_input.size(1)):
             encoder_input_mask = batch['encoder_input_mask']
 
         else:
             encoder_input_mask = torch.cat(
-                [batch['question_start_attention_mask'],
+                [question_start_attention_mask,
                  batch['mask'],
-                 batch['question_end_attention_mask']], dim=1
+                 question_end_attention_mask], dim=1
             )
 
         # Create answers + masks for LM's decoder inputs
@@ -328,6 +363,15 @@ class EncoderSimpleModel(nn.Module):
             raise AttributeError(f"Unable to use prefix prompt in provided form: {type(prefix_prompt)}!")
 
         prefix_prompt_embeddings = self.language_model_tokens_embedding_func(prefix_prompt_tokens)
+
+        # if it already ends with [trx]
+        if self.has_start_token(prefix_prompt_tokens):
+            self.replace_start_token(prefix_prompt_tokens, prefix_prompt_embeddings)
+        # otherwise append it to the end of starting sequence
+        else:
+            prefix_prompt_embeddings = torch.cat([prefix_prompt_embeddings,
+                                                  self.transactions_start_embedding[None, None]], dim=1)
+
         prefix_prompt_embeddings_batch = prefix_prompt_embeddings.repeat(batch_size, 1, 1)
 
         # Question
@@ -358,6 +402,17 @@ class EncoderSimpleModel(nn.Module):
             question_embeddings_batch = question_embeddings
         else:
             raise AttributeError(f"Unable to use questions in provided form: {type(questions)}!")
+
+        # Fill questions transactions' injection end token with trainable parameters
+        # if it already starts with [/trx]
+        if self.has_end_token(question_tokens):
+            self.replace_end_token(question_tokens, question_embeddings_batch)
+
+        # otherwise prepend it to the start of question sequence
+        else:
+            question_embeddings_batch = torch.cat([
+                self.transactions_end_embedding[None, None].repeat(batch_size, 1, 1),
+                question_embeddings_batch], dim=1)
 
         # Answer template --> embeddings
         answer_template_tokens = self.tokenizer.encode(answer_template,

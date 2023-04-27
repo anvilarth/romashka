@@ -361,10 +361,10 @@ class TrainingArguments:
     # -----------------
 
     do_freeze_language_model: Optional[bool] = field(
-        default=False, metadata={"help": "Whether to freeze weights of Language model during training."}
+        default=True, metadata={"help": "Whether to freeze weights of Language model during training."}
     )
     do_freeze_transactions_model: Optional[bool] = field(
-        default=True, metadata={"help": "Whether to freeze weights of Transactions model during training."}
+        default=False, metadata={"help": "Whether to freeze weights of Transactions model during training."}
     )
     do_freeze_connector: Optional[bool] = field(
         default=False, metadata={"help": "Whether to freeze weights of a Connector layer during training."}
@@ -445,11 +445,11 @@ class TrainingArguments:
         metadata={"help": "The checkpoint save metric to use: val_loss or train_loss or any other."},
     )
     save_strategy_mode: Optional[str] = field(
-        default="max",
+        default="min",
         metadata={"help": "The checkpoint save strategy to use: max or min"},
     )
     save_filename_format: Optional[str] = field(
-        default='checkpoint-{epoch:02d}-{loss3:.2f}',
+        default='checkpoint-{epoch:02d}-{loss:.2f}',
         metadata={"help": "The checkpoint save filename template."},
     )
     save_epochs: Optional[int] = field(default=1, metadata={"help": "Save checkpoint every X epochs."})

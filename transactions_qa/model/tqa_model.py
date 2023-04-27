@@ -9,6 +9,7 @@ import torch.nn as nn
 import transformers
 import pytorch_lightning as pl
 from pytorch_lightning.utilities import rank_zero_info
+from pytorch_lightning.loggers import WandbLogger
 
 from romashka.transactions_qa.model.generation_utils import AnsweredQACriteria
 from romashka.transactions_qa.tasks.task_abstract import AbstractTask
@@ -121,7 +122,8 @@ class TransactionQAModel(pl.LightningModule):
     def model_step(self, batch,
                    task_idx: Optional[int] = None,
                    generate: Optional[bool] = False,
-                   generation_options: Optional[Dict[str, Any]] = None) -> Tuple[Any, torch.Tensor]:
+                   generation_options: Optional[Dict[str, Any]] = None,
+                   output_attentions: Optional[bool] = False) -> Tuple[Any, torch.Tensor]:
 
         # Sample single task
         if task_idx is None:
@@ -140,7 +142,7 @@ class TransactionQAModel(pl.LightningModule):
             # join two batches
             for key, val in batch.items():
                 qa_batch[key] = val
-            outputs = self.model(qa_batch)
+            outputs = self.model(qa_batch, output_attentions=output_attentions)
             batch_answers = qa_batch['answer_tokens'] if "answer_tokens" not in outputs else outputs['answer_tokens']
 
             return outputs, batch_answers
@@ -254,9 +256,21 @@ class TransactionQAModel(pl.LightningModule):
 
         logging_dict = dict(list(logging_dict.items()) + list(metrics_scores.items()))
 
-        self.log_dict(
-            logging_dict,
-            batch_size=batch_answers.size(0)
+        # self.log_dict(
+        #     logging_dict,
+        #     batch_size=batch_answers.size(0),
+        #     sync_dist=True,
+        #     on_step=False, on_epoch=True, prog_bar=True, logger=True
+        # )
+        self.log(
+            "val_loss", loss,
+            on_step=False, on_epoch=True,
+            prog_bar=True, logger=True, sync_dist=True,
+        )
+
+        self.log(
+            f'{task.task_name}_val_loss', loss, on_step=False, on_epoch=True,
+            prog_bar=True, logger=True, sync_dist=True,
         )
 
         # Log predictions on validation set
@@ -403,7 +417,7 @@ class TransactionQAModel(pl.LightningModule):
         """
         task = self.tasks[task_idx]
         qa_batch = task.process_input_batch(batch)
-        batch_answers = qa_batch['answer_tokens'] if "answer_tokens" in qa_batch else None
+        batch_answers = qa_batch['answer_tokens'].long() if "answer_tokens" in qa_batch else None
 
         # Get parameters for generation from model
         generation_config = self.model.generation_config
@@ -488,12 +502,29 @@ class TransactionQAModel(pl.LightningModule):
         # Reset log counter
         self.log_eval_steps_counter = 0
 
-    def on_train_end(self) -> None:
+    def on_validation_epoch_end(self) -> None:
         # ✨ W&B: Log predictions table to wandb
-        wandb.log({"val_predictions": self.log_eval_predictions_table})
+        print(f"\n----------- Validation end ----------\n")
+        # print(f"Using logger: {self.logger.experiment}")
+        # wandb_logger = [logger for logger in self.trainer.loggers if isinstance(logger, WandbLogger)][0]
+        self.logger.log_metrics({"val_predictions": self.log_eval_predictions_table})
+
         # was directly to W&B: wandb.log({"val_predictions": self.log_eval_predictions_table})
         # ✨ W&B: Mark the run as complete (useful for multi-cell notebook)
-        wandb.finish()
+        # wandb.finish()
+
+    def on_before_optimizer_step(self, optimizer, optimizer_idx = 0):
+        # example to inspect gradient information in tensorboard
+        if self.trainer.global_step % 25 == 0:  # don't make logging too much
+            for param_name, param in self.model.named_parameters():
+                if param_name.startswith("transactions_start_embedding") or param_name.startswith("transactions_end_embedding")  or param_name.startswith("connector"):
+                    if param.grad is not None:
+                        grad_sum = np.sum(param.grad.detach().cpu().numpy())
+                        self._logger.info(f"Parameter `{param_name}` with grad of size: {param.grad.size()}")
+                        self._logger.info(f"Summed `{param_name}` grad = {grad_sum}")
+                        self.log(
+                            name=f"{param_name}_grad_sum", value=grad_sum, sync_dist=True
+                        )
 
     def log_predictions(self,
                         logits: torch.Tensor,
