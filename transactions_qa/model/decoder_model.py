@@ -23,6 +23,7 @@ class DecoderSimpleModel(nn.Module):
                  connector_output_size: Optional[int] = None,
                  do_freeze_tm: Optional[bool] = True,
                  do_freeze_lm: Optional[bool] = False,
+                 do_freeze_lm_embeddings: Optional[bool] = False,
                  do_freeze_connector: Optional[bool] = False,
                  generation_config: Optional[Dict[str, Any]] = None,
                  is_debug: Optional[bool] = False):
@@ -45,6 +46,7 @@ class DecoderSimpleModel(nn.Module):
         self.language_model_tokens_embedding_func = None
         self.do_freeze_tm: bool = do_freeze_tm
         self.do_freeze_lm: bool = do_freeze_lm
+        self.do_freeze_lm_embeddings = do_freeze_lm_embeddings
         self.do_freeze_connector: bool = do_freeze_connector
         self.generation_config = generation_config
 
@@ -109,6 +111,13 @@ class DecoderSimpleModel(nn.Module):
             self._logger.info(f"Freezing language model's parameters...")
             for param in self.language_model.parameters():
                 param.requires_grad = False
+
+        if self.do_freeze_lm_embeddings:
+            self._logger.info(f"Freezing language model's embeddings...")
+            self.language_model_tokens_embedding_func.requires_grad = False
+        else:
+            self._logger.info(f"Unfreezing (if frozen) language model's embeddings...")
+            self.language_model_tokens_embedding_func.requires_grad = True
 
         if self.do_freeze_connector:
             self.connector.eval()

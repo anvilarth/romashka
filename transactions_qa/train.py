@@ -275,6 +275,7 @@ def main():
     lm_model_config = {
         "do_freeze_tm": training_args.do_freeze_transactions_model,
         "do_freeze_lm": training_args.do_freeze_language_model,
+        "do_freeze_lm_embeddings": training_args.do_freeze_language_model_embeddings,
         "do_freeze_connector": training_args.do_freeze_connector,
         "is_debug": True
     }

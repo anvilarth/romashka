@@ -369,6 +369,9 @@ class TrainingArguments:
     do_freeze_connector: Optional[bool] = field(
         default=False, metadata={"help": "Whether to freeze weights of a Connector layer during training."}
     )
+    do_freeze_language_model_embeddings: Optional[bool] = field(
+        default=False, metadata={"help": "Whether to freeze Embeddings of Language model during training."}
+    )
     
     gradient_clip_val: float = field(
         default=None,
