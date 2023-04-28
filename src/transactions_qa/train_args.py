@@ -215,11 +215,11 @@ class DataTrainingArguments:
             )
         },
     )
-    shuffle_buffer_size: Optional[int] = field(
-        default=10_000,
+    shuffle: Optional[bool] = field(
+        default=True,
         metadata={
             "help": (
-            "Size of buffer which is used for shuffling."
+            "Whether shuffle data or not"
             )
         },
     )

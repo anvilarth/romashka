@@ -208,7 +208,7 @@ def main():
                 'batch_size': training_args.per_device_train_batch_size,
                 'min_seq_len': data_args.min_trx_seq_len,
                 'max_seq_len': data_args.max_trx_seq_len,
-                'buffer_size': data_args.shuffle_buffer_size,
+                'shuffle': data_args.shuffle,
                 'num_workers': data_args.preprocessing_num_workers,
                 'pin_memory': True,
                 'seed': training_args.seed

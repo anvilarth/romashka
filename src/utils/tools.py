@@ -122,6 +122,9 @@ def generate_subsequences(batch, K, m = 0.1, M=0.9):
     return new_batches
 
 def make_time_batch(batch, number_days=30):
+    """
+    Returns amount, number, codes
+    """
     device = batch['mask'].device
     time_tr = batch['num_features'][1] * 365
     

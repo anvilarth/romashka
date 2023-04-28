@@ -22,7 +22,9 @@ class TransactionHead(nn.Module):
         elif head_type == 'next_time':
             self.head = NextActionsHead(input_size)
         elif head_type == 'last_output':
-            self.head = LastOutputHead()
+            self.head = LastOutputLinearHead(input_size)
+        elif head_type == 'pretraining_last_output':
+            self.head = LastOutputHead(input_size)
         else:
             raise NotImplementedError
     
@@ -30,7 +32,7 @@ class TransactionHead(nn.Module):
         return self.head(x, mask)
 
 class LastOutputHead(nn.Module):
-    def __init__(self):
+    def __init__(self, input_size):
         super().__init__()
     
     def forward(self, x, mask):
@@ -39,6 +41,18 @@ class LastOutputHead(nn.Module):
         trx_index = mask.sum(1) - 1
         output = x[torch.arange(batch_size, device=device), trx_index]
         return output
+
+class LastOutputLinearHead(nn.Module):
+    def __init__(self, input_size):
+        super().__init__()
+        self.linear1 = nn.Linear(input_size, 1)
+    
+    def forward(self, x, mask):
+        device = mask.device
+        batch_size = mask.shape[0]
+        trx_index = mask.sum(1) - 1
+        output = x[torch.arange(batch_size, device=device), trx_index]
+        return self.linear1(output).squeeze(1)
 
 
 class LinearHead(nn.Module):

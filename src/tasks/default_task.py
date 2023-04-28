@@ -63,7 +63,8 @@ class DefaultTask(AbstractTask):
         self.criterion = nn.BCEWithLogitsLoss()
     
     def prepare_task_batch(self, batch: Dict[str, Any], **kwargs):
-        return batch['label'].float()
+        batch['label'] = batch['label'].float()
+        return batch
 
     def generate_target(self, batch: Any, **kwargs) -> Any:
         target_feature_batch = batch['label']  # Tensor [batch_size]

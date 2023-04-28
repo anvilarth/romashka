@@ -1,4 +1,5 @@
 from typing import Any, List
+from copy import deepcopy
 
 import torch
 from pytorch_lightning import LightningModule
@@ -49,7 +50,7 @@ class TaskModule(LightningModule):
         self.transactions_model = TransactionsModel(**transactions_model_config)
         self.task = AutoTask.get(task_name=task_name, task_type='non-text')
 
-        self.metrics = self.task.metrics
+        self.metrics = deepcopy(self.task.metrics)
         # loss function
         self.criterion = self.task.criterion
 
@@ -89,8 +90,6 @@ class TaskModule(LightningModule):
         loss = self.criterion(outputs, answers)
 
         metrics_scores = self.task.calculate_metrics(outputs, answers, self.metrics)
-        for metric_key in metrics_scores:
-            metrics_scores[metric_key] = metrics_scores.pop(metric_key)
 
         # update and log metrics
         self.log("val_loss",loss, on_step=False, on_epoch=True, prog_bar=True, batch_size=batch_size)

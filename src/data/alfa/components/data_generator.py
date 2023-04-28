@@ -1,5 +1,6 @@
 import gc
 import torch
+import numpy as np
 import pickle
 from typing import List, Optional
 
@@ -19,7 +20,8 @@ cat_features_indices = [transaction_features.index(x) for x in cat_features_name
 def batches_generator(list_of_paths: List[str],
                       batch_size: Optional[int] = 1,
                       min_seq_len: Optional[int] = None, max_seq_len: Optional[int] = None,
-                      is_train: Optional[bool] = True, verbose: Optional[bool] = False):
+                      is_train: Optional[bool] = True, verbose: Optional[bool] = False,
+                      shuffling_generator: Optional[bool] = False):
     """
     Infinite generator for time-based data reading and collation in padded batches.
     Args:
@@ -47,9 +49,20 @@ def batches_generator(list_of_paths: List[str],
 
         padded_sequences, products = data['padded_sequences'], data['products']
         app_ids = data['app_id']
+        indices = np.arange(len(products))
 
+        if shuffling_generator:
+            np.random.shuffle(indices)
+            padded_sequences = padded_sequences[indices]
+            products = products[indices]
+            app_ids = app_ids[indices]
+
+        if verbose:
+            print(f'{path} = {indices[:10]}')
+            
         if is_train:
             targets = data['targets']
+            targets = targets[indices]
 
         for idx in range(len(products)):
             bucket, product = padded_sequences[idx], products[idx]

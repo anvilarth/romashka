@@ -2,6 +2,7 @@ import os
 import numpy as np
 import torch
 import torch.nn as nn
+import random
 
 from torch.utils.data import IterableDataset, DataLoader
 from typing import Optional
@@ -20,9 +21,9 @@ class AlfaDataModule(pl.LightningDataModule):
                 seed: Optional[int] = 42,
                 batch_size: Optional[int] = 32,
                 val_batch_size: Optional[int] = 32,
-                buffer_size: Optional[int] = 10_000,
-                num_workers: Optional[int] = 0,
+                num_workers: Optional[int] = 1,
                 pin_memory: Optional[bool] = False,
+                shuffle: Optional[bool] = False,
         ):
         super().__init__()
 
@@ -31,9 +32,9 @@ class AlfaDataModule(pl.LightningDataModule):
         self.seed = seed
         self.batch_size = batch_size
         self.val_batch_size = val_batch_size
-        self.buffer_size = buffer_size
         self.num_workers = num_workers
         self.pin_memory = pin_memory
+        self.shuffle = shuffle
 
         # TODO add checking validity of train data path
         data_files = {}
@@ -44,50 +45,66 @@ class AlfaDataModule(pl.LightningDataModule):
         # logger.info(f"Detected {len(dataset_files)} files for training.")
        
         # TODO add checking validity of val data path
+        shuffling_generator = self.shuffle
         dir_with_datasets = os.listdir(os.path.join(data_dir, 'val_buckets'))
         data_files["validation"] = sorted([os.path.join(data_dir, 'val_buckets', x)
                                 for x in dir_with_datasets])
         # logger.info(f"Detected {len(dataset_files)} files for validation.")
 
-        self.train_ds = self.create_data(list_paths=data_files["train"])
+        self.train_ds = self.create_data(list_paths=data_files["train"], shuffling_generator=self.shuffle)
         self.val_ds = self.create_data(list_paths=data_files["validation"])
 
-    def create_data(self, list_paths):
+    def create_data(self, list_paths, shuffling_generator=None):
         dataset = HFIterableDataset.from_generator(batches_generator,
                                                     gen_kwargs={
                                                         'list_of_paths': list_paths,
                                                         'min_seq_len': self.min_seq_len,
                                                         'max_seq_len': self.max_seq_len,
+                                                        'shuffling_generator': shuffling_generator
                                                     }
         )
-        if self.buffer_size > 0:
-            dataset = dataset.shuffle(seed=self.seed, buffer_size=self.buffer_size)
+        # if self.buffer_size > 0:
+        #     dataset = dataset.shuffle(seed=self.seed, buffer_size=self.buffer_size)
         
         return dataset.with_format('torch')
 
     def train_dataloader(self, pl_training=True):
-        if pl_training:
-            self.train_ds.set_epoch(self.trainer.current_epoch)
+        # if pl_training:
+        #     self.train_ds.set_epoch(self.trainer.current_epoch)
         
         return DataLoader(self.train_ds, 
                             batch_size=self.batch_size,
                             num_workers=self.num_workers, 
-                            collate_fn=self.collate_fn)
+                            collate_fn=self.collate_fn,
+                            worker_init_fn=self.worker_init_fn,
+                            persistent_workers=True)
         
 
     def val_dataloader(self):
         return DataLoader(self.val_ds, 
                             batch_size=self.batch_size,
                             num_workers=self.num_workers, 
-                            collate_fn=self.collate_fn)
+                            collate_fn=self.collate_fn,
+                            worker_init_fn=self.worker_init_fn,
+                            persistent_workers=True)
 
     def test_dataloader(self):
         return DataLoader(self.val_ds, 
                             batch_size=self.batch_size,
                             num_workers=self.num_workers, 
-                            collate_fn=self.collate_fn)
+                            collate_fn=self.collate_fn,
+                            worker_init_fn=self.worker_init_fn,
+                            persistent_workers=True)
 
-    
+    @staticmethod
+    def worker_init_fn(worker_id):
+        seed = torch.utils.data.get_worker_info().id
+        random.seed(seed)
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed(seed)
+        np.random.seed(seed)       
+                                                                                                                                    
+        
     @staticmethod
     def collate_fn(batch):
         output = {}
