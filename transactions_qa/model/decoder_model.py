@@ -203,6 +203,7 @@ class DecoderSimpleModel(nn.Module):
                               f"{self.generation_config}")
 
     def forward(self, batch: Union[Dict[str, torch.Tensor], Any],
+                output_attentions: Optional[bool] = False,
                 is_train: Optional[bool] = True) -> Any:
         """
         Passes input batch through:
@@ -317,6 +318,7 @@ class DecoderSimpleModel(nn.Module):
         # `logits` of size: [batch_size, max_pred_len, vocab_size]
         output = self.language_model(inputs_embeds=input_embedds,
                                      labels=labels_masked if is_train else None,
+                                     output_attentions=output_attentions,
                                      output_hidden_states=True)
         if is_train:
             output['labels'] = labels_masked

@@ -155,6 +155,7 @@ class EncoderFrozenModel(EncoderSimpleModel):
         input_embeddings[mask] = self.transactions_end_embedding
 
     def forward(self, batch: Union[Dict[str, torch.Tensor], Any],
+                output_attentions: Optional[bool] = False,
                 is_train: Optional[bool] = True) -> Any:
         """
         Passes input batch through:
@@ -253,6 +254,7 @@ class EncoderFrozenModel(EncoderSimpleModel):
         lm_outputs = self.language_model(inputs_embeds=encoder_input,
                                          attention_mask=encoder_input_mask,
                                          labels=batch_answers,
+                                         output_attentions=output_attentions,
                                          decoder_attention_mask=batch_answers_mask)
         # Create answers + masks for LM's decoder inputs
         lm_outputs['answer_tokens'] = batch_answers
@@ -444,6 +446,7 @@ class EncoderFrozenModel(EncoderSimpleModel):
                 i += 1
                 output = self.language_model(inputs_embeds=embeddings,
                                              decoder_inputs_embeds=embeddings,
+                                             output_attentions=output_attentions,
                                              output_hidden_states=True)
 
                 # Collect and sum the hidden states.

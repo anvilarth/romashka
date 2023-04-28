@@ -153,6 +153,7 @@ class EncoderSimpleModel(nn.Module):
                               f"{self.generation_config}")
 
     def forward(self, batch: Union[Dict[str, torch.Tensor], Any],
+                output_attentions: Optional[bool] = False,
                 is_train: Optional[bool] = True) -> Any:
         """
         Passes input batch through:
@@ -218,6 +219,7 @@ class EncoderSimpleModel(nn.Module):
         lm_outputs = self.language_model(inputs_embeds=encoder_input,
                                          attention_mask=encoder_input_mask,
                                          labels=batch_answers,
+                                         output_attentions=output_attentions,
                                          decoder_attention_mask=batch_answers_mask)
         # Create answers + masks for LM's decoder inputs
         lm_outputs['answer_tokens'] = batch_answers
