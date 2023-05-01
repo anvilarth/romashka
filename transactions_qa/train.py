@@ -13,6 +13,8 @@ import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 
+# Use custom transformers version == 4.27.4 + modifications
+sys.path.insert(0, "/home/jovyan/abdullaeva/transactionsQA")
 import transformers
 from transformers import (AutoModelForSeq2SeqLM,
                           AutoModelForCausalLM,

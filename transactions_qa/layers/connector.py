@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
 from typing import Optional, Union, List
-from ..utils import init_layers
+from romashka.transactions_qa.layers.initialization import (init_xavier_uniform_layers,
+                                                            init_linear)
 
 
 def make_linear_connector(output_size: Optional[int] = None,
@@ -65,7 +66,7 @@ class LinearConnector(nn.Module):
     def _create_layer(self) -> Optional[nn.Module]:
         try:
             layer = nn.Linear(self.output_size, self.input_size).to(self.device)
-            init_layers(layer)
+            init_linear(layer)
             return layer
         except Exception as e:
             print(f"Error occurred during connector creation:\n{e}")
@@ -162,7 +163,7 @@ class ReccurrentConnector(nn.Module):
                 bidirectional=self.is_bidirectional,
                 batch_first=True,
             ).to(self.device)
-            init_layers(layer)
+            init_xavier_uniform_layers(layer)
             return layer
         except Exception as e:
             print(f"Error occurred during connector creation:\n{e}")
