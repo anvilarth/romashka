@@ -187,26 +187,53 @@ def make_complex_linear_connector(output_size: Optional[int] = None,
                                   input_size: Optional[int] = None,
                                   n_layers: Optional[int] = 2,
                                   hidden_dims: Optional[List[int]] = None,
+                                  add_normalizations: Optional[List[bool]] = None,
+                                  add_activations: Optional[List[bool]] = None,
                                   device: Optional[Union[torch.device, str]] = 'cpu'):
     """
     Creates more complex, but still linear connector by stacking with non-linearity few linear layers.
-
     Args:
-        output_size:
-        input_size:
-        device:
+        output_size: an output size of an embeddings model (i.e. input size for the first connector layer);
+        input_size: an input size of an autoregressive model (i.e. output size for the last connector layer);
+        n_layers: a number of inner layers in connector;
+        hidden_dims: a list of dimensions for each inner layer;
+        add_normalizations: a list of bool flags indicated whether to add or not LayerNorm after each layer;
+        add_activations: a list of bool flags indicated whether to add or not activation after each layer;
+        device: a device to allocate model.
 
     Returns:
-
+        a connector.
     """
-    print(f"Output dimension of embedding model: {required_output_size}")
-    print(f"Input dimension of autoregressive model: {required_input_size}")
-    print(f"Creating linear connector from {required_output_size} to {required_input_size} "
+    # Check parameters consistency
+    if (hidden_dims is None) or (len(hidden_dims) != (n_layers - 1)):
+        raise AttributeError(f"Number of hidden dims (= {len(hidden_dims) if hidden_dims is not None else 0}) "
+                             f"does not equal to number of layers - 1 (= {n_layers - 1})!")
+
+    if add_normalizations is None:
+        add_normalizations = [False] * n_layers
+    elif len(add_normalizations) != n_layers:
+        raise AttributeError(f"Number of normalization flags (= {len(add_normalizations)}) "
+                             f"does not equal to number of layers (= {n_layers})!")
+
+    if add_activations is None:
+        add_activations = [False] * n_layers
+    elif len(add_activations) != n_layers:
+        raise AttributeError(f"Number of adding activations flags (= {len(add_activations)}) "
+                             f"does not equal to number of layers (= {n_layers})!")
+
+    print(f"Output dimension of embedding model: {output_size}")
+    print(f"Input dimension of autoregressive model: {input_size}")
+    print(f"Creating connector from {output_size} to {input_size} "
           f"and move to device: {device}.")
 
-    return LinearConnector(
-        output_size=required_output_size,
-        input_size=required_input_size
+    return ComplexLinearConnector(
+        output_size=output_size,
+        input_size=input_size,
+        n_layers=n_layers,
+        hidden_dims=hidden_dims,
+        add_normalizations=add_normalizations,
+        add_activations=add_activations,
+        device=device
     )
 
 
@@ -242,7 +269,9 @@ class ComplexLinearConnector(nn.Module):
                     output_dim = final_output_dim
                 else:
                     output_dim = self.hidden_dims[layer_n]
-                self.layers.append(init_layers(nn.Linear(input_dim, output_dim)))
+                    layer = nn.Linear(input_dim, output_dim)
+                    init_linear(layer)
+                self.layers.append(layer)
                 if self.add_normalizations[layer_n]:
                     self.layers.append(nn.LayerNorm(output_dim))
                 if self.add_activations[layer_n]:

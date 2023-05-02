@@ -364,7 +364,7 @@ class DecoderRetrievalModel(DecoderSimpleModel):
 
         transactions_tokens = torch.Tensor([
             self.tokenizer.convert_tokens_to_ids(self._ret_tokens_template % i)
-            for i in range(max_transactions_size)]).long().repeat(16, 1)
+            for i in range(max_transactions_size)]).long().repeat(batch_size, 1)
 
         transactions_tokens.masked_fill_(transactions_embeddings_mask == 0,
                                          self.tokenizer.pad_token_id)
@@ -419,6 +419,7 @@ class DecoderRetrievalModel(DecoderSimpleModel):
 
         # join two output dicts
         outputs = dict()
+        outputs["logits"] = lm_outputs.logits
         outputs["text_loss"] = lm_outputs.loss
         outputs["retrieval_loss"] = ret_loss_outputs.pop('loss')
         outputs['loss'] = total_loss
