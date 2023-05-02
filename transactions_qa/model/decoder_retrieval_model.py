@@ -9,6 +9,9 @@ import transformers
 from romashka.transactions_qa.model.decoder_model import DecoderSimpleModel
 from romashka.transactions_qa.tasks.task_abstract import AbstractTask
 
+from romashka.transactions_qa.losses.infonce_loss import InfoNCE
+from romashka.transactions_qa.utils import (mask_padding, mask_lm_labels_padding)
+
 
 class DecoderRetrievalModel(DecoderSimpleModel):
     def __init__(self,
@@ -20,15 +23,33 @@ class DecoderRetrievalModel(DecoderSimpleModel):
                  connector_output_size: Optional[int] = None,
                  do_freeze_tm: Optional[bool] = True,
                  do_freeze_lm: Optional[bool] = False,
+                 do_freeze_lm_embeddings: Optional[bool] = False,
                  do_freeze_connector: Optional[bool] = False,
                  min_ret_tokens: Optional[int] = 50,  # equals to max transactions history size
                  max_ret_tokens: Optional[int] = 150,  # equals to min transactions history size
                  n_retrieval_layers: Optional[List[int]] = None,
                  embeddings_dropout_p: Optional[float] = 0.1,
+                 retrieval_loss_scale: Optional[float] = 1.0,
+                 text_loss_scale: Optional[float] = 1.0,
                  transactions_embeddings_start_token: Optional[str] = r"[trx]",
                  transactions_embeddings_end_token: Optional[str] = r"[/trx]",
                  generation_config: Optional[Dict[str, Any]] = None,
                  is_debug: Optional[bool] = False):
+
+        self._transactions_embeddings_start_token = transactions_embeddings_start_token
+        self._transactions_embeddings_end_token = transactions_embeddings_end_token
+
+        self.min_ret_tokens = min_ret_tokens
+        self.max_ret_tokens = max_ret_tokens
+        self._ret_tokens_template = "[RET_%s]"
+
+        # self.projection_layers = nn.ModuleList([])
+        self._n_retrieval_layers = n_retrieval_layers
+        self._embeddings_dropout_p = embeddings_dropout_p
+
+        self._retrieval_loss_scale = retrieval_loss_scale
+        self._text_loss_scale = text_loss_scale
+
         super().__init__(language_model=language_model,
                          transaction_model=transaction_model,
                          tokenizer=tokenizer,
@@ -37,23 +58,30 @@ class DecoderRetrievalModel(DecoderSimpleModel):
                          connector_output_size=connector_output_size,
                          do_freeze_tm=do_freeze_tm,
                          do_freeze_lm=do_freeze_lm,
+                         do_freeze_lm_embeddings=do_freeze_lm_embeddings,
                          do_freeze_connector=do_freeze_connector,
                          generation_config=generation_config,
                          is_debug=is_debug)
-        self.min_ret_tokens = min_ret_tokens
-        self.max_ret_tokens = max_ret_tokens
-        self._ret_tokens_template = "[RET_%s]"
-
-        self.projection_layers = nn.ModuleList([])
-        self._n_retrieval_layers = n_retrieval_layers
-        self._embeddings_dropout_p = embeddings_dropout_p
-        self._transactions_embeddings_start_token = transactions_embeddings_start_token
-        self._transactions_embeddings_end_token = transactions_embeddings_end_token
 
     def _prepare_model(self):
         super()._prepare_model()
-        self._create_projection_layers()
-        self._add_retrieval_tokens()
+        self._create_trainable_parameters()
+        self._create_losses()
+
+        # Additionally re-assign embeddings
+        self._set_language_model_embedding_func()
+
+        # Check if language model is frozen, optionally freeze
+        self._logger.info(f"Check language model's parameters to be frozen...")
+        for param_name, param in self.language_model.named_parameters():
+            if param.requires_grad:
+                self._logger.warning(f"Parameter `{param_name}` of LM requires grad, freezing..")
+                param.requires_grad = False
+
+        # Check total trainable parameters
+        parameters = list(self.parameters())
+        trainable_parameters = list(filter(lambda p: p.requires_grad, parameters))
+        self._logger.info(f"Totally trainable parameters: {len(trainable_parameters)} from {len(parameters)}")
 
     def _create_trainable_parameters(self):
         """
@@ -66,11 +94,16 @@ class DecoderRetrievalModel(DecoderSimpleModel):
                 list(projection.parameters())
                 + [trns_start_embedding, trns_end_embedding], lr=1e-2, relative_step=False)
         """
+        # Create transactions embeddings start/end tokens: [trx] / [/trx] and trainable parameters for them
         self._create_surrounding_parameters()
+        # Create retrieval tokens: RET_0 ... RET_N in tokenizers vocabulary and mappings token <-> id
         self._create_retrieval_parameters()
 
         # Additionally call to re-init embedding function reference to resized (maybe) embeddings
         self._resize_text_embeddings()
+
+        # Create projection layers from LM output hidden states to shared dim for loss calculation
+        self._create_projection_layers()
 
     def _create_surrounding_parameters(self):
         """
@@ -145,32 +178,16 @@ class DecoderRetrievalModel(DecoderSimpleModel):
         self.transactions_ret_ids2tokens_mapping = {token_id: token for token, token_id
                                                     in self.transactions_ret_tokens2ids_mapping.items()}
 
-        # Create randomly initialized embeddings for each of them, of size [n_embeddings, hidden_dim]
-        params_dim = None
-        if hasattr(self.language_model.config, "hidden_size"):
-            params_dim = self.language_model.config.hidden_size
-        elif hasattr(self.language_model.config, "d_model"):  # may occur in encoder-decoder models (like T5)
-            params_dim = self.language_model.config.d_model
-        else:
-            raise AttributeError(f"The default setting, where parameters embeddings dimensionality "
-                                 "equals to LLM hidden dimensionality can not be run because "
-                                 "model do not have required attribute: `hidden_size` or `d_model` in config.")
-
-        # Transactions retrieval embeddings RET_0...RET_N
-        self.ret_embeddings = torch.nn.Embedding(num_embeddings=self.max_ret_tokens, embedding_dim=params_dim)
-        self._logger.info(f"Initialized trainable parameters for transactions retrieval tokens.")
-
-        # todo: Get their ids in tokenizers' vocabulary and put in LLM embeddings matrix their created embeddings
-        # then update them on_optimizer_step()
-
-
     def _create_projection_layers(self):
         """
         Creates a linear mappings from language model hidden dimensionality
         to shared embeddings dimensionality for rET tokens loss calculation.
         """
         # List of indexes of hidden states to take for information extraction
-        n_retrieval_layers = self._n_retrieval_layers if self._n_retrieval_layers is not None else [-1]
+        if self._n_retrieval_layers is None:
+            self._n_retrieval_layers = [-1]
+
+        self.projection_layers = nn.ModuleList([])
 
         shared_dim = None
         if hasattr(self.language_model.config, "hidden_size"):
@@ -182,7 +199,7 @@ class DecoderRetrievalModel(DecoderSimpleModel):
                                  "equals to LLM hidden dimensionality can not be run because "
                                  "model do not have required attribute: `hidden_size` or `d_model` in config.")
 
-        for layer_idx in n_retrieval_layers:
+        for layer_idx in self._n_retrieval_layers:
             # Last layer hidden states
             if layer_idx == -1 or layer_idx == self.language_model.config.num_hidden_layers:
                 if self.language_model_arch_type == "OPT":
@@ -202,6 +219,15 @@ class DecoderRetrievalModel(DecoderSimpleModel):
                 raise ValueError(
                     f'Embedding of layer {layer_idx} was requested but model only'
                     f' has {self.language_model.config.num_hidden_layers} layers.')
+
+    def _create_losses(self):
+        # Use CE for general QA text loss
+        self.qa_loss_fn = torch.nn.CrossEntropyLoss(reduction='none', ignore_index=-100)
+
+        # Use CE for RET tokens generation loss
+        self.ret_CE_loss_fn = torch.nn.CrossEntropyLoss(reduction='none', ignore_index=-100)
+        # Use contrastive loss for embeddings comparison
+        self.ret_NCE_loss_fn = InfoNCE()
 
     def has_start_token(self, input_tokens_ids: Union[List[int], torch.Tensor]) -> bool:
         """
@@ -230,3 +256,255 @@ class DecoderRetrievalModel(DecoderSimpleModel):
         """
         mask = input_tokens_ids == self.transactions_end_token_id
         input_embeddings[mask] = self.transactions_end_embedding
+
+    def forward(self, batch: Union[Dict[str, torch.Tensor], Any],
+                output_attentions: Optional[bool] = False,
+                is_train: Optional[bool] = True) -> Any:
+        """
+        Passes input batch through:
+        1) Sequence embedder model (transactions model);
+        2) Connector
+        3) Collate CLM input sequences and pass through LM decoder
+        Args:
+            batch: a prepared with chosen task batch of items;
+            output_attentions: whether to output attention maps;
+            is_train: whether to pass to LM forward input labels or not;
+
+        Returns:
+            LM model's outputs with added labels (if `is_train` was set).
+        """
+        # Get transactions embeddings for initial batch
+        # transactions model requires: ['mask', 'cat_features', 'num_features', 'meta_features']
+        # return: Tuple[
+        # torch.Tensor, - embeddings
+        # torch.Tensor - mask
+        # ]
+        transaction_mask = batch['mask']
+        device = transaction_mask.device
+
+        batch_size = transaction_mask.size(0)
+        transactions_embeddings, transactions_embeddings_mask = self.transaction_model.get_embs(batch)
+
+        # next pass them to connector == linear mapping -> to LM inner dim
+        transactions_embeddings = self.connector(transactions_embeddings)
+
+        # Questions: to embedding of LM
+        # torch.Size([1, len(question_start_tokens))
+        question_start_embeddings = self.language_model_tokens_embedding_func(
+            batch['question_start_tokens'])  # call for (embed_tokens): Embedding(vocab_size, model_hidden_dim)
+
+        # if it already ends with [trx]
+        if self.has_start_token(batch['question_start_tokens']):
+            self.replace_start_token(batch['question_start_tokens'], question_start_embeddings)
+        # otherwise append it to the end of starting sequence
+        else:
+            # todo: add one more sample to attention_mask also !!!
+            question_start_embeddings = torch.cat([question_start_embeddings,
+                                                   self.transactions_start_embedding[None, None]], dim=1)
+
+        question_start_embeddings_batch = question_start_embeddings.repeat(batch_size, 1, 1)
+
+        # Question ends: to embedding of LM
+        # 1) Strip paddings from questions endings!!!
+        question_end_tokens_mask = batch['question_end_attention_mask'].bool()  # 1 - token, 0 == pad
+
+        question_end_tokens_full = []
+        for i in range(question_end_tokens_mask.size(0)):
+            # question without padding
+            question_end_tokens_ = batch['question_end_tokens'][i][question_end_tokens_mask[i]]
+            answer_ = batch['answer_tokens'][i]
+            full_question_end_tokens_ = torch.cat([question_end_tokens_,
+                                                   self.whitespace_token_id.to(device),
+                                                   answer_,
+                                                   # eos_token_id.to(device)
+                                                   ], dim=0)
+            question_end_tokens_full.append(full_question_end_tokens_)
+
+        # 2) Pad to max q+a length
+        max_question_answer_len = max([len(qa) for qa in question_end_tokens_full])
+        for i in range(question_end_tokens_mask.size(0)):
+            n_padds = max_question_answer_len - question_end_tokens_full[i].size(0)
+            question_end_tokens_full[i] = torch.cat(
+                [torch.full((n_padds,), self.tokenizer.pad_token_id).to(device),
+                 question_end_tokens_full[i],
+                 ], dim=0)
+
+        # 3) Cat back into batch
+        question_end_tokens_full = torch.stack(question_end_tokens_full).long()
+
+        # Get LLM embeddings
+        question_end_embeddings_batch = self.language_model_tokens_embedding_func(question_end_tokens_full)
+
+        # 4) Fill with trainable parameters
+        # if it already starts with [/trx]
+        if self.has_end_token(question_end_tokens_full):
+            self.replace_end_token(question_end_tokens_full, question_end_embeddings_batch)
+
+        # otherwise prepend it to the start of question sequence
+        else:
+            # todo: add one more sample to attention_mask also !!!
+            question_end_embeddings_batch = torch.cat([
+                self.transactions_end_embedding[None, None].repeat(batch_size, 1, 1),
+                question_end_embeddings_batch], dim=1)
+
+        # Get general LM's input as:
+        # Q_start_tokens + TRNS_embeddings + Q_end_tokens
+        input_embedds = torch.cat([question_start_embeddings_batch,
+                                   transactions_embeddings,
+                                   question_end_embeddings_batch], dim=1)
+
+        # First transactions token
+        transactions_start_i = question_start_embeddings_batch.size(1)
+        # Last transactions token
+        transactions_end_i = transactions_start_i + transactions_embeddings.size(1)
+
+        # Create transactions tokens ids + mask padding in transactions history
+        max_transactions_size = transactions_embeddings.size(1)
+        transactions_text_tokens = [self._ret_tokens_template % i for i in range(max_transactions_size)]
+
+        transactions_tokens = torch.Tensor([
+            self.tokenizer.convert_tokens_to_ids(self._ret_tokens_template % i)
+            for i in range(max_transactions_size)]).long().repeat(16, 1)
+
+        transactions_tokens.masked_fill_(transactions_embeddings_mask == 0,
+                                         self.tokenizer.pad_token_id)
+
+        #  3) Label = [-100 * (question_start_tokens_len - 1)
+        #             <trns>,
+        #             -100 * transactions_tokens_len
+        #             </trns>,
+        #             -100 * (question_end_tokens_len - 1)]
+
+        question_end_labels = question_end_tokens_full.clone()
+        for i in range(batch_size):
+            answer_tokens_len = batch['answer_tokens'][i].size(0)  # + 1  # + 1 for whitespace token
+            question_end_labels[i, 1:-answer_tokens_len] = -100
+
+        text_labels = torch.cat([
+            # <pad> * (question_start_tokens_len - 1)
+            torch.full((batch_size, batch['question_start_tokens'].size(1) - 1), self.tokenizer.pad_token_id).to(
+                device),  # --> empty
+            # <trns> token
+            batch['question_start_tokens'][:, -1].repeat(batch_size, 1),
+            # <pad> * transactions_tokens_len
+            torch.full(transactions_embeddings.size()[:2], self.tokenizer.pad_token_id).to(device),  # --> empty
+            question_end_tokens_full[:, 0].unsqueeze(-1),  # </trns> to [batch_size, 1]
+            # <pad> * (question_end_tokens_len - 1)
+            question_end_labels[:, 1:]
+        ], dim=1)
+
+        labels_masked = mask_lm_labels_padding(text_labels,
+                                               pad_token_id=self.tokenizer.pad_token_id,
+                                               mask_value=-100)
+
+        # Pass through LM
+        # contains: ['loss', 'logits', 'past_key_values', 'last_hidden_state']
+        # `logits` of size: [batch_size, max_pred_len, vocab_size]
+        lm_outputs = self.language_model(inputs_embeds=input_embedds,
+                                         labels=labels_masked if is_train else None,
+                                         output_attentions=output_attentions,
+                                         output_hidden_states=True)
+
+        # Calculate retrival loss
+        ret_loss_outputs = self._compute_retrieval_loss(lm_outputs,
+                                                        ret_start_i=transactions_start_i,
+                                                        ret_end_i=transactions_end_i,
+                                                        ret_embeddings=transactions_embeddings,
+                                                        output_hidden_states=True,
+                                                        output_logits=True)
+
+        # Re-scale losses
+        total_loss = lm_outputs.loss * self._text_loss_scale + \
+                     ret_loss_outputs.get('loss') * self._retrieval_loss_scale
+
+        # join two output dicts
+        outputs = dict()
+        outputs["text_loss"] = lm_outputs.loss
+        outputs["retrieval_loss"] = ret_loss_outputs.pop('loss')
+        outputs['loss'] = total_loss
+        for key, val in ret_loss_outputs.items():
+            outputs[key] = val
+
+        if is_train:
+            outputs['labels'] = labels_masked
+        if self._is_debug:
+            outputs['input_embeddings'] = input_embedds  # for debug purposes
+            question_start_tokens_batch = batch['question_start_tokens'].repeat(batch_size, 1)
+            outputs['question_encoded'] = torch.cat([question_start_tokens_batch,
+                                                     batch['question_end_tokens']], dim=1)
+            # Experimental !
+            transactions_history_lengths = transaction_mask.sum(1)
+            outputs['transactions_history_lengths'] = transactions_history_lengths
+
+            outputs['question_start_input_size'] = question_start_embeddings_batch.size(1)
+            outputs['question_end_input_size'] = question_end_embeddings_batch.size(1)
+            outputs['transactions_input_size'] = transactions_embeddings.size(1)
+            outputs['total_input_size'] = input_embedds.size(1)
+        return outputs
+
+    def _compute_retrieval_loss(self,
+                                outputs: Dict[str, torch.Tensor],
+                                ret_start_i: int, ret_end_i: int,
+                                ret_embeddings: torch.Tensor,
+                                output_hidden_states: Optional[bool] = False,
+                                output_logits: Optional[bool] = False) -> Dict[str, torch.Tensor]:
+        """
+        Calculate contrastive retrival loss based on InfoNCE loss implementation.
+        Args:
+            outputs: a LLM outputs, containing: 'logits', 'hidden_states', etc.
+            ret_start_i: a starting index of transactions embeddings injection;
+            ret_end_i: an ending index of transactions embeddings injection (non-inclusive);
+            ret_embeddings: a reference embeddings (i.e. target embeddings);
+            output_hidden_states: whether to output hidden_states for retrieval tokens;
+            output_logits: whether to output logits for retrieval tokens;
+
+        Returns:
+            a dict, containing 'loss' and,  optionally, 'last_hidden_state' and 'ret_tokens_logits'.
+        """
+        # 1) Extract hidden states and pass them through projection layers
+        ret_hidden_states = []
+        start_hidden_states = []
+        end_hidden_states = []
+
+        # As a projection_layers can be used: projection_layers or lm_connector
+        for idx, projection_layer in zip(self._n_retrieval_layers, self.projection_layers):  # [lm_connector]
+            ret_hidden_states.append(
+                projection_layer(outputs.hidden_states[idx][..., ret_start_i:ret_end_i, :])
+            )  # (bs, trns_history_seq_len, 768)
+
+            start_hidden_states.append(
+                outputs.hidden_states[idx][..., ret_start_i - 1, :]
+            )  # (bs, 768)
+            end_hidden_states.append(
+                outputs.hidden_states[idx][..., ret_start_i, :]
+            )  # (bs, 768)
+
+        # start_tokens == 10
+        # transactions_tokens == [50 ... 150]
+        # Q end tokens == seq_len - 10 - transactions_tokens -> == question_end_tokens_full.size(-1)
+
+        # 2) Add hidden states together
+        collected_last_hidden_state = torch.stack(ret_hidden_states, dim=-1).sum(dim=-1)
+        collected_start_hidden_states = torch.stack(start_hidden_states, dim=-1).sum(dim=-1)
+        collected_end_hidden_states = torch.stack(end_hidden_states, dim=-1).sum(dim=-1)
+
+        # 3) Collect also logits for start/end and retrieval tokens
+        trx_start_token_logits = outputs.logits[:, ret_start_i - 1, :].to(torch.float32)
+        trx_end_token_logits = outputs.logits[:, ret_end_i, :].to(torch.float32)
+        ret_tokens_logits = outputs.logits[:, ret_start_i:ret_end_i, :].to(torch.float32)
+
+        # 4) Calculate Contrastive loss
+        ret_loss_accumulated = []
+        for trx_i in range(collected_last_hidden_state.size(1)):
+            ret_token_loss = self.ret_NCE_loss_fn(ret_embeddings[:, trx_i, :],
+                                                  collected_last_hidden_state[:, trx_i, :])
+            ret_loss_accumulated.append(ret_token_loss)
+
+        ret_loss_accumulated = torch.stack(ret_loss_accumulated).sum()
+
+        loss_outputs = dict(loss=ret_loss_accumulated)
+        if output_hidden_states:
+            loss_outputs['last_hidden_state'] = collected_last_hidden_state
+        if output_logits:
+            loss_outputs['ret_tokens_logits'] = ret_tokens_logits
+        return loss_outputs

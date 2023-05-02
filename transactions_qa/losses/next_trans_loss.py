@@ -1,4 +1,4 @@
-import torch 
+import torch
 import torch.nn as nn
 
 from romashka.transactions_qa.losses.masked_loss import MaskedMSELoss
@@ -9,35 +9,36 @@ class NextNumericalFeatureLoss(nn.Module):
         super().__init__()
         self.num_criterion = MaskedMSELoss()
         self.number = number
-        
+
     def forward(self, output, batch, mask=None, cat_weights=None, num_weights=None):
         mask = batch['mask'][:, 1:]
         num_pred = output['num_features'][self.number]
         num_trues = batch['num_features'][self.number]
-        
+
         return self.num_criterion(num_pred.squeeze(), num_trues[:, 1:].squeeze(), mask)
-    
+
+
 class NextCatFeatureLoss(nn.Module):
     def __init__(self, number):
         super().__init__()
         self.cat_criterion = nn.CrossEntropyLoss(ignore_index=0)
         self.number = number
-        
+
     def forward(self, output, batch, mask=None, cat_weights=None, num_weights=None):
         mask = batch['mask'][:, 1:]
         cat_pred = output['cat_features'][self.number]
         cat_trues = batch['cat_features'][self.number]
-    
+
         return self.cat_criterion(cat_pred.permute(0, 2, 1), cat_trues[:, 1:])
+
 
 class NextTimeLoss(nn.Module):
     def __init__(self):
         super().__init__()
-        
+
         self.cat_criterion = nn.BCEWithLogitsLoss(reduction='none')
         self.num_criterion = MaskedMSELoss()
-        
-        
+
     def forward(self, output, trues, mask=None):
         amnt_out, num_out, need_out = output
         all_amnt_transactions, all_num_transactions, all_code_transactions, next_time_mask = trues
@@ -46,24 +47,26 @@ class NextTimeLoss(nn.Module):
         l_amnt = self.num_criterion(amnt_out.squeeze(), all_amnt_transactions.squeeze(), loss_mask)
         l_num = self.num_criterion(num_out.squeeze(), all_num_transactions.squeeze(), loss_mask)
         l_need = (self.cat_criterion(need_out, all_code_transactions) * loss_mask.unsqueeze(-1)).sum()
-        
+
         l_need /= loss_mask.sum()
 
         return l_amnt + l_need + l_num
-        
+
+
 class NextTransactionLoss(nn.Module):
     def __init__(self):
         super().__init__()
         self.cat_criterion = nn.CrossEntropyLoss(ignore_index=0)
         self.num_criterion = MaskedMSELoss()
 
-    def forward(self, output, batch, mask=None, cat_weights=None, num_weights=None, cat_feature_ids=None, num_feature_ids=None):
+    def forward(self, output, batch, mask=None, cat_weights=None, num_weights=None, cat_feature_ids=None,
+                num_feature_ids=None):
         cat_pred, num_pred = output['cat_features'], output['num_features']
         cat_trues, num_trues = batch['cat_features'], batch['num_features']
         mask = batch['mask'][:, 1:]
-        
+
         res = []
-        
+
         for i, (pred, true) in enumerate(zip(cat_pred, cat_trues)):
             if i not in cat_feature_ids:
                 continue
@@ -72,21 +75,21 @@ class NextTransactionLoss(nn.Module):
             else:
                 coef = 1.0
             res.append(coef * self.cat_criterion(pred.permute(0, 2, 1), true[:, 1:]))
-        
+
         for i, (pred, true) in enumerate(zip(num_pred, num_trues)):
             if i not in num_feature_ids:
                 continue
-            
+
             elif num_weights is not None:
                 coef = num_weights[i]
-                
+
             else:
                 coef = 1.0
-                
+
             res.append(coef * self.num_criterion(pred.squeeze(), true[:, 1:].squeeze(), mask))
 
         return sum(res)
-    
+
 
 def pairwise_distance_torch(embeddings, device):
     """Computes the pairwise distance matrix with numerical stability.
@@ -119,9 +122,11 @@ def pairwise_distance_torch(embeddings, device):
     pairwise_distances = torch.mul(pairwise_distances_squared, error_mask)
 
     # Explicitly set diagonals to zero.
-    mask_offdiagonals = torch.ones((pairwise_distances.shape[0], pairwise_distances.shape[1])) - torch.diag(torch.ones(pairwise_distances.shape[0]))
+    mask_offdiagonals = torch.ones((pairwise_distances.shape[0], pairwise_distances.shape[1])) - torch.diag(
+        torch.ones(pairwise_distances.shape[0]))
     pairwise_distances = torch.mul(pairwise_distances.to(device), mask_offdiagonals.to(device))
     return pairwise_distances
+
 
 def TripletSemiHardLoss(y_true, y_pred, device, margin=1.0):
     """Computes the triplet loss_functions with semi-hard negative mining.
@@ -175,13 +180,15 @@ def TripletSemiHardLoss(y_true, y_pred, device, margin=1.0):
 
     # negatives_outside: smallest D_an where D_an > D_ap.
     axis_maximums = torch.max(pdist_matrix_tile, dim=1, keepdim=True)
-    masked_minimums = torch.min(torch.mul(pdist_matrix_tile - axis_maximums[0], mask), dim=1, keepdim=True)[0] + axis_maximums[0]
+    masked_minimums = torch.min(torch.mul(pdist_matrix_tile - axis_maximums[0], mask), dim=1, keepdim=True)[0] + \
+                      axis_maximums[0]
     negatives_outside = masked_minimums.reshape([batch_size, batch_size])
     negatives_outside = negatives_outside.transpose(0, 1)
 
     # negatives_inside: largest D_an.
     axis_minimums = torch.min(pdist_matrix, dim=1, keepdim=True)
-    masked_maximums = torch.max(torch.mul(pdist_matrix - axis_minimums[0], adjacency_not), dim=1, keepdim=True)[0] + axis_minimums[0]
+    masked_maximums = torch.max(torch.mul(pdist_matrix - axis_minimums[0], adjacency_not), dim=1, keepdim=True)[0] + \
+                      axis_minimums[0]
     negatives_inside = masked_maximums.repeat(1, batch_size)
 
     semi_hard_negatives = torch.where(mask_final, negatives_outside, negatives_inside)

@@ -25,6 +25,7 @@ class EncoderFrozenModel(EncoderSimpleModel):
                  connector_output_size: Optional[int] = None,
                  do_freeze_tm: Optional[bool] = True,
                  do_freeze_lm: Optional[bool] = False,
+                 do_freeze_lm_embeddings: Optional[bool] = False,
                  do_freeze_connector: Optional[bool] = False,
                  transactions_embeddings_start_token: Optional[str] = r"[trx]",
                  transactions_embeddings_end_token: Optional[str] = r"[/trx]",
@@ -42,6 +43,7 @@ class EncoderFrozenModel(EncoderSimpleModel):
                          connector_output_size=connector_output_size,
                          do_freeze_tm=do_freeze_tm,
                          do_freeze_lm=do_freeze_lm,
+                         do_freeze_lm_embeddings=do_freeze_lm_embeddings,
                          do_freeze_connector=do_freeze_connector,
                          generation_config=generation_config,
                          is_debug=is_debug)
@@ -49,6 +51,9 @@ class EncoderFrozenModel(EncoderSimpleModel):
     def _prepare_model(self):
         super()._prepare_model()
         self._create_trainable_parameters()
+
+        # Additionally re-assign embeddings
+        self._set_language_model_embedding_func()
 
         # Check if language model is frozen, optionally freeze
         self._logger.info(f"Check language model's parameters to be frozen...")

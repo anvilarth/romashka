@@ -170,7 +170,7 @@ class TransactionQAModel(pl.LightningModule):
         if outputs is None:
             return None
 
-        loss = outputs.loss
+        loss = outputs['loss']
 
         logging_dict = {
             'train_loss': loss,
@@ -517,9 +517,12 @@ class TransactionQAModel(pl.LightningModule):
         # example to inspect gradient information in tensorboard
         if self.trainer.global_step % 25 == 0:  # don't make logging too much
             for param_name, param in self.model.named_parameters():
-                if param_name.startswith("transactions_start_embedding") or param_name.startswith("transactions_end_embedding")  or param_name.startswith("connector"):
+                if param_name.startswith("transactions_start_embedding") \
+                        or param_name.startswith("transactions_end_embedding")  \
+                        or param_name.startswith("connector") \
+                        or param_name.startswith("projection_layers"):
                     if param.grad is not None:
-                        grad_sum = np.sum(param.grad.detach().cpu().numpy())
+                        grad_sum = np.sum(np.abs(param.grad.detach().cpu().numpy()))
                         self._logger.info(f"Parameter `{param_name}` with grad of size: {param.grad.size()}")
                         self._logger.info(f"Summed `{param_name}` grad = {grad_sum}")
                         self.log(

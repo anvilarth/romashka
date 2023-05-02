@@ -22,6 +22,7 @@ class DecoderFrozenModel(DecoderSimpleModel):
                  connector_output_size: Optional[int] = None,
                  do_freeze_tm: Optional[bool] = True,
                  do_freeze_lm: Optional[bool] = False,
+                 do_freeze_lm_embeddings: Optional[bool] = False,
                  do_freeze_connector: Optional[bool] = False,
                  transactions_embeddings_start_token: Optional[str] = r"[trx]",
                  transactions_embeddings_end_token: Optional[str] = r"[/trx]",
@@ -39,6 +40,7 @@ class DecoderFrozenModel(DecoderSimpleModel):
                          connector_output_size=connector_output_size,
                          do_freeze_tm=do_freeze_tm,
                          do_freeze_lm=do_freeze_lm,
+                         do_freeze_lm_embeddings=do_freeze_lm_embeddings,
                          do_freeze_connector=do_freeze_connector,
                          generation_config=generation_config,
                          is_debug=is_debug)
@@ -46,6 +48,9 @@ class DecoderFrozenModel(DecoderSimpleModel):
     def _prepare_model(self):
         super()._prepare_model()
         self._create_trainable_parameters()
+
+        # Additionally re-assign embeddings
+        self._set_language_model_embedding_func()
 
         # Check if language model is frozen, optionally freeze
         self._logger.info(f"Check language model's parameters to be frozen...")
@@ -117,6 +122,7 @@ class DecoderFrozenModel(DecoderSimpleModel):
         3) Collate CLM input sequences and pass through LM decoder
         Args:
             batch: a prepared with chosen task batch of items;
+            output_attentions: whether to output attention maps;
             is_train: whether to pass to LM forward input labels or not;
 
         Returns:

@@ -35,13 +35,6 @@ class InfoNCE(nn.Module):
             If None, then the negative keys for a sample are the positive keys for the other samples.
     Returns:
          Value of the InfoNCE Loss.
-     Examples:
-        >>> loss = InfoNCE()
-        >>> batch_size, num_negative, embedding_size = 32, 48, 128
-        >>> query = torch.randn(batch_size, embedding_size)
-        >>> positive_key = torch.randn(batch_size, embedding_size)
-        >>> negative_keys = torch.randn(num_negative, embedding_size)
-        >>> output = loss(query, positive_key, negative_keys)
     """
 
     def __init__(self, temperature=0.1, reduction='mean', negative_mode='unpaired'):
