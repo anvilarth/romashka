@@ -5,6 +5,7 @@ from romashka.transactions_qa.tasks.task_abstract import AbstractTask
 from romashka.transactions_qa.tasks.context_mcc_tasks import (MostFrequentMCCCodeTaskMulti,
                                                               MostFrequentMCCCodeTaskBinary,
                                                               MostFrequentMCCCodeTaskOpenEnded,
+                                                              LeastFrequentMCCCodeTaskOpenEnded,
                                                               ruMostFrequentMCCCodeTaskBinary,
                                                               ruMostFrequentMCCCodeTaskMulti,
                                                               ruMostFrequentMCCCodeTaskOpenEnded)
@@ -47,6 +48,7 @@ AUTO_TASKS = [
         ("most_frequent_mcc_code_multi", MostFrequentMCCCodeTaskMulti),
         ("most_frequent_mcc_code_binary", MostFrequentMCCCodeTaskBinary),
         ("most_frequent_mcc_code_open-ended", MostFrequentMCCCodeTaskOpenEnded),
+        ("least_frequent_mcc_code_open-ended", LeastFrequentMCCCodeTaskOpenEnded),
         ("ru_most_frequent_mcc_code_binary", ruMostFrequentMCCCodeTaskBinary),
         ("ru_most_frequent_mcc_code_multi", ruMostFrequentMCCCodeTaskMulti),
         ("ru_most_frequent_mcc_code_open-ended", ruMostFrequentMCCCodeTaskOpenEnded),
@@ -66,7 +68,7 @@ AUTO_TASKS = [
         # Day of week
         ("most_frequent_day_of_week_multi", MostFrequentDayOfWeekTaskMulti),
         ("most_frequent_day_of_week_binary", MostFrequentDayOfWeekTaskBinary),
-        ("most_frequent_day_of_week_binary", MostFrequentDayOfWeekTaskOpenEnded),
+        ("most_frequent_day_of_week_open-ended", MostFrequentDayOfWeekTaskOpenEnded),
         # Predictive
         ("default", DefaultTask),
         ("next_mcc_binary", NextMCCFeatureTaskBinary),

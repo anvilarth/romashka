@@ -1616,7 +1616,7 @@ class LastAmountNumericTaskOpenEnded(NumericTaskAbstract):
         # ).to(device)
 
         # Map to strings
-        target_batch = list(map(lambda x: str(round(x.item(), 2)), target_feature_value_batch))
+        target_batch = list(map(lambda x: str(round(x, 2)), target_feature_value_batch))
 
         # for binary task randomly sample True and False examples from batch
         # and construct target sequences
