@@ -1,0 +1,21 @@
+_target_: src.data.AlfaPretrainingDataModule
+
+
+splitter:
+  _target_: ptls.frames.coles.split_strategy.SampleSlices
+  split_count: 5
+  cnt_min: 10
+  cnt_max: 30 
+  is_sorted: True
+
+rep: 5
+mode: 'coles'
+
+data_dir: ${paths.data_dir}
+batch_size: 32
+min_seq_len: 0
+max_seq_len: 250
+num_workers: 10
+pin_memory: True
+seed: 42
+shuffle: True

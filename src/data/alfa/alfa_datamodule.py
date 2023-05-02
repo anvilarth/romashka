@@ -12,6 +12,7 @@ from src.data.alfa.components.data_generator import batches_generator
 from torch.nn.utils.rnn import pad_sequence
 from datasets import IterableDataset as HFIterableDataset
 import pytorch_lightning as pl
+from .data_utils import split_process
 
 class AlfaDataModule(pl.LightningDataModule):
     def __init__(self,
@@ -105,8 +106,7 @@ class AlfaDataModule(pl.LightningDataModule):
         np.random.seed(seed)       
                                                                                                                                     
         
-    @staticmethod
-    def collate_fn(batch):
+    def collate_fn(self, batch):
         output = {}
 
         # cat_features shape 1 x cat_features x seq_len
@@ -131,3 +131,20 @@ class AlfaDataModule(pl.LightningDataModule):
             output['label'] = torch.cat([d['label'] for d in batch])
 
         return output
+
+
+class AlfaPretrainingDataModule(AlfaDataModule):
+    def  __init__(self, splitter, rep, mode, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.splitter = splitter
+        self.rep = rep
+        self.mode = mode
+
+    def collate_fn(self, batch):
+        batch = super().collate_fn(batch)
+        len_batch = batch['num_features'][0].shape[0]
+        labels = torch.arange(len_batch, device=batch['mask'].device).repeat(self.rep)
+        batch = split_process(batch, self.splitter)
+        
+        if self.mode == 'coles':
+            return batch, labels

@@ -190,13 +190,13 @@ def main():
     task_names = tasks_args.task_names
     if isinstance(task_names, str):
         task_names = eval(task_names)
-    task_kwargs = tasks_args.task_kwargs
-    if isinstance(task_kwargs, str):
-        task_kwargs = eval(task_kwargs)
-    print(f"Got task_names: {task_names} with task_kwargs: {task_kwargs}")
+    tasks_kwargs = tasks_args.tasks_kwargs
+    if isinstance(tasks_kwargs, str):
+        tasks_kwargs = eval(tasks_kwargs)
+    print(f"Got task_names: {task_names} with task_kwargs: {tasks_kwargs}")
 
     for task_i, task_name in enumerate(task_names):
-        task_kwargs = task_kwargs[task_i] if task_i < len(task_kwargs) else {}
+        task_kwargs = tasks_kwargs[task_i] if task_i < len(tasks_kwargs) else {}
         if "tokenizer" not in task_kwargs:
             task_kwargs['tokenizer'] = tokenizer
         task = AutoTask.get(task_name=task_name, **task_kwargs)
@@ -299,6 +299,7 @@ def main():
         logger=wb_logger,  #[tb_logger, wb_logger],
         callbacks=[checkpoint_callback, lr_monitor_callback])
     trainer.fit(model=model, datamodule=datamodule)
+    trainer.test(model=model, datamodule=datamodule)
 
 
 if __name__ == '__main__':

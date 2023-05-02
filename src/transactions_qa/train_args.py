@@ -276,7 +276,7 @@ class TasksArguments:
         default_factory=list,
         metadata={"help": "A list of task names, that would be used during training."},
     )
-    task_kwargs: Optional[List[Dict[str, Any]]] = field(
+    tasks_kwargs: Optional[List[Dict[str, Any]]] = field(
         default_factory=list,
         metadata={"help": "A list of dictionary-like arguments for tasks creation."}
     )

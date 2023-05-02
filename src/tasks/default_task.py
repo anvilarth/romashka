@@ -165,7 +165,7 @@ class DefaultTask(AbstractTask):
 
         return preds, targets 
 
-    def calculate_metrics(self, outputs, answers, task_metrics):
+    def calculate_metrics(self, outputs, answers, task_metrics, stage):
         metrics = {}
 
         if self.task_type == 'text':
@@ -175,11 +175,11 @@ class DefaultTask(AbstractTask):
 
         if 'auc' in task_metrics:
             task_metrics['auc'].update(preds, targets)
-            metrics[self.task_name + '_auc'] = task_metrics['auc']
+            metrics[stage + self.task_name + '_auc'] = task_metrics['auc']
         
         if 'accuracy' in task_metrics:
             task_metrics['accuracy'](preds, targets)
-            metrics[self.task_name + '_accuracy'] = task_metrics['accuracy']
+            metrics[stage + self.task_name + '_accuracy'] = task_metrics['accuracy']
 
         return metrics 
 

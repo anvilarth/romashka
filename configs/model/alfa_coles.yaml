@@ -1,0 +1,17 @@
+_target_: ptls.frames.coles.CoLESModule
+
+seq_encoder:
+  _target_: src.models.pretraining_model.MySeqEncoder
+  encoder_type: 'whisper/tiny'
+  head_type: 'pretraining_last_output'
+
+optimizer_partial:
+  _target_: torch.optim.AdamW
+  _partial_: true
+  lr: 0.0005
+
+lr_scheduler_partial:
+  _target_: transformers.get_linear_schedule_with_warmup
+  _partial_: true
+  num_warmup_steps: 100
+  num_training_steps:  "${eval:'${trainer.max_epochs} * 16500'}"   

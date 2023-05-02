@@ -1,1 +1,1 @@
-from .alfa.alfa_datamodule import AlfaDataModule
+from .alfa.alfa_datamodule import AlfaDataModule, AlfaPretrainingDataModule

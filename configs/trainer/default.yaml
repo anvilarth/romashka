@@ -7,6 +7,7 @@ max_epochs: 15
 
 accelerator: cpu
 devices: 1
+fast_dev_run: false
 
 # mixed precision for extra speed-up
 # precision: 16

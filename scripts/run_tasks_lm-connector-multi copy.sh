@@ -3,18 +3,22 @@
 # TRANSFORMERS_OFFLINE=1
 # HF_DATASETS_OFFLINE=1
 learning_rate=0.0005;
+warmup_steps=100;
 
 WANDB_PROJECT=Transactions;
 WANDB_WATCH=all;
 # WANDB_SILENT=true
 #--fast_dev_run=10 \
+model_name=$(basename $1);
+
+
 
 python src/transactions_qa/train.py \
 --transactions_model_name_or_path="/home/jovyan/checkpoints/transactions_model/final_model_v2.ckpt" \
 --transactions_model_encoder_type="whisper/tiny" \
 --transactions_model_head_type="next" \
---language_model_name_or_path="google/flan-t5-small" \
---learning_rate=0.0003 \
+--language_model_name_or_path=$1 \
+--learning_rate=$learning_rate \
 --projections_mappings_path="." \
 --cache_dir="cache" \
 --use_fast_tokenizer=True \
@@ -25,22 +29,22 @@ python src/transactions_qa/train.py \
 --preprocessing_num_workers=8 \
 --dataloader_pin_memory=True \
 --do_freeze_connector=False \
---do_freeze_language_model=True \
---do_freeze_transactions_model=False \
+--do_freeze_language_model=False \
+--do_freeze_transactions_model=True \
 --optimizer_name='AdamW' \
---task_names 'default' "next_mcc_binary" \
+--task_names 'next_mcc_binary' 'next_mcc_open_ended' \
 --min_trx_seq_len=0 \
 --max_trx_seq_len=250 \
 --no_cuda=False \
 --device="cuda" \
 --do_train=True \
 --do_eval=True \
---max_steps=20 \
---max_epochs=1 \
---limit_train_batches=10 \
---limit_val_batches=10 \
---warmup_steps=100 \
+--max_steps=200000 \
+--max_epochs=10 \
+--warmup_steps=$warmup_steps \
 --project_name="Transactions" \
---group_name="debug" \
---run_name="tqa_200k-steps_ft=all_default_next_mcc_binary"
+--group_name="predictive_tasks_single_mode" \
+--run_name="tqa_200k-steps_ft=lm+connector_multi_$model_name"
+
+
 

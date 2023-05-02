@@ -1,4 +1,5 @@
 import random
+from tkinter import TRUE
 import numpy as np
 from typing import List, Optional, Tuple, Any, Dict, Union
 
@@ -59,9 +60,10 @@ class TransactionQAModel(pl.LightningModule):
         self.checkpoint_dir = checkpoint_dir
 
         self._logger.info(f"Setuping metrics.")
-        self.metrics = nn.ModuleDict({task.task_name: deepcopy(task.metrics) for task in self.tasks})
+        self.val_metrics = nn.ModuleDict({task.task_name: deepcopy(task.metrics) for task in self.tasks})
+        self.test_metrics = nn.ModuleDict({task.task_name: deepcopy(task.metrics) for task in self.tasks})          
 
-        print(self.metrics)
+        print(self.val_metrics)
         self.warmup_steps: int = warmup_steps
         self.training_steps: int = training_steps
         self.learning_rate = learning_rate
@@ -220,7 +222,7 @@ class TransactionQAModel(pl.LightningModule):
         if len(qa_batch) == 0:
             return None, None
 
-        batch_size = batch['mask'].size()[0]
+        batch_size = qa_batch['mask'].size()[0]
         transactions_history_lengths = batch['mask'].sum(1)
 
         # Question template: to embedding of LM
@@ -399,7 +401,7 @@ class TransactionQAModel(pl.LightningModule):
 
         # Calc metrics
         try: 
-            metrics_scores = task.calculate_metrics(outputs, batch_answers, self.metrics[task.task_name])
+            metrics_scores = task.calculate_metrics(outputs, batch_answers, self.val_metrics[task.task_name], stage='val_')
         except Exception as e:
             self._logger.error(f"error occurred during task metric calculation:\n{e}")
 
@@ -430,6 +432,29 @@ class TransactionQAModel(pl.LightningModule):
             self.log_eval_steps_counter += 1
         return loss
 
+    def test_step(self, batch:Any, batch_idx: int, dataloader_idx: int = 0):
+        batch_size = batch['mask'].shape[0]
+
+        for task_idx, task in enumerate(self.tasks):
+            try:
+                predictions = self._predict_step_task(batch,
+                                                      batch_idx=batch_idx,
+                                                      task_idx=task_idx,
+                                                      verbose=False,
+                                                      calculate_metrics=True)
+
+                if predictions:
+                    self.log_dict(
+                            predictions['metrics'],
+                            batch_size=batch_size,
+                        )
+
+            except Exception as e:
+                self._logger.error(f"Error occurred during task `{task.task_name}` evaluation:\n{e}")
+            
+
+
+                
     def predict_step(self, batch: Any, batch_idx: int, dataloader_idx: int = 0) -> Any:
         """
         Step function called during Trainer.predict().
@@ -499,12 +524,10 @@ class TransactionQAModel(pl.LightningModule):
         # Calc metrics
         metrics_scores = {}
         if calculate_metrics:
-            for metric_name, metric in task.metrics.items():
-                try:
-                    metrics_scores[metric_name] = metric(predictions_decoded,
-                                                         batch_answers_decoded)
-                except Exception as e:
-                    self._logger.error(f"error occurred during task metric `{metric_name}` calculation:\n{e}")
+            try:
+                metrics_scores = task.calculate_metrics(outputs, batch_answers, self.test_metrics[task.task_name], stage='test_')
+            except Exception as e:
+                self._logger.error(f"error occurred during task metric `{metric_name}` calculation:\n{e}")
 
         return dict(
             predictions=predictions_decoded,
@@ -524,7 +547,6 @@ class TransactionQAModel(pl.LightningModule):
         wandb.log({"val_predictions": self.log_eval_predictions_table})
         # was directly to W&B: wandb.log({"val_predictions": self.log_eval_predictions_table})
         # ✨ W&B: Mark the run as complete (useful for multi-cell notebook)
-        wandb.finish()
 
     def log_predictions(self,
                         logits: torch.Tensor,

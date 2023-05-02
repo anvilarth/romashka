@@ -14,3 +14,4 @@ scheduler:
 
 encoder_type: 'whisper/tiny'
 head_type: 'last_output'
+task_name: ${task.task_name}
