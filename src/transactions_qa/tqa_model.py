@@ -211,25 +211,82 @@ class TransactionQAModel(pl.LightningModule):
         self._logger.info(f"LM resized `num_embeddings`: {resized_embedds.num_embeddings}, "
                           f"`embedding_dim`: {resized_embedds.embedding_dim}")
 
+    def tokenize_texts(self, batch):
+        device = batch['mask'].device
+        transactions_embedding_mask = batch['mask']
+
+        ### Tokenizing question start
+        
+        question_start_encoded = self.tokenizer(batch['question_start_string'],
+                                        padding=True,
+                                        return_tensors='pt').to(device)
+
+        question_start_tokens, question_start_tokens_mask = question_start_encoded.input_ids[:, :-1], question_start_encoded.attention_mask[:, :-1]
+
+        ### Tokenizing question end
+
+        question_target_encoded_batch = self.tokenizer(batch['question_end_string'],
+                                                    padding=True,
+                                                    truncation=True,
+                                                    return_tensors='pt').to(device)
+
+        question_end_tokens_mask = question_target_encoded_batch.attention_mask
+
+
+        encoder_input_mask = torch.cat(
+                                        [question_start_tokens_mask, 
+                                        transactions_embedding_mask, 
+                                        question_end_tokens_mask], dim=1
+        )
+
+        ###
+
+        target_encoded_batch = self.tokenizer(batch['answer_target_string'],
+                                        padding=True,
+                                        return_tensors='pt').to(device)
+
+
+        answer_template_encoded = self.tokenizer(batch['answer_start_string'],
+                                                        padding=True,
+                                                        return_tensors='pt').to(device)
+
+        batch_answer_encoded = torch.cat([answer_template_encoded.input_ids[:, :-1],
+                                          target_encoded_batch.input_ids], dim=1).to(device)
+        
+        batch_answer_mask = torch.cat([answer_template_encoded.attention_mask[:, :-1],
+                                       target_encoded_batch.attention_mask], dim=1)
+
+        return dict(
+            question_start_tokens=question_start_tokens,
+            question_end_tokens=question_target_encoded_batch['input_ids'],
+            target_tokens=target_encoded_batch['input_ids'],
+            answer_tokens=batch_answer_encoded,  # template + targets
+            answer_mask=batch_answer_mask,
+            encoder_input_mask=encoder_input_mask,
+        )
+        
+
+
     def model_step(self, batch, task_idx: Optional[int] = None) -> Tuple[Any, torch.Tensor]:
         # Sample single task
         if task_idx is None:
             task_idx = 0
         task = self.tasks[task_idx]
 
-        qa_batch = task.process_input_batch(batch)
+        tmp_batch = task.process_input_batch(batch)
 
-        if len(qa_batch) == 0:
+        if len(tmp_batch) == 0:
             return None, None
 
-        batch_size = qa_batch['mask'].size()[0]
+        qa_batch = self.tokenize_texts(tmp_batch)
+
+        batch_size = qa_batch['encoder_input_mask'].size()[0]
         transactions_history_lengths = batch['mask'].sum(1)
 
         # Question template: to embedding of LM
         # torch.Size([1, len(question_start_tokens))
-        question_start_embeddings = self.language_model.encoder.embed_tokens(
+        question_start_embeddings_batch = self.language_model.encoder.embed_tokens(
             qa_batch['question_start_tokens'])  # call for (embed_tokens): Embedding(32128, 512)
-        question_start_embeddings_batch = question_start_embeddings.repeat(batch_size, 1, 1)
         # question_end_tokens: torch.Size([batch_size, len(max_question_end_tokens)])
         question_end_embeddings_batch = self.language_model.encoder.embed_tokens(
             qa_batch['question_end_tokens'])  # call for (embed_tokens): Embedding(32128, 512)
@@ -283,8 +340,7 @@ class TransactionQAModel(pl.LightningModule):
 
         # Return question as:
         # Q_start_tokens + TRNS_embeddings + Q_end_tokens
-        question_start_tokens_batch = qa_batch['question_start_tokens'].repeat(batch_size, 1)
-        lm_outputs['question_encoded'] = torch.cat([question_start_tokens_batch,
+        lm_outputs['question_encoded'] = torch.cat([qa_batch['question_start_tokens'],
                                                     qa_batch['question_end_tokens']], dim=1)
         # Experimental !
         lm_outputs['transactions_history_lengths'] = transactions_history_lengths

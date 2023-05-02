@@ -72,10 +72,12 @@ class NextFeatureTask(AbstractTask):
             question_start = self.task_special_token + " " + question_start
 
         question_start = question_start + self.transactions_embeddings_start_token
+
         question_end = self.transactions_embeddings_end_token + question_end
 
         device = batch['mask'].device
         batch_size = batch['mask'].shape[0]
+        batch_question_start = [question_start] * batch_size
 
         # Construct target values 
         # Target's questions numeric/categorical answers as str
@@ -91,61 +93,15 @@ class NextFeatureTask(AbstractTask):
 
         # Construct target sequences
         question_target_batch = self.generate_target_question(question_end, target_batch) # as strings
-        # Encode
-        # question_start  -> 'start str <trx>'
-        # question_target_bin/question_target_batch  -> '</trx> + end str + OPTIONS:... / Yes or No'
-        # target_batch -> feature values as str ('15')
+        answer_template = [self.answer_template] * batch_size
 
-        question_start_tokens = self.tokenizer.encode(question_start,
-                                                      return_tensors='pt')[:, :-1].to(device)
-
-
-        # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
-        question_target_encoded_batch = self.tokenizer(question_target_batch,
-                                                       padding=True,
-                                                       truncation=True,
-                                                       return_tensors='pt').to(device)
-        # Attention masks
-        # already for full batch
-        question_start_tokens_mask = torch.ones(question_start_tokens.size()).repeat(batch_size, 1).to(device)
-        question_end_tokens_mask = question_target_encoded_batch['attention_mask']
-
-        encoder_input_mask = torch.cat(
-                                        [question_start_tokens_mask, 
-                                        transactions_embedding_mask, 
-                                        question_end_tokens_mask], dim=1
-        )
-
-        # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
-        target_encoded_batch = self.tokenizer.batch_encode_plus(target_batch,
-                                                                padding=True,
-                                                                return_tensors='pt').to(device)
-
-
-        # target_encoded_batch = [self.tokenizer.encode(target,
-        #                                               return_tensors='pt')[:, :-1].to(device)
-        #                         for target in target_batch]
-        # list of 2d tensors [num_tokens, 1], each token_ids (no eos token!)
-
-        # Answer template encoding + strip </s> (EOS) token
-        answer_template_encoded = self.tokenizer.encode(self.answer_template,
-                                                        return_tensors='pt')[:, :-1].to(device)
-
-        batch_answer_template_encoded = answer_template_encoded.repeat(batch_size, 1)
-        batch_answer_encoded = torch.cat([batch_answer_template_encoded,
-                                          target_encoded_batch['input_ids']], dim=1).to(device)
-        
-        batch_answer_template_mask = torch.ones(batch_size, answer_template_encoded.shape[1]).to(device)
-        batch_answer_mask = torch.cat([batch_answer_template_mask,
-                                       target_encoded_batch['attention_mask']], dim=1)
-
+    
         return dict(
-            question_start_tokens=question_start_tokens,
-            question_end_tokens=question_target_encoded_batch['input_ids'],
-            target_tokens=target_encoded_batch['input_ids'],
-            answer_tokens=batch_answer_encoded,  # template + targets
-            answer_mask=batch_answer_mask,
-            encoder_input_mask=encoder_input_mask,
+            mask=transactions_embedding_mask,
+            question_start_string=batch_question_start,
+            answer_target_string=target_batch,
+            answer_start_string=answer_template,
+            question_end_string=question_target_batch,
         )
 
     def process_outputs(self, outputs, answers: torch.Tensor):
@@ -206,6 +162,25 @@ class NextCatFeatureTaskBinary(NextFeatureTask):
             metrics[stage + self.task_name + '_accuracy'] = task_metrics['accuracy']
 
         return metrics 
+@dataclass
+class DefaultTaskBinary(NextCatFeatureTaskBinary):
+    def __post_init__(self):
+        super().__post_init__()
+        
+        self.task_name = "default"
+        self.target_feature_name = 'mcc_category'
+        self.threshold = 2
+
+        self.update_feature_index()
+
+        self.question_templates = [
+            ("This is the client's transaction history ",
+             "Will the client have a credit default? Yes or No?"),
+        ]
+    
+    def prepare_task_batch(self, batch: Dict[str, Any], **kwargs):
+        batch['label'] = batch['label'].float()
+        return batch
 
 @dataclass
 class NextMCCFeatureTaskBinary(NextCatFeatureTaskBinary):

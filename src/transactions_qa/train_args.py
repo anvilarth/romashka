@@ -282,8 +282,8 @@ class TasksArguments:
     )
 
     def __post_init__(self):
-        if (len(self.task_names) > 0) and (len(self.task_kwargs) > 0):
-            if len(self.task_names) != len(self.task_kwargs):
+        if (len(self.task_names) > 0) and (len(self.tasks_kwargs) > 0):
+            if len(self.task_names) != len(self.tasks_kwargs):
                 raise ValueError("Provided tasks list does not match length with given tasks kwargs."
                                  "Check consistency for both lists and try again.")
 

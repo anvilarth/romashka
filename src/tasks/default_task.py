@@ -66,13 +66,6 @@ class DefaultTask(AbstractTask):
         batch['label'] = batch['label'].float()
         return batch
 
-    def generate_target(self, batch: Any, **kwargs) -> Any:
-        target_feature_batch = batch['label']  # Tensor [batch_size]
-
-        # Construct target values 
-        # Target's questions numeric/categorical answers as str
-        return target_feature_batch.float()
-
     def generate_text_target(self, batch: Any, **kwargs) -> Any:
 
         target_feature_batch = self.generate_target(batch)

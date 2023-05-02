@@ -19,7 +19,8 @@ from .next_feature_tasks import (NextMCCFeatureTaskBinary,
                                                                NextMCCFeatureTaskMulti,
                                                                NextNumTransactionTaskMulti,
                                                                NextMCCFeatureOpenEnded,
-                                                               NextNumTransactionTaskOpenEnded)
+                                                               NextNumTransactionTaskOpenEnded,
+                                                               DefaultTaskBinary)
                                                                
 from .default_task import DefaultTask
 from .next_pred import NextFeatureStandardTask
@@ -58,7 +59,7 @@ AUTO_TASKS = [
         ("next_transaction", NextFeatureStandardTask),
         ("next_mcc_open_ended", NextMCCFeatureOpenEnded),
         ("next_num_30days_open_ended", NextNumTransactionTaskOpenEnded),
-        ("default", DefaultTask)
+        ("default", DefaultTaskBinary)
     ]
 AUTO_TASKS = OrderedDict(AUTO_TASKS)
 ALL_TASKS_NAMES = list(AUTO_TASKS.keys())
