@@ -11,6 +11,7 @@ from romashka.transactions_qa.utils import seed_everything
 from romashka.transactions_qa.layers.connector import (make_linear_connector,
                                                        make_recurrent_connector)
 from romashka.transactions_qa.utils import (mask_padding, mask_lm_labels_padding)
+from romashka.transactions_qa.model.generation_utils import USE_HF_GENERATE
 
 
 class DecoderSimpleModel(nn.Module):
@@ -453,7 +454,7 @@ class DecoderSimpleModel(nn.Module):
             else:
                 question_embeddings_batch = question_embeddings
 
-        # In case a list of dtring questions provided
+        # In case a list of string questions provided
         elif isinstance(questions, list) and isinstance(questions[0], str):
             question_tokens = self.tokenizer.encode(questions,
                                                     padding=True,
@@ -481,6 +482,38 @@ class DecoderSimpleModel(nn.Module):
                                    transactions_history_embeddings,
                                    question_embeddings_batch,
                                    answer_template_embeddings_batch], dim=1).to(device)
+
+        if any([model_type in self.language_model.config.architectures[0] for model_type in USE_HF_GENERATE]):
+            pass
+        else:
+            self._custom_generate(input_embedds=input_embedds,
+                                  temperature=temperature,
+                                  min_new_tokens=min_new_tokens,
+                                  max_new_tokens=max_new_tokens,
+                                  top_p=top_p,
+                                  suggestions=suggestions,
+                                  diversity_penalty=diversity_penalty,
+                                  hidden_dims_indexes=hidden_dims_indexes,
+                                  allowed_token_ids=allowed_token_ids,
+                                  stopping_criteria=stopping_criteria,
+                                  filter_value=filter_value,
+                                  seed=seed,
+                                  device=device)
+
+    def _custom_generate(self, input_embedds: torch.Tensor,
+                         max_new_tokens: Optional[int] = None,
+                         min_new_tokens: Optional[int] = None,
+                         top_p: Optional[float] = 1.0,
+                         temperature: Optional[float] = 0.0,
+                         suggestions: Optional[int] = 1,
+                         diversity_penalty: Optional[float] = 0.0,
+                         filter_value: Optional[float] = -float('Inf'),
+                         allowed_token_ids: Optional[List[int]] = None,
+                         hidden_dims_indexes: Optional[List[int]] = None,
+                         stopping_criteria: Optional[Any] = None,
+                         seed: Optional[int] = 11,
+                         device: Union[torch.device, str] = "cpu"):
+        vocab_size = self.language_model.vocab_size
 
         embeddings = input_embedds.clone().to(device)
         output_embeddings = []

@@ -255,10 +255,10 @@ class ComplexLinearConnector(nn.Module):
         self.add_normalizations = add_normalizations if add_normalizations is not None else [False] * self.n_layers
         self.add_activations = add_activations if add_activations is not None else [False] * self.n_layers
         self.device = device
-        self.layers = nn.Sequential()
         self._create_layers()
 
     def _create_layers(self):
+        layers = []
         try:
             input_dim = self.output_size
             output_dim = None
@@ -269,15 +269,16 @@ class ComplexLinearConnector(nn.Module):
                     output_dim = final_output_dim
                 else:
                     output_dim = self.hidden_dims[layer_n]
-                    layer = nn.Linear(input_dim, output_dim)
-                    init_linear(layer)
-                self.layers.append(layer)
+                linear = nn.Linear(input_dim, output_dim)
+                init_linear(linear)
+                layers.append(linear)
                 if self.add_normalizations[layer_n]:
-                    self.layers.append(nn.LayerNorm(output_dim))
+                    layers.append(nn.LayerNorm(output_dim))
                 if self.add_activations[layer_n]:
-                    self.layers.append(nn.ELU())
+                    layers.append(nn.ELU())
                 input_dim = output_dim
 
+            self.layers = nn.Sequential(*layers)
             self.layers.to(self.device)
         except Exception as e:
             print(f"Error occurred during complex connector creation:\n{e}")

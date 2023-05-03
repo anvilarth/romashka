@@ -2,6 +2,11 @@ import torch
 from typing import Optional, List, Union
 from transformers import StoppingCriteriaList, StoppingCriteria, GenerationConfig
 
+# Mark models than can use HF generate method with input_embeddings
+USE_HF_GENERATE = [
+    "GPT2", "GPTJ", "GPTNeo"
+]
+
 
 def isin(elements: torch.Tensor, test_elements: torch.Tensor):
     """

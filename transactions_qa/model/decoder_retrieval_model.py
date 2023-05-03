@@ -258,7 +258,8 @@ class DecoderRetrievalModel(DecoderSimpleModel):
         input_embeddings[mask] = self.transactions_end_embedding
 
     def forward(self, batch: Union[Dict[str, torch.Tensor], Any],
-                output_attentions: Optional[bool] = False,
+                output_attentions: Optional[bool] = True,
+                output_hidden_states: Optional[bool] = True,
                 is_train: Optional[bool] = True) -> Any:
         """
         Passes input batch through:
@@ -268,6 +269,7 @@ class DecoderRetrievalModel(DecoderSimpleModel):
         Args:
             batch: a prepared with chosen task batch of items;
             output_attentions: whether to output attention maps;
+            output_hidden_states: whether to output LM hidden states;
             is_train: whether to pass to LM forward input labels or not;
 
         Returns:
@@ -403,7 +405,7 @@ class DecoderRetrievalModel(DecoderSimpleModel):
         lm_outputs = self.language_model(inputs_embeds=input_embedds,
                                          labels=labels_masked if is_train else None,
                                          output_attentions=output_attentions,
-                                         output_hidden_states=True)
+                                         output_hidden_states=output_hidden_states)
 
         # Calculate retrival loss
         ret_loss_outputs = self._compute_retrieval_loss(lm_outputs,
@@ -422,6 +424,10 @@ class DecoderRetrievalModel(DecoderSimpleModel):
         outputs["logits"] = lm_outputs.logits
         outputs["text_loss"] = lm_outputs.loss
         outputs["retrieval_loss"] = ret_loss_outputs.pop('loss')
+        if output_attentions:
+            outputs["attentions"] = lm_outputs.attentions
+        if output_hidden_states:
+            outputs["hidden_states"] = lm_outputs.hidden_states
         outputs['loss'] = total_loss
         for key, val in ret_loss_outputs.items():
             outputs[key] = val
