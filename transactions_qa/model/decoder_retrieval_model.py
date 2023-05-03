@@ -364,7 +364,7 @@ class DecoderRetrievalModel(DecoderSimpleModel):
 
         transactions_tokens = torch.Tensor([
             self.tokenizer.convert_tokens_to_ids(self._ret_tokens_template % i)
-            for i in range(max_transactions_size)]).long().repeat(batch_size, 1)
+            for i in range(max_transactions_size)]).long().repeat(batch_size, 1).to(device)
 
         transactions_tokens.masked_fill_(transactions_embeddings_mask == 0,
                                          self.tokenizer.pad_token_id)
