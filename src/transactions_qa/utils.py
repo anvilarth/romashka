@@ -1,6 +1,7 @@
 import os
 import re
 
+import numpy as np
 import json
 import pickle
 from typing import Dict, Any, Optional, List
@@ -166,3 +167,31 @@ def init_layers(module: nn.Module):
                 nn.init.xavier_uniform_(module._parameters[param])
     else:
         pass
+
+def collate_batch_dict(batches):
+    final_batch = {}
+    for key in batches[0]:
+        if key == 'mask':
+            final_batch[key] = torch.cat([elem[key] for elem in batches], dim=0)
+        else:
+            final_batch[key] = sum([elem[key] for elem in batches], [])
+
+    return final_batch
+
+def prepare_splitted_batch(batch, split_indices):
+    new_batch = {}
+    for key in batch:
+        if batch[key].dim() == 1 or key == 'mask':
+            new_batch[key] = batch[key][split_indices]
+        else:
+            new_batch[key] = batch[key][:, split_indices]
+    return new_batch
+
+def get_split_indices(batch, number_tasks):
+    batch_size = batch['mask'].shape[0]
+    device = batch['mask'].device
+
+    number_of_tasks = np.random.randint(1, number_tasks+1)
+    indices = torch.arange(batch_size, device=device)
+    splitted = torch.tensor_split(indices, number_of_tasks)
+    return splitted

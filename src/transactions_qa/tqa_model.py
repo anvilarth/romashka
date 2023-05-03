@@ -15,6 +15,7 @@ from src.transactions_qa.layers.connector import (make_linear_connector,
                                                        make_recurrent_connector)
 from src.tasks.task_abstract import AbstractTask
 from src.utils.logging_handler import get_logger
+from src.transactions_qa.utils import get_split_indices, prepare_splitted_batch, collate_batch_dict
 
 from transformers import Adafactor
 from transformers.optimization import AdafactorSchedule
@@ -269,18 +270,31 @@ class TransactionQAModel(pl.LightningModule):
 
     def model_step(self, batch, task_idx: Optional[int] = None) -> Tuple[Any, torch.Tensor]:
         # Sample single task
-        if task_idx is None:
-            task_idx = 0
-        task = self.tasks[task_idx]
+        # if task_idx is None:
+        #     task_idx = 0
+        # task = self.tasks[task_idx]
 
-        tmp_batch = task.process_input_batch(batch)
+        NUM_TASKS = len(self.tasks)
+        splitted = get_split_indices(batch, len(self.tasks))
+        task_ids = np.random.choice(NUM_TASKS, size=len(splitted), replace=False)
 
-        if len(tmp_batch) == 0:
+        batches = []
+        for i, split_indices in enumerate(splitted):
+            task = self.tasks[task_ids[i]]
+            subbatch = prepare_splitted_batch(batch, split_indices)
+            tmp_batch = task.process_input_batch(subbatch)
+            if len(tmp_batch) == 0:
+                continue
+
+            batches.append(tmp_batch)
+        
+        new_batch = collate_batch_dict(batches)
+
+        if len(batches) == 0:
             return None, None
 
-        qa_batch = self.tokenize_texts(tmp_batch)
+        qa_batch = self.tokenize_texts(new_batch)
 
-        batch_size = qa_batch['encoder_input_mask'].size()[0]
         transactions_history_lengths = batch['mask'].sum(1)
 
         # Question template: to embedding of LM

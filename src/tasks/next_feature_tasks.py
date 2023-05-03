@@ -75,8 +75,10 @@ class NextFeatureTask(AbstractTask):
 
         question_end = self.transactions_embeddings_end_token + question_end
 
-        device = batch['mask'].device
         batch_size = batch['mask'].shape[0]
+
+        ### Constructing batch of questions
+
         batch_question_start = [question_start] * batch_size
 
         # Construct target values 
@@ -93,6 +95,8 @@ class NextFeatureTask(AbstractTask):
 
         # Construct target sequences
         question_target_batch = self.generate_target_question(question_end, target_batch) # as strings
+
+        # Constructing batch of answer templates
         answer_template = [self.answer_template] * batch_size
 
     
