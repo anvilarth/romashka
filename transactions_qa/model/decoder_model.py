@@ -483,22 +483,22 @@ class DecoderSimpleModel(nn.Module):
                                    question_embeddings_batch,
                                    answer_template_embeddings_batch], dim=1).to(device)
 
-        if any([model_type in self.language_model.config.architectures[0] for model_type in USE_HF_GENERATE]):
-            pass
-        else:
-            self._custom_generate(input_embedds=input_embedds,
-                                  temperature=temperature,
-                                  min_new_tokens=min_new_tokens,
-                                  max_new_tokens=max_new_tokens,
-                                  top_p=top_p,
-                                  suggestions=suggestions,
-                                  diversity_penalty=diversity_penalty,
-                                  hidden_dims_indexes=hidden_dims_indexes,
-                                  allowed_token_ids=allowed_token_ids,
-                                  stopping_criteria=stopping_criteria,
-                                  filter_value=filter_value,
-                                  seed=seed,
-                                  device=device)
+        # if any([model_type in self.language_model.config.architectures[0] for model_type in USE_HF_GENERATE]):
+        #     pass
+        # else:
+        return self._custom_generate(input_embedds=input_embedds,
+                                     temperature=temperature,
+                                     min_new_tokens=min_new_tokens,
+                                     max_new_tokens=max_new_tokens,
+                                     top_p=top_p,
+                                     suggestions=suggestions,
+                                     diversity_penalty=diversity_penalty,
+                                     hidden_dims_indexes=hidden_dims_indexes,
+                                     allowed_token_ids=allowed_token_ids,
+                                     stopping_criteria=stopping_criteria,
+                                     filter_value=filter_value,
+                                     seed=seed,
+                                     device=device)
 
     def _custom_generate(self, input_embedds: torch.Tensor,
                          max_new_tokens: Optional[int] = None,

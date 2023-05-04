@@ -1,8 +1,11 @@
 import torch
 import torch.nn as nn
 from typing import Optional, Union, List
+from transformers import PretrainedConfig
 from romashka.transactions_qa.layers.initialization import (init_xavier_uniform_layers,
                                                             init_linear)
+from romashka.transactions_qa.layers.layers import TransformerEncoderLayer
+from romashka.transactions_qa.layers.qformer import QFromerConnector
 
 
 def make_linear_connector(output_size: Optional[int] = None,
@@ -286,3 +289,96 @@ class ComplexLinearConnector(nn.Module):
 
     def forward(self, x: torch.Tensor, *args, **kwargs) -> torch.Tensor:
         return self.layers(x)
+
+
+class TransformerConnector(nn.Module):
+    def __init__(self,
+                 output_size: int,
+                 input_size: int,
+                 n_layers: Optional[int] = 1,
+                 n_heads: Optional[List[int]] = None,
+                 ff_output_dims: Optional[List[int]] = None,
+                 forward_expansions: Optional[List[int]] = None,
+                 add_rel_pos_embeddings: Optional[List[bool]] = None,
+                 dropouts_p: Optional[List[float]] = None,
+                 device: Optional[Union[torch.device, str]] = 'cpu'):
+
+        super().__init__()
+        self.output_size = output_size  # output size of embedder model
+        self.input_size = input_size  # input size of second model / -> output shape for last linear layer
+        self.n_layers = n_layers  # a number of Transformer layers
+
+        self.n_heads = n_heads if n_heads is not None else [8] * self.n_layers
+        self.ff_output_dims = ff_output_dims if ff_output_dims is not None else None
+        self.forward_expansions = forward_expansions if forward_expansions is not None else [2] * self.n_layers
+
+        self.add_rel_pos_embeddings = add_rel_pos_embeddings if add_rel_pos_embeddings is not None else [False] * self.n_layers
+        self.dropouts_p = dropouts_p if dropouts_p is not None else [0.1] * self.n_layers
+        self.device = device
+        self._create_layers()
+
+    def _create_layers(self):
+        layers = []
+        try:
+            for layer_n in range(self.n_layers):
+                ff_output_dim = self.ff_output_dims[layer_n] if self.ff_output_dims is not None else None
+                n_heads = self.n_heads[layer_n]
+                forward_expansion = self.forward_expansions[layer_n]
+                dropout_p = self.dropouts_p[layer_n]
+                layer = TransformerEncoderLayer(
+                    embedding_dim=self.output_size,
+                    heads=n_heads,
+                    ff_output_dim=ff_output_dim,
+                    forward_expansion=forward_expansion,
+                    dropout=dropout_p
+                )
+                layers.append(layer)
+
+            self.layers = nn.Sequential(*layers)
+            self.layers.to(self.device)
+
+            self.lm_projection_layer = torch.nn.Linear(self.output_size,
+                                                       self.input_size).to(self.device)
+
+        except Exception as e:
+            print(f"Error occurred during complex connector creation:\n{e}")
+            raise AttributeError(f"Error occurred during complex connector creation:\n{e}")
+
+
+def make_qformer_connector(output_size: int,
+                           input_size: int,
+                           vocab_size: int,
+                           pad_token_id: int,
+                           config: Optional[PretrainedConfig] = None,
+                           num_queries: Optional[int] = 32,
+                           device: Optional[Union[torch.device, str]] = 'cpu'):
+    """
+    Creates a connector based on Querying Transformer (Q-Former), used in BLIP-2.
+    Args:
+        output_size: an output size of an embeddings model (i.e. input size for the first connector layer);
+        input_size: an input size of an autoregressive model (i.e. output size for the last connector layer);
+        vocab_size: a vocabulary size of LM (need to be passed AFTER extending it with special/additional tokens!);
+        pad_token_id: a pad_token_id from LM tokenizer;
+        config: a pretrained config for Q-Former model;
+        num_queries: a number of queries for cross attention with embeddings
+                    (equals to output sequence length of transactions history);
+        device: a device to allocate model.
+
+    Returns:
+        a connector.
+    """
+    # Check parameters consistency
+    print(f"Output dimension of embedding model: {output_size}")
+    print(f"Input dimension of autoregressive model: {input_size}")
+    print(f"Creating connector from {output_size} to {input_size} "
+          f"and move to device: {device}.")
+
+    return QFromerConnector(
+        output_size=output_size,
+        input_size=input_size,
+        vocab_size=vocab_size,
+        pad_token_id=pad_token_id,
+        num_queries=num_queries,
+        config=config,
+        device=device
+    )

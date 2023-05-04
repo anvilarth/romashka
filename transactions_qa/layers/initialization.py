@@ -12,6 +12,8 @@ def init_xavier_uniform_layers(module: torch.nn.Module):
         for param in module._flat_weights_names:
             if "weight" in param:
                 torch.nn.init.xavier_uniform_(module._parameters[param])
+    elif isinstance(module, torch.nn.Parameter):
+        torch.nn.init.xavier_uniform_(module)
     else:
         pass
 
