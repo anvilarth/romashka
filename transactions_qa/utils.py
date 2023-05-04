@@ -24,8 +24,33 @@ def seed_everything(seed):
     torch.backends.cudnn.benchmark = True
 
 
-def count_parameters(model):
-    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+def count_parameters(model, verbose: Optional[bool] = True):
+    total_params = 0
+    trainable_parameters = 0
+    if isinstance(model, torch.nn.Parameter):
+        total_params = model.numel()
+        trainable_parameters = model.numel() if model.requires_grad else 0
+    else:
+        total_params = sum(p.numel() for p in model.parameters())
+        trainable_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    if verbose:
+        s = f"Model contains: "
+        # Total
+        if total_params > 1_000_000:
+            s += f"{round(total_params / 1_000_000, 3)} M. total parameters, "
+        elif total_params > 1000:
+            s += f"{round(total_params / 1000, 3)} K. total parameters, "
+        else:
+            s += f"{total_params} total parameters, "
+        # Trainable
+        if trainable_parameters > 1_000_000:
+            s += f"{round(trainable_parameters / 1_000_000, 3)} M. trainable parameters."
+        elif trainable_parameters > 1000:
+            s += f"{round(trainable_parameters / 1000, 3)} K. trainable parameters."
+        else:
+            s += f"{trainable_parameters} trainable parameters."
+        print(s)
+    return trainable_parameters
 
 
 def masked_mean(inp, mask, axis=1):

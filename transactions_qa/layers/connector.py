@@ -344,6 +344,10 @@ class TransformerConnector(nn.Module):
             print(f"Error occurred during complex connector creation:\n{e}")
             raise AttributeError(f"Error occurred during complex connector creation:\n{e}")
 
+    def forward(self, x: torch.Tensor, mask: torch.Tensor, *args, **kwargs) -> torch.Tensor:
+        x = self.layers(x, mask)
+        return self.lm_projection_layer(x)
+
 
 def make_qformer_connector(output_size: int,
                            input_size: int,
