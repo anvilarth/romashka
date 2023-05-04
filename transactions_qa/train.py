@@ -14,7 +14,7 @@ from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 
 # Use custom transformers version == 4.27.4 + modifications
-sys.path.insert(0, "/home/jovyan/abdullaeva/transactionsQA")
+sys.path.insert(0, "/home/jovyan/abdullaeva/transactionsQA/transformers/src/")
 import transformers
 from transformers import (AutoModelForSeq2SeqLM,
                           AutoModelForCausalLM,
@@ -38,9 +38,14 @@ from romashka.transactions_qa.dataset.data_generator import (
 from romashka.transactions_qa.dataset.dataloader import (TransactionQADataset, TransactionQADataModule)
 
 from romashka.transactions_qa.transactions_model.model import TransactionsModel
+
 from romashka.transactions_qa.model.encoder_model import EncoderSimpleModel
 from romashka.transactions_qa.model.decoder_model import DecoderSimpleModel
+
 from romashka.transactions_qa.model.decoder_frozen_model import DecoderFrozenModel
+
+from romashka.transactions_qa.model.decoder_retrieval_model import DecoderRetrievalModel
+
 from romashka.transactions_qa.model.tqa_model import TransactionQAModel
 from romashka.transactions_qa.layers.connector import (make_linear_connector,
                                                        make_recurrent_connector)

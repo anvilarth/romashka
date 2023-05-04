@@ -372,12 +372,24 @@ class TrainingArguments:
     do_freeze_language_model_embeddings: Optional[bool] = field(
         default=False, metadata={"help": "Whether to freeze Embeddings of Language model during training."}
     )
+
+    # -----------------
+
+    text_loss_scale: Optional[float] = field(
+        default=1.0,
+        metadata={"help": "A scaling factor for general text-based loss (usually Cross-Entropy)."},
+    )
+
+    retrieval_loss_scale: Optional[float] = field(
+        default=1.0,
+        metadata={"help": "A scaling factor for retrieval from embeddings loss (usually kind of Contractive loss)."},
+    )
     
     gradient_clip_val: float = field(
         default=None,
         metadata={"help": "Clipping norm of gradients. If ||g|| < val, g = val * g / ||g||."},
     )
-    # -----------------
+
     gradient_accumulation_steps: int = field(
         default=1,
         metadata={"help": "Number of updates steps to accumulate before performing a backward/update pass."},

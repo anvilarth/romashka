@@ -377,6 +377,12 @@ class DecoderRetrievalModel(DecoderSimpleModel):
         #             </trns>,
         #             -100 * (question_end_tokens_len - 1)]
 
+        #  4) Label = [<pad> * (question_start_tokens_len - 1)
+        #             <trns>,
+        #             transactions_tokens, <pad> * num_trns_history_paddings,
+        #             </trns>,
+        #             <pad> * (question_end_tokens_len - 1)]
+
         question_end_labels = question_end_tokens_full.clone()
         for i in range(batch_size):
             answer_tokens_len = batch['answer_tokens'][i].size(0)  # + 1  # + 1 for whitespace token
@@ -388,8 +394,8 @@ class DecoderRetrievalModel(DecoderSimpleModel):
                 device),  # --> empty
             # <trns> token
             batch['question_start_tokens'][:, -1].repeat(batch_size, 1),
-            # <pad> * transactions_tokens_len
-            torch.full(transactions_embeddings.size()[:2], self.tokenizer.pad_token_id).to(device),  # --> empty
+            # transactions_tokens, < pad > * num_trns_history_paddings,
+            transactions_tokens.to(device),
             question_end_tokens_full[:, 0].unsqueeze(-1),  # </trns> to [batch_size, 1]
             # <pad> * (question_end_tokens_len - 1)
             question_end_labels[:, 1:]

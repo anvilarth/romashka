@@ -171,11 +171,14 @@ class TransactionQAModel(pl.LightningModule):
             return None
 
         loss = outputs['loss']
-
         logging_dict = {
             'train_loss': loss,
             f'{task_name}_train_loss': loss,
         }
+        # Log additional loss values
+        for k in outputs:
+            if k.endswith("loss"):
+                logging_dict[f"train_{k}"] = outputs[k]
         if self._verbose_for_debug:
             additional_logging_dict = self._collect_additional_info(outputs)
             if additional_logging_dict is not None and len(additional_logging_dict):
@@ -249,6 +252,11 @@ class TransactionQAModel(pl.LightningModule):
             'val_loss': loss,
             f'{task.task_name}_val_loss': loss
         }
+        # Log additional loss values
+        for k in outputs:
+            if k.endswith("loss"):
+                logging_dict[f"val_{k}"] = outputs[k]
+
         if self._verbose_for_debug:
             additional_logging_dict = self._collect_additional_info(outputs)
             if additional_logging_dict is not None and len(additional_logging_dict):
@@ -256,22 +264,23 @@ class TransactionQAModel(pl.LightningModule):
 
         logging_dict = dict(list(logging_dict.items()) + list(metrics_scores.items()))
 
-        # self.log_dict(
-        #     logging_dict,
-        #     batch_size=batch_answers.size(0),
-        #     sync_dist=True,
-        #     on_step=False, on_epoch=True, prog_bar=True, logger=True
-        # )
-        self.log(
-            "val_loss", loss,
+        self.log_dict(
+            logging_dict,
+            batch_size=batch_answers.size(0),
+            sync_dist=True,
             on_step=False, on_epoch=True,
-            prog_bar=True, logger=True, sync_dist=True,
+            prog_bar=True, logger=True
         )
-
-        self.log(
-            f'{task.task_name}_val_loss', loss, on_step=False, on_epoch=True,
-            prog_bar=True, logger=True, sync_dist=True,
-        )
+        # self.log(
+        #     "val_loss", loss,
+        #     on_step=False, on_epoch=True,
+        #     prog_bar=True, logger=True, sync_dist=True,
+        # )
+        #
+        # self.log(
+        #     f'{task.task_name}_val_loss', loss, on_step=False, on_epoch=True,
+        #     prog_bar=True, logger=True, sync_dist=True,
+        # )
 
         # Log predictions on validation set
         if self.num_eval_batches_to_log == -1:  # log all validation data
