@@ -374,8 +374,10 @@ class DecoderRetrievalModel(DecoderSimpleModel):
             self.tokenizer.convert_tokens_to_ids(self._ret_tokens_template % i)
             for i in range(max_transactions_size)]).long().repeat(batch_size, 1).to(device)
 
-        transactions_tokens.masked_fill_(transactions_embeddings_mask == 0,
-                                         self.tokenizer.pad_token_id)
+        # Check if transactions history embedding size was reduced, then we cannot mask it
+        if transactions_tokens.size(-1) == transactions_embeddings_mask.size(-1):
+            transactions_tokens.masked_fill_(transactions_embeddings_mask == 0,
+                                             self.tokenizer.pad_token_id)
         # 5) Labels
         #  5.3) Label = [-100 * (question_start_tokens_len - 1)
         #             <trns>,
@@ -597,7 +599,7 @@ class DecoderRetrievalModel(DecoderSimpleModel):
         # Checks whether a connector requires mask argument
         if self.inspect_forward_signature("mask", self.connector):
             transactions_history_embeddings = self.connector(transactions_history_embeddings,
-                                                     mask=transactions_embeddings_mask)
+                                                             mask=transactions_embeddings_mask)
         else:
             transactions_history_embeddings = self.connector(transactions_history_embeddings)
 

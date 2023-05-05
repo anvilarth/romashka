@@ -8,6 +8,9 @@ from collections import OrderedDict
 import wandb
 os.environ["WANDB_MODE"] = "online"
 
+import warnings
+warnings.filterwarnings("ignore")
+
 import torch
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
@@ -48,7 +51,10 @@ from romashka.transactions_qa.model.decoder_retrieval_model import DecoderRetrie
 
 from romashka.transactions_qa.model.tqa_model import TransactionQAModel
 from romashka.transactions_qa.layers.connector import (make_linear_connector,
-                                                       make_recurrent_connector)
+                                                       make_recurrent_connector,
+                                                       make_complex_linear_connector,
+                                                       make_transformer_connector,
+                                                       make_qformer_connector)
 from romashka.transactions_qa.train_utils import get_warmup_steps
 
 
@@ -275,6 +281,47 @@ def main():
             input_size=lm_input_size,
             **connector_args
         )
+    elif model_args.connector_type == "transformer":
+        # Connector args are hardcoded, should be changed here
+        connector_args = {
+            'n_layers': 1,
+            'n_heads': [8],
+            "ff_output_dims": [1024],
+            'add_rel_pos_embeddings': [False],
+            'dropouts_p': [0.1]
+        }
+        connector = make_transformer_connector(
+            output_size=trns_output_size,
+            input_size=lm_input_size,
+            **connector_args
+        )
+    elif model_args.connector_type == "qformer":
+        # Connector args are hardcoded, should be changed here
+        qformer_config = {
+              "attention_probs_dropout_prob": 0.1,
+              "classifier_dropout": 0.1,
+              "cross_attention_frequency": 2,
+              "hidden_act": "gelu",
+              "hidden_dropout_prob": 0.1,
+              "initializer_range": 0.02,
+              "intermediate_size": 1024,
+              "max_position_embeddings": 1024,
+              "num_attention_heads": 8,
+              "num_hidden_layers": 4,
+              "position_embedding_type": "absolute",
+        }
+        connector_args = {
+            'config': qformer_config,
+            'vocab_size': len(tokenizer),
+            "pad_token_id": tokenizer.pad_token_id,
+            "num_queries": 32
+        }
+        connector = make_qformer_connector(
+            output_size=trns_output_size,
+            input_size=lm_input_size,
+            **connector_args
+        )
+
     else:
         raise AttributeError(f"Unknown connector type: {model_args.connector_type}")
 
@@ -296,11 +343,33 @@ def main():
             **lm_model_config
         )
     else:
-        model_ = DecoderFrozenModel(
+        # model_ = DecoderFrozenModel(
+        #     language_model=lm_model,
+        #     transaction_model=transactions_model,
+        #     tokenizer=tokenizer,
+        #     connector=connector,
+        #     **lm_model_config
+        # )
+        lm_model_config = {
+            "do_freeze_tm": training_args.do_freeze_transactions_model,
+            "do_freeze_lm": training_args.do_freeze_language_model,
+            "do_freeze_connector": training_args.do_freeze_connector,
+            "do_freeze_lm_embeddings": training_args.do_freeze_language_model_embeddings,
+            "min_ret_tokens": 50,
+            "max_ret_tokens": 150,
+            "n_retrieval_layers": [-1],
+            "retrieval_loss_scale": training_args.retrieval_loss_scale,
+            "text_loss_scale": training_args.text_loss_scale,
+            "embeddings_dropout_p": 0.1,
+            "transactions_embeddings_start_token": r"[trx]",
+            "transactions_embeddings_end_token": r"[/trx]",
+        }
+        model_ = DecoderRetrievalModel(
             language_model=lm_model,
             transaction_model=transactions_model,
             tokenizer=tokenizer,
             connector=connector,
+            is_debug=True,
             **lm_model_config
         )
 

@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from typing import Optional, Union, List
+from typing import Optional, Union, List, Dict, Any
 from transformers import PretrainedConfig
 from romashka.transactions_qa.layers.initialization import (init_xavier_uniform_layers,
                                                             init_linear)
@@ -405,7 +405,7 @@ def make_qformer_connector(output_size: int,
                            input_size: int,
                            vocab_size: int,
                            pad_token_id: int,
-                           config: Optional[PretrainedConfig] = None,
+                           config: Optional[Union[PretrainedConfig, Dict[str, Any]]] = None,
                            num_queries: Optional[int] = 32,
                            device: Optional[Union[torch.device, str]] = 'cpu'):
     """

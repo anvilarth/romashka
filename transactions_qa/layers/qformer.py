@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from typing import Optional, Union, List
+from typing import Optional, Union, List, Dict, Any
 
 from transformers import Blip2QFormerConfig, Blip2QFormerModel
 from romashka.transactions_qa.layers.initialization import (init_xavier_uniform_layers,
@@ -51,6 +51,9 @@ class QFromerConnector(nn.Module):
         self.config['vocab_size'] = vocab_size
         self.config['pad_token_id'] = pad_token_id
 
+        if not isinstance(self.config, Blip2QFormerConfig):
+            self.config = Blip2QFormerConfig(**self.config)
+
         self.device = device
         self._create_layers()
 
@@ -67,16 +70,16 @@ class QFromerConnector(nn.Module):
             raise AttributeError(f"Error occurred during Q-Former connector creation:\n{e}")
 
     def forward(self, embeds: torch.Tensor,
-                output_attentions: Optional[bool] = None,
-                output_hidden_states: Optional[bool] = None,
-                return_dict: Optional[bool] = None,
+                output_attentions: Optional[bool] = False,
+                output_hidden_states: Optional[bool] = False,
+                return_dict: Optional[bool] = True,
                 *args, **kwargs) -> torch.Tensor:
 
         # step 1: get embeddings -> done!
         # step 2: forward the query tokens through the QFormer, using input embeddings for cross-attention
         embeds_attention_mask = torch.ones(embeds.size()[:-1], dtype=torch.long, device=embeds.device)
 
-        query_tokens = self.query_tokens.expand(embeds.shape[0], -1, -1)
+        query_tokens = self.query_tokens_embeddings.expand(embeds.shape[0], -1, -1)
         query_outputs = self.qformer(
             query_embeds=query_tokens,
             encoder_hidden_states=embeds,
@@ -88,7 +91,7 @@ class QFromerConnector(nn.Module):
         query_output = query_outputs[0]
 
         # step 3: use the language model, conditioned on the query outputs and the prompt
-        language_model_inputs = self.language_projection(query_output)
+        language_model_inputs = self.lm_projection_layer(query_output)
         language_model_attention_mask = torch.ones(
             language_model_inputs.size()[:-1], dtype=torch.long, device=language_model_inputs.device
         )
