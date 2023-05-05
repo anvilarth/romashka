@@ -141,8 +141,13 @@ class DecoderFrozenModel(DecoderSimpleModel):
         batch_size = transaction_mask.size(0)
         transactions_embeddings, transactions_embeddings_mask = self.transaction_model.get_embs(batch)
 
-        # next pass them to connector == linear mapping -> to LM inner dim
-        transactions_embeddings = self.connector(transactions_embeddings)
+        # 2) Next pass them to connector == linear mapping -> to LM inner dim
+        # Checks whether a connector requires mask argument
+        if self.inspect_forward_signature("mask", self.connector):
+            transactions_embeddings = self.connector(transactions_embeddings,
+                                                     mask=transactions_embeddings_mask)
+        else:
+            transactions_embeddings = self.connector(transactions_embeddings)
 
         # Questions: to embedding of LM
         # torch.Size([1, len(question_start_tokens))
@@ -335,10 +340,17 @@ class DecoderFrozenModel(DecoderSimpleModel):
             torch.cuda.empty_cache()
 
         # Transactions
-        transactions_history_embeddings, _ = self.transaction_model.get_embs(transactions_batch)
+        transactions_history_embeddings, transactions_embeddings_mask = self.transaction_model.get_embs(
+            transactions_batch
+        )
 
-        # next pass them to connector == linear mapping -> to LM inner dim
-        transactions_history_embeddings = self.connector(transactions_history_embeddings)
+        # 2) Next pass them to connector == linear mapping -> to LM inner dim
+        # Checks whether a connector requires mask argument
+        if self.inspect_forward_signature("mask", self.connector):
+            transactions_history_embeddings = self.connector(transactions_history_embeddings,
+                                                             mask=transactions_embeddings_mask)
+        else:
+            transactions_history_embeddings = self.connector(transactions_history_embeddings)
 
         vocab_size = self.language_model.vocab_size
         batch_size = transactions_history_embeddings.size(0)

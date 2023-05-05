@@ -1,3 +1,4 @@
+import inspect
 from typing import (List, Optional,
                     Tuple, Any,
                     Dict, Union)
@@ -161,6 +162,23 @@ class EncoderSimpleModel(nn.Module):
             self._logger.info(f"Created default generation configration for a model:\n"
                               f"{self.generation_config}")
 
+    @staticmethod
+    def inspect_forward_signature(param_name: str, model: nn.Module) -> bool:
+        """
+        Get the list of parameter names of `forward` function of the model
+        and checks whether requested parameter name is in list.
+        Args:
+            param_name: str, a requested parameter name;
+            model: nn.Module, a model to get `forward` function from;
+        Returns:
+            a bool flag, whether requested parameter name is in parameter names list.
+        """
+        # Inspect model forward signature to keep only the arguments it accepts
+        signature = inspect.signature(model.forward)
+        if param_name in list(signature.parameters.keys()):
+            return True
+        return False
+
     def forward(self, batch: Union[Dict[str, torch.Tensor], Any],
                 output_attentions: Optional[bool] = False,
                 is_train: Optional[bool] = True) -> Any:
@@ -188,8 +206,13 @@ class EncoderSimpleModel(nn.Module):
 
         transactions_embeddings, transactions_embeddings_mask = self.transaction_model.get_embs(batch)
 
-        # next pass them to connector == linear mapping -> to LM inner dim
-        transactions_embeddings = self.connector(transactions_embeddings)
+        # 2) Next pass them to connector == linear mapping -> to LM inner dim
+        # Checks whether a connector requires mask argument
+        if self.inspect_forward_signature("mask", self.connector):
+            transactions_embeddings = self.connector(transactions_embeddings,
+                                                     mask=transactions_embeddings_mask)
+        else:
+            transactions_embeddings = self.connector(transactions_embeddings)
 
         # Questions: to embedding of LM
         # torch.Size([1, len(question_start_tokens))

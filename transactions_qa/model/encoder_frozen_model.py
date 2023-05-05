@@ -174,7 +174,7 @@ class EncoderFrozenModel(EncoderSimpleModel):
         Returns:
             LM model's outputs with added labels (if `is_train` was set).
         """
-        # Get transactions embeddings for initial batch
+        # 1) Get transactions embeddings for initial batch
         # transactions model requires: ['mask', 'cat_features', 'num_features', 'meta_features']
         # + optionally: 'time' - ??? maybe 'event_time' ???
         # return: Tuple[
@@ -186,10 +186,15 @@ class EncoderFrozenModel(EncoderSimpleModel):
 
         transactions_embeddings, transactions_embeddings_mask = self.transaction_model.get_embs(batch)
 
-        # next pass them to connector == linear mapping -> to LM inner dim
-        transactions_embeddings = self.connector(transactions_embeddings)
+        # 2) Next pass them to connector == linear mapping -> to LM inner dim
+        # Checks whether a connector requires mask argument
+        if self.inspect_forward_signature("mask", self.connector):
+            transactions_embeddings = self.connector(transactions_embeddings,
+                                                     mask=transactions_embeddings_mask)
+        else:
+            transactions_embeddings = self.connector(transactions_embeddings)
 
-        # Questions: to embedding of LM
+        # 3) Questions: to embedding of LM
         # torch.Size([1, len(question_start_tokens))
         question_start_embeddings = self.language_model_tokens_embedding_func(
             batch['question_start_tokens'])  # call for (embed_tokens): Embedding(vocab_size, model_hidden_dim)
@@ -231,7 +236,7 @@ class EncoderFrozenModel(EncoderSimpleModel):
                 torch.ones((1,)).long().repeat(batch_size, 1).to(batch['question_end_attention_mask'].device)
             ], dim=1)
 
-        # Get general LM's encoder input as:
+        # 4) Get general LM's encoder input as:
         # Q_start_tokens + TRNS_embeddings + Q_end_tokens
         encoder_input = torch.cat([question_start_embeddings_batch,
                                    transactions_embeddings,

@@ -54,7 +54,6 @@ class MuiltiHeadSelfAttention(nn.Module):
 
     def forward(self, query, key, value, mask):
         batch_size = query.shape[0]
-
         query_len, key_len, value_len = query.shape[1], key.shape[1], value.shape[1]
 
         query = query.reshape(batch_size, query_len, self.heads, self.head_dims)
@@ -145,7 +144,13 @@ class TransformerEncoderLayer(nn.Module):
         )
         self.dropout = nn.Dropout(dropout)
 
+    @staticmethod
+    def create_mask(mask):
+        mask = (mask == 0).unsqueeze(1).unsqueeze(2)
+        return mask
+
     def forward(self, x, mask):
+        mask = self.create_mask(mask)
         attention_block = self.attention(x, x, x, mask)
         add = self.dropout(self.layer_norm1(x + attention_block))
         feed_forward = self.feed_forward(add)

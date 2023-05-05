@@ -1,3 +1,4 @@
+import inspect
 from typing import (List, Optional,
                     Tuple, Any,
                     Dict, Union)
@@ -212,6 +213,23 @@ class DecoderSimpleModel(nn.Module):
             self._logger.info(f"Created default generation configration for a model:\n"
                               f"{self.generation_config}")
 
+    @staticmethod
+    def inspect_forward_signature(param_name: str, model: nn.Module) -> bool:
+        """
+        Get the list of parameter names of `forward` function of the model
+        and checks whether requested parameter name is in list.
+        Args:
+            param_name: str, a requested parameter name;
+            model: nn.Module, a model to get `forward` function from;
+        Returns:
+            a bool flag, whether requested parameter name is in parameter names list.
+        """
+        # Inspect model forward signature to keep only the arguments it accepts
+        signature = inspect.signature(model.forward)
+        if param_name in list(signature.parameters.keys()):
+            return True
+        return False
+
     def forward(self, batch: Union[Dict[str, torch.Tensor], Any],
                 output_attentions: Optional[bool] = False,
                 is_train: Optional[bool] = True) -> Any:
@@ -227,7 +245,7 @@ class DecoderSimpleModel(nn.Module):
         Returns:
             LM model's outputs with added labels (if `is_train` was set).
         """
-        # Get transactions embeddings for initial batch
+        # 1) Get transactions embeddings for initial batch
         # transactions model requires: ['mask', 'cat_features', 'num_features', 'meta_features']
         # + optionally: 'time' - ??? maybe 'event_time' ???
         # return: Tuple[
@@ -240,17 +258,22 @@ class DecoderSimpleModel(nn.Module):
         batch_size = transaction_mask.size(0)
         transactions_embeddings, transactions_embeddings_mask = self.transaction_model.get_embs(batch)
 
-        # next pass them to connector == linear mapping -> to LM inner dim
-        transactions_embeddings = self.connector(transactions_embeddings)
+        # 2) Next pass them to connector == linear mapping -> to LM inner dim
+        # Checks whether a connector requires mask argument
+        if self.inspect_forward_signature("mask", self.connector):
+            transactions_embeddings = self.connector(transactions_embeddings,
+                                                     mask=transactions_embeddings_mask)
+        else:
+            transactions_embeddings = self.connector(transactions_embeddings)
 
-        # Questions: to embedding of LM
+        # 3) Questions: to embedding of LM
         # torch.Size([1, len(question_start_tokens))
         question_start_embeddings = self.language_model_tokens_embedding_func(
             batch['question_start_tokens'])  # call for (embed_tokens): Embedding(vocab_size, model_hidden_dim)
         question_start_embeddings_batch = question_start_embeddings.repeat(batch_size, 1, 1)
 
         # question_end_tokens: torch.Size([batch_size, len(max_question_end_tokens)])
-        # 1) Strip paddings from questions endings!!!
+        # 3.1) Strip paddings from questions endings!!!
         question_end_tokens_mask = batch['question_end_attention_mask'].bool()  # 0 - token, 1 == pad
 
         question_end_tokens_full = []
@@ -263,7 +286,7 @@ class DecoderSimpleModel(nn.Module):
                                                        answer_,
                                                        self.eos_token_id.to(device)], dim=0))
 
-        # 2) Pad to max q+a length
+        # 3.2) Pad to max q+a length
         max_question_answer_len = max([len(qa) for qa in question_end_tokens_full])
         for i in range(question_end_tokens_mask.size(0)):
             n_padds = max_question_answer_len - question_end_tokens_full[i].size(0)
@@ -272,23 +295,23 @@ class DecoderSimpleModel(nn.Module):
                  question_end_tokens_full[i],
                  ], dim=0)
 
-        # 3) Cat back into batch
+        # 3.3) Cat back into batch
         question_end_tokens_full = torch.stack(question_end_tokens_full).long()
 
         question_end_embeddings_batch = self.language_model_tokens_embedding_func(question_end_tokens_full)
 
-        # Get general LM's input as:
+        # 4) Get general LM's input as:
         # Q_start_tokens + TRNS_embeddings + Q_end_tokens
         input_embedds = torch.cat([question_start_embeddings_batch,
                                    transactions_embeddings,
                                    question_end_embeddings_batch], dim=1)
 
-        # Create CLM labels, todo: use later for Retrieval/Captioning task
+        # 5) Create CLM labels, todo: use later for Retrieval/Captioning task
         # question_start_tokens_mask = ~batch['question_start_tokens_mask'].bool()  # 0 - token, 1 == pad
         # transactions_tokens_mask = torch.ones(transactions_embeddings.size()[:2]).bool()  # all to 1 == pad
         # question_end_tokens_mask = mask_padding(question_end_tokens_full)  # 0 - token, 1 == pad
 
-        # 1) Label = [question_start_tokens, <trns>,
+        # 5.1) Label = [question_start_tokens, <trns>,
         #           <pad> * trns_history_len,
         #           <pad> * n, </trns>,
         #           question_end_tokens, answer_tokens,
@@ -299,7 +322,7 @@ class DecoderSimpleModel(nn.Module):
             question_end_tokens_full
         ], dim=1)
 
-        # 2) Label = [<pad> * len(question_start_tokens) - 1,
+        # 5.2) Label = [<pad> * len(question_start_tokens) - 1,
         #            <trns>,  --> train it!
         #           <pad> * trns_history_len,
         #           <pad> * len(question_end_tokens) - 1,
@@ -408,10 +431,17 @@ class DecoderSimpleModel(nn.Module):
             torch.cuda.empty_cache()
 
         # Transactions
-        transactions_history_embeddings, _ = self.transaction_model.get_embs(transactions_batch)
+        transactions_history_embeddings, transactions_embeddings_mask = self.transaction_model.get_embs(
+            transactions_batch
+        )
 
-        # next pass them to connector == linear mapping -> to LM inner dim
-        transactions_history_embeddings = self.connector(transactions_history_embeddings)
+        # 2) Next pass them to connector == linear mapping -> to LM inner dim
+        # Checks whether a connector requires mask argument
+        if self.inspect_forward_signature("mask", self.connector):
+            transactions_history_embeddings = self.connector(transactions_history_embeddings,
+                                                     mask=transactions_embeddings_mask)
+        else:
+            transactions_history_embeddings = self.connector(transactions_history_embeddings)
 
         vocab_size = self.language_model.vocab_size
         batch_size = transactions_history_embeddings.size(0)

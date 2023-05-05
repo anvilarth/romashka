@@ -291,6 +291,56 @@ class ComplexLinearConnector(nn.Module):
         return self.layers(x)
 
 
+def make_transformer_connector(output_size: int,
+                               input_size: int,
+                               n_layers: Optional[int] = 1,
+                               n_heads: Optional[List[int]] = None,
+                               ff_output_dims: Optional[List[int]] = None,
+                               forward_expansions: Optional[List[int]] = None,
+                               add_rel_pos_embeddings: Optional[List[bool]] = None,
+                               dropouts_p: Optional[List[float]] = None,
+                               device: Optional[Union[torch.device, str]] = 'cpu'):
+    """
+    Creates a connector based on simple Transformer encoder blocks.
+    Args:
+        output_size: an output size of an embeddings model (i.e. input size for the first connector layer);
+        input_size: an input size of an autoregressive model (i.e. output size for the last connector layer);
+        n_layers: a number of Transformer layers;
+        n_heads:  a list contains numbers of heads for each Transformer layer;
+        ff_output_dims: a list of fast-forward dims (exact sizes) for each Transformer layer;
+        forward_expansions: a list of multipliers for fast-forward dims calculation for each Transformer layer.
+            Can be overwritten by `ff_output_dims` argument;
+        add_rel_pos_embeddings: a list of bool flags whether
+            to add relative position embeddings for each Transformer layer or not;
+        dropouts_p: a list of dropout probabilities for each Transformer layer;
+        device: a device to allocate model.
+    Returns:
+        a Transformer connector.
+    """
+    # Check parameters consistency
+    print(f"Output dimension of embedding model: {output_size}")
+    print(f"Input dimension of autoregressive model: {input_size}")
+    print(f"Creating connector from {output_size} to {input_size} "
+          f"and move to device: {device}.")
+
+    # Check parameters consistency
+    if (n_heads is None) or (len(n_heads) != n_layers):
+        raise AttributeError(f"Number of heads (= {len(n_heads) if n_heads is not None else 0}) "
+                             f"does not equal to number of layers  (= {n_layers})!")
+
+    return TransformerConnector(
+        output_size=output_size,
+        input_size=input_size,
+        n_layers=n_layers,
+        n_heads=n_heads,
+        ff_output_dims=ff_output_dims,
+        forward_expansions=forward_expansions,
+        add_rel_pos_embeddings=add_rel_pos_embeddings,
+        dropouts_p=dropouts_p,
+        device=device
+    )
+
+
 class TransformerConnector(nn.Module):
     def __init__(self,
                  output_size: int,
@@ -312,7 +362,8 @@ class TransformerConnector(nn.Module):
         self.ff_output_dims = ff_output_dims if ff_output_dims is not None else None
         self.forward_expansions = forward_expansions if forward_expansions is not None else [2] * self.n_layers
 
-        self.add_rel_pos_embeddings = add_rel_pos_embeddings if add_rel_pos_embeddings is not None else [False] * self.n_layers
+        self.add_rel_pos_embeddings = add_rel_pos_embeddings if add_rel_pos_embeddings is not None else [
+                                                                                                            False] * self.n_layers
         self.dropouts_p = dropouts_p if dropouts_p is not None else [0.1] * self.n_layers
         self.device = device
         self._create_layers()
@@ -334,7 +385,7 @@ class TransformerConnector(nn.Module):
                 )
                 layers.append(layer)
 
-            self.layers = nn.Sequential(*layers)
+            self.layers = nn.ModuleList(layers)
             self.layers.to(self.device)
 
             self.lm_projection_layer = torch.nn.Linear(self.output_size,
@@ -345,7 +396,8 @@ class TransformerConnector(nn.Module):
             raise AttributeError(f"Error occurred during complex connector creation:\n{e}")
 
     def forward(self, x: torch.Tensor, mask: torch.Tensor, *args, **kwargs) -> torch.Tensor:
-        x = self.layers(x, mask)
+        for layer in self.layers:
+            x = layer(x, mask)
         return self.lm_projection_layer(x)
 
 
