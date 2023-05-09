@@ -67,22 +67,6 @@ class EncoderFrozenModel(EncoderSimpleModel):
         trainable_parameters = list(filter(lambda p: p.requires_grad, parameters))
         self._logger.info(f"Totally trainable parameters: {len(trainable_parameters)} from {len(parameters)}")
 
-    def _prepare_model(self):
-        super()._prepare_model()
-        self._create_trainable_parameters()
-
-        # Check if language model is frozen, optionally freeze
-        self._logger.info(f"Check language model's parameters to be frozen...")
-        for param_name, param in self.language_model.named_parameters():
-            if param.requires_grad:
-                self._logger.warning(f"Parameter `{param_name}` of LM requires grad, freezing..")
-                param.requires_grad = False
-
-        # Check total trainable parameters
-        parameters = list(self.parameters())
-        trainable_parameters = list(filter(lambda p: p.requires_grad, parameters))
-        self._logger.info(f"Totally trainable parameters: {len(trainable_parameters)} from {len(parameters)}")
-
     def _create_trainable_parameters(self):
         """
         Creates trainable parameters for:
