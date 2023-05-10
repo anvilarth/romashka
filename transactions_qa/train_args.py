@@ -8,6 +8,7 @@ from transformers.trainer_utils import (
 )
 # from transformers import TrainingArguments
 from ..logging_handler import get_logger
+from romashka.transactions_qa.layers.connector import CONNECTOR_TYPES
 
 logger = get_logger(
     name="Tasks",
@@ -110,7 +111,9 @@ class ModelArguments:
     )
 
     def __post_init__(self):
-        pass
+        if self.connector_type not in CONNECTOR_TYPES:
+            raise ValueError(f"`connector_type` should be one from:\n{CONNECTOR_TYPES}.")
+
 
 
 @dataclass

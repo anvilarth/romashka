@@ -42,12 +42,8 @@ from romashka.transactions_qa.dataset.dataloader import (TransactionQADataset, T
 
 from romashka.transactions_qa.transactions_model.model import TransactionsModel
 
-from romashka.transactions_qa.model.encoder_model import EncoderSimpleModel
-from romashka.transactions_qa.model.decoder_model import DecoderSimpleModel
-
-from romashka.transactions_qa.model.decoder_frozen_model import DecoderFrozenModel
-
-from romashka.transactions_qa.model.decoder_retrieval_model import DecoderRetrievalModel
+from romashka.transactions_qa.model import (EncoderSimpleModel, EncoderFrozenModel, EncoderRetrievalModel,
+                                           DecoderSimpleModel, DecoderFrozenModel, DecoderRetrievalModel)
 
 from romashka.transactions_qa.model.tqa_model import TransactionQAModel
 from romashka.transactions_qa.layers.connector import (make_linear_connector,
@@ -266,9 +262,23 @@ def main():
                        f"use default setting: {trns_output_size}")
 
     if model_args.connector_type == "linear":
+        connector_args = {}
         connector = make_linear_connector(
             output_size=trns_output_size,
             input_size=lm_input_size
+        )
+    elif model_args.connector_type == "complex_linear":
+        # Connector args are hardcoded, should be changed here
+        connector_args = {
+            "n_layers": 2,
+            "hidden_dims": [1024],
+            "add_normalizations": [False, True],
+            'add_activations': [True, False]
+        }
+        connector = make_complex_linear_connector(
+            output_size=trns_output_size,
+            input_size=lm_input_size,
+
         )
     elif model_args.connector_type == "recurrent":
         # Connector args are hardcoded, should be changed here
@@ -335,11 +345,33 @@ def main():
     }
 
     if model_args.language_model_type == "encoder-decoder":
-        model_ = EncoderSimpleModel(
+        # model_ = EncoderSimpleModel(
+        #     language_model=lm_model,
+        #     transaction_model=transactions_model,
+        #     tokenizer=tokenizer,
+        #     connector=connector,
+        #     **lm_model_config
+        # )
+        lm_model_config = {
+            "do_freeze_tm": training_args.do_freeze_transactions_model,
+            "do_freeze_lm": training_args.do_freeze_language_model,
+            "do_freeze_connector": training_args.do_freeze_connector,
+            "do_freeze_lm_embeddings": training_args.do_freeze_language_model_embeddings,
+            "min_ret_tokens": 50,
+            "max_ret_tokens": 150,
+            "n_retrieval_layers": [-1],
+            "retrieval_loss_scale": training_args.retrieval_loss_scale,
+            "text_loss_scale": training_args.text_loss_scale,
+            "embeddings_dropout_p": 0.1,
+            "transactions_embeddings_start_token": r"[trx]",
+            "transactions_embeddings_end_token": r"[/trx]",
+        }
+        model_ = EncoderRetrievalModel(
             language_model=lm_model,
             transaction_model=transactions_model,
             tokenizer=tokenizer,
             connector=connector,
+            is_debug=True,
             **lm_model_config
         )
     else:
@@ -389,7 +421,10 @@ def main():
 
     model = TransactionQAModel(model=model_,
                                tasks=tasks,
-                               **transactionsQA_model_config)
+                               **transactionsQA_model_config,
+                               **lm_model_config,  # as additional kwargs -> to save hyperparameters to checkpoint
+                               **connector_args
+                              )
 
     # Datasets & Dataloader & Other utils
     if training_args.do_train and "train" in data_files:

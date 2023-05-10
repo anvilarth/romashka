@@ -438,10 +438,11 @@ class DecoderRetrievalModel(DecoderSimpleModel):
         outputs["logits"] = lm_outputs.logits
 
         outputs["text_loss"] = lm_outputs.loss * self._text_loss_scale
-        outputs["retrieval_loss"] = ret_loss_outputs.pop('loss') * self._retrieval_loss_scale
+        ret_loss = ret_loss_outputs.pop('loss')
+        outputs["retrieval_loss"] = ret_loss * self._retrieval_loss_scale
 
         outputs["unscaled_text_loss"] = lm_outputs.loss
-        outputs["unscaled_retrieval_loss"] = ret_loss_outputs.pop('loss')
+        outputs["unscaled_retrieval_loss"] = ret_loss
 
         if output_attentions:
             outputs["attentions"] = lm_outputs.attentions

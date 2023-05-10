@@ -8,6 +8,15 @@ from romashka.transactions_qa.layers.layers import TransformerEncoderLayer
 from romashka.transactions_qa.layers.qformer import QFromerConnector
 
 
+CONNECTOR_TYPES = [
+    "linear",
+    "complex_linear",
+    "recurrent",
+    "transformer",
+    "qformer"
+]
+
+
 def make_linear_connector(output_size: Optional[int] = None,
                           input_size: Optional[int] = None,
                           embedding_model: Optional[nn.Module] = None,
@@ -137,7 +146,7 @@ def make_recurrent_connector(layer_type: str,
         return None
 
 
-class ReccurrentConnector(nn.Module):
+class RecurrentConnector(nn.Module):
     def __init__(self,
                  layer_type: str,
                  output_size: int,
