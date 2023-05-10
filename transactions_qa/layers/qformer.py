@@ -31,7 +31,7 @@ class QFromerConnector(nn.Module):
                  vocab_size: int,
                  pad_token_id: int,
                  num_queries: Optional[int] = 32,
-                 config: Optional[Blip2QFormerConfig] = None,
+                 config: Optional[Union[Blip2QFormerConfig, Dict[str, Any]]] = None,
                  device: Optional[Union[torch.device, str]] = 'cpu'):
 
         super().__init__()
