@@ -418,8 +418,13 @@ class EncoderRetrievalModel(EncoderSimpleModel):
         # join two output dicts
         outputs = dict()
         outputs["logits"] = lm_outputs.logits
-        outputs["text_loss"] = lm_outputs.loss
-        outputs["retrieval_loss"] = ret_loss_outputs.pop('loss')
+
+        outputs["text_loss"] = lm_outputs.loss * self._text_loss_scale
+        outputs["retrieval_loss"] = ret_loss_outputs.pop('loss') * self._retrieval_loss_scale
+
+        outputs["unscaled_text_loss"] = lm_outputs.loss
+        outputs["unscaled_retrieval_loss"] = ret_loss_outputs.pop('loss')
+
         if output_attentions:
             outputs["attentions"] = lm_outputs.attentions
         if output_hidden_states:

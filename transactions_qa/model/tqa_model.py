@@ -528,7 +528,6 @@ class TransactionQAModel(pl.LightningModule):
             for param_name, param in self.model.named_parameters():
                 if param_name.startswith("transactions_start_embedding") \
                         or param_name.startswith("transactions_end_embedding")  \
-                        or param_name.startswith("connector") \
                         or param_name.startswith("projection_layers"):
                     if param.grad is not None:
                         grad_sum = np.sum(np.abs(param.grad.detach().cpu().numpy()))
