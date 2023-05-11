@@ -6,14 +6,9 @@ import torch
 import torch.nn as nn
 import transformers
 
-from romashka.logging_handler import get_logger
-from romashka.transactions_qa.utils import seed_everything
-from romashka.transactions_qa.layers.connector import (make_linear_connector,
-                                                       make_recurrent_connector)
 from romashka.transactions_qa.model.encoder_model import EncoderSimpleModel
 from romashka.transactions_qa.tasks.task_abstract import AbstractTask
 from romashka.transactions_qa.losses.infonce_loss import InfoNCE
-from romashka.transactions_qa.utils import (mask_padding, mask_lm_labels_padding)
 
 
 class EncoderRetrievalModel(EncoderSimpleModel):
