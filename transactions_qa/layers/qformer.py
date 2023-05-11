@@ -46,7 +46,9 @@ class QFromerConnector(nn.Module):
             self.config = config
 
         # Configure model dependent parameters
-        self.config['hidden_size'] = input_size  # usually set to LLM hidden_size
+        # usually set to LLM hidden_size
+        self.config['hidden_size'] = input_size if self.config.get('hidden_size') is None \
+            else self.config.get('hidden_size')
         self.config['encoder_hidden_size'] = output_size  # equals to embedder output size
         self.config['vocab_size'] = vocab_size
         self.config['pad_token_id'] = pad_token_id
@@ -64,7 +66,7 @@ class QFromerConnector(nn.Module):
             self.query_tokens_embeddings = torch.nn.Parameter(
                 torch.zeros(1, self.num_queries, self.config.hidden_size)).to(self.device)
             self.lm_projection_layer = torch.nn.Linear(self.config.hidden_size,
-                                                       self.config.hidden_size).to(self.device)
+                                                       self.input_size).to(self.device)
         except Exception as e:
             print(f"Error occurred during Q-Former connector creation:\n{e}")
             raise AttributeError(f"Error occurred during Q-Former connector creation:\n{e}")

@@ -30,7 +30,9 @@ class TransactionQAModel(pl.LightningModule):
                  adam_epsilon: Optional[float] = 1e-8,
                  warmup_steps: Optional[int] = 100,
                  training_steps: Optional[int] = 10_000,
-                 verbose_for_debug: Optional[bool] = False):
+                 verbose_for_debug: Optional[bool] = False,
+                 **additional_kwargs
+                ):
         super().__init__()
         self._logger = get_logger(
             name=self.__class__.__name__,
@@ -376,12 +378,14 @@ class TransactionQAModel(pl.LightningModule):
             return dict()
 
         # as list of strings
-        predictions_decoded = self.model.tokenizer.batch_decode(outputs.logits.argmax(2),
-                                                          skip_special_tokens=True)
+        predictions_decoded = self.model.tokenizer.batch_decode(
+            outputs['logits'].argmax(2) if isinstance(outputs, dict) else outputs.logits.argmax(2),
+            skip_special_tokens=True)
         batch_answers_decoded = self.model.tokenizer.batch_decode(batch_answers,
                                                             skip_special_tokens=True)
-        batch_questions_decoded = self.model.tokenizer.batch_decode(outputs.question_encoded.detach().cpu(),
-                                                              skip_special_tokens=True)
+        batch_questions_decoded = self.model.tokenizer.batch_decode(
+             outputs['question_encoded'].detach().cpu() if isinstance(outputs, dict) else outputs.question_encoded.detach().cpu(),
+            skip_special_tokens=True)
 
         if verbose:
             print("----- Prediction step -----")

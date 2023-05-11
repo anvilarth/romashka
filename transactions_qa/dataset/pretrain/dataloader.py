@@ -1,36 +1,48 @@
-import torch
-import torch.nn as nn
-
-from torch.utils.data import DataLoader
+# Basic
 from typing import Optional
 
-from .data_generator import batches_generator
+import torch
+import torch.nn as nn
+import pytorch_lightning as pl
+from torch.utils.data import DataLoader
+
 from torch.nn.utils.rnn import pad_sequence
 from datasets import IterableDataset as HFIterableDataset
-import pytorch_lightning as pl
+
+# Set up logging
+from romashka.logging_handler import get_logger
+
+logger = get_logger(
+    name="pretrain_dataloader"
+)
+
+from romashka.transactions_qa.dataset.serializers import AbstractSerializer
+from romashka.transactions_qa.dataset.pretrain.data_generator import text_batches_generator
 
 
-class TransactionQADataset:
+class TransactionCaptioningDataset:
 
-    def __init__(self, dataset, generator_batch_size: Optional[int] = 1,
-                 min_seq_len: Optional[int] = 50, max_seq_len: Optional[int] = 150,
+    def __init__(self, dataset,
+                 generator_batch_size: Optional[int] = 1,
+                 sub_seq_len: Optional[int] = 10,
+                 serializer: Optional[AbstractSerializer] = None,
                  seed: Optional[int] = 42, buffer_size: Optional[int] = 10_000,
                  is_train: Optional[bool] = True, shuffle: Optional[bool] = False, *args, **kwargs):
         super().__init__()
         self.dataset = dataset
-        self.min_seq_len = min_seq_len
-        self.max_seq_len = max_seq_len
+        self.sub_seq_len = sub_seq_len
         self.is_train = is_train
         self.seed = seed
+        self.serializer = serializer
         self.generator_batch_size = generator_batch_size
         self.shuffle = shuffle
         self.buffer_size = buffer_size
 
     def create_generator(self, dataset):
-        return batches_generator(dataset,
-                                 batch_size=self.generator_batch_size,
-                                 min_seq_len=self.min_seq_len, max_seq_len=self.max_seq_len,
-                                 is_train=self.is_train)
+        return text_batches_generator(dataset,
+                                      batch_size=self.generator_batch_size,
+                                      sub_seq_len=self.sub_seq_len,
+                                      serializer=self.serializer)
 
     def build_dataset(self):
         # Somehow it is important to pass dataset using gen_kwargs, because sharding is done using it
@@ -62,40 +74,9 @@ class TransactionQADataset:
 
         output['mask'] = pad_sequence([d['mask'].transpose(0, -1) for d in batch], batch_first=True).squeeze(2)
         output['app_id'] = torch.cat([d['app_id'] for d in batch])
+        output['captions'] = [d['captions'] for d in batch]
 
         if 'label' in batch[0]:
             output['label'] = torch.cat([d['label'] for d in batch])
 
         return output
-
-
-class TransactionQADataModule(pl.LightningDataModule):
-    def __init__(self, train_dataset_config: dict = None, val_dataset_config: dict = None):
-        super().__init__()
-        self.train_dataset_config = train_dataset_config
-        self.val_dataset_config = val_dataset_config
-
-        if train_dataset_config is not None:
-            self.train_ds = TransactionQADataset(**train_dataset_config).build_dataset()
-
-        if val_dataset_config is not None:
-            self.val_ds = TransactionQADataset(**val_dataset_config).build_dataset()
-
-    def train_dataloader(self):
-        if self.train_dataset_config is None:
-            raise KeyError("train_dataset_config is None")
-        else:
-            self.train_ds.set_epoch(self.trainer.current_epoch)
-            return DataLoader(self.train_ds,
-                              batch_size=self.train_dataset_config['batch_size'],
-                              num_workers=self.train_dataset_config['num_workers'],
-                              collate_fn=TransactionQADataset.collate_fn)
-
-    def val_dataloader(self):
-        if self.val_dataset_config is None:
-            raise KeyError("train_dataset_config is None")
-        else:
-            return DataLoader(self.val_ds,
-                              batch_size=self.val_dataset_config['batch_size'],
-                              num_workers=self.val_dataset_config['num_workers'],
-                              collate_fn=TransactionQADataset.collate_fn)

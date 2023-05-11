@@ -159,7 +159,7 @@ class MeanAmountBinnedTaskBinary(NumericTaskAbstract):
 
         return dict(
             question_start_tokens=question_start_tokens,
-            question_start_attention_mask=question_start_tokens_mask,
+            question_start_tokens_mask=question_start_tokens_mask,
             question_end_tokens=question_target_encoded_batch['input_ids'],
             question_end_attention_mask=question_target_encoded_batch['attention_mask'],
             target_tokens=target_encoded_batch['input_ids'],
@@ -412,7 +412,7 @@ class MeanAmountNumericTaskBinary(NumericTaskAbstract):
 
         return dict(
             question_start_tokens=question_start_tokens,
-            question_start_attention_mask=question_start_tokens_mask,
+            question_start_tokens_mask=question_start_tokens_mask,
             question_end_tokens=question_target_encoded_batch['input_ids'],
             question_end_attention_mask=question_target_encoded_batch['attention_mask'],
             target_tokens=target_encoded_batch['input_ids'],
@@ -661,7 +661,7 @@ class MeanAmountBinnedTaskOpenEnded(NumericTaskAbstract):
 
         return dict(
             question_start_tokens=question_start_tokens,
-            question_start_attention_mask=question_start_tokens_mask,
+            question_start_tokens_mask=question_start_tokens_mask,
             question_end_tokens=question_target_encoded_batch['input_ids'],
             question_end_attention_mask=question_target_encoded_batch['attention_mask'],
             target_tokens=target_encoded_batch['input_ids'],
@@ -890,7 +890,7 @@ class MeanAmountNumericTaskOpenEnded(NumericTaskAbstract):
 
         return dict(
             question_start_tokens=question_start_tokens,
-            question_start_attention_mask=question_start_tokens_mask,
+            question_start_tokens_mask=question_start_tokens_mask,  # question_start_attention_mask
             question_end_tokens=question_target_encoded_batch['input_ids'],
             question_end_attention_mask=question_target_encoded_batch['attention_mask'],
             target_tokens=target_encoded_batch['input_ids'],
@@ -1119,7 +1119,7 @@ class MinAmountNumericTaskOpenEnded(NumericTaskAbstract):
 
         return dict(
             question_start_tokens=question_start_tokens,
-            question_start_attention_mask=question_start_tokens_mask,
+            question_start_tokens_mask=question_start_tokens_mask,
             question_end_tokens=question_target_encoded_batch['input_ids'],
             question_end_attention_mask=question_target_encoded_batch['attention_mask'],
             target_tokens=target_encoded_batch['input_ids'],
@@ -1344,7 +1344,7 @@ class MaxAmountNumericTaskOpenEnded(NumericTaskAbstract):
 
         return dict(
             question_start_tokens=question_start_tokens,
-            question_start_attention_mask=question_start_tokens_mask,
+            question_start_tokens_mask=question_start_tokens_mask,
             question_end_tokens=question_target_encoded_batch['input_ids'],
             question_end_attention_mask=question_target_encoded_batch['attention_mask'],
             target_tokens=target_encoded_batch['input_ids'],
@@ -1570,7 +1570,7 @@ class LastAmountNumericTaskOpenEnded(NumericTaskAbstract):
 
         return dict(
             question_start_tokens=question_start_tokens,
-            question_start_attention_mask=question_start_tokens_mask,
+            question_start_tokens_mask=question_start_tokens_mask,
             question_end_tokens=question_target_encoded_batch['input_ids'],
             question_end_attention_mask=question_target_encoded_batch['attention_mask'],
             target_tokens=target_encoded_batch['input_ids'],
