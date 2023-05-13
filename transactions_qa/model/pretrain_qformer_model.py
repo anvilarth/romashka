@@ -58,6 +58,8 @@ class PretrainQFormerModel(pl.LightningModule):
         self.save_hyperparameters(ignore=['_logger', 'language_model', 'tokenizer',
                                           'transaction_model', 'qformer'])
 
+        self._prepare_model()
+
     def configure_optimizers(self):
         """
         Choose what optimizers and learning-rate schedulers to use in your optimization.
@@ -106,7 +108,9 @@ class PretrainQFormerModel(pl.LightningModule):
         if hasattr(self.language_model, "encoder"):
             self._is_encoder_decoder = True
         # For decoder-only
-        elif hasattr(self.language_model, "transformer"):
+        elif hasattr(self.language_model, "transformer") \
+                or ("gpt" in self.language_model.config._name_or_path.lower()) \
+                or ("opt" in self.language_model.config._name_or_path.lower()):
             self._is_encoder_decoder = False
         else:
             raise NotImplementedError(f"Unknown model type: {type(self.language_model)}")
@@ -127,11 +131,10 @@ class PretrainQFormerModel(pl.LightningModule):
 
     def _create_losses(self):
         # Use contrastive loss for embeddings comparison
-        self.loss_fn = InfoNCE(negative_mode = 'paired')
+        self.loss_fn = InfoNCE(negative_mode='paired')
 
     def model_step(self, batch: Union[Dict[str, torch.Tensor], Any],
-                   output_attentions: Optional[bool] = True,
-                   output_hidden_states: Optional[bool] = True) -> Any:
+                   output_attentions: Optional[bool] = True) -> Any:
         """
         Passes input batch through inner parts of module:
         1) a transaction sequences through Sequence embedder model (i.e. transactions model)
@@ -177,7 +180,7 @@ class PretrainQFormerModel(pl.LightningModule):
         # 3.2) Pass tokenized transaction captions through LM model -> last hisdden state of last token in sequence
         lm_outputs = self.language_model(batch_captions_encoded['input_ids'],
                                          attention_mask=batch_captions_encoded['attention_mask'],
-                                         output_attentions=False,
+                                         output_attentions=output_attentions,
                                          output_hidden_states=True,
                                          )
         last_hidden_state = lm_outputs['last_hidden_state']
@@ -240,7 +243,7 @@ class PretrainQFormerModel(pl.LightningModule):
             The loss value shown in the progress bar is smoothed (averaged) over the last values,
             so it differs from the actual loss returned in train/validation step.
         """
-        outputs, answer = self.model_step(batch)
+        outputs = self.model_step(batch)
         if outputs is None:
             return None
 
@@ -267,7 +270,7 @@ class PretrainQFormerModel(pl.LightningModule):
         Return:
             - Any object or value
         """
-        outputs, answer = self.model_step(batch)
+        outputs = self.model_step(batch)
         if outputs is None:
             return None
 

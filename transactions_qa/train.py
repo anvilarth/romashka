@@ -17,7 +17,7 @@ from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 
 # Use custom transformers version == 4.27.4 + modifications
-sys.path.insert(0, "/home/jovyan/abdullaeva/transactionsQA/transformers/src/")
+# sys.path.insert(0, "/home/jovyan/abdullaeva/transactionsQA/transformers/src/")
 import transformers
 from transformers import (AutoModelForSeq2SeqLM,
                           AutoModelForCausalLM,
@@ -46,7 +46,8 @@ from romashka.transactions_qa.model import (EncoderSimpleModel, EncoderFrozenMod
                                            DecoderSimpleModel, DecoderFrozenModel, DecoderRetrievalModel)
 
 from romashka.transactions_qa.model.tqa_model import TransactionQAModel
-from romashka.transactions_qa.layers.connector import (make_linear_connector,
+from romashka.transactions_qa.layers.connector import (CONNECTOR_TYPES,
+                                                       make_linear_connector,
                                                        make_recurrent_connector,
                                                        make_complex_linear_connector,
                                                        make_transformer_connector,
@@ -278,6 +279,7 @@ def main():
         connector = make_complex_linear_connector(
             output_size=trns_output_size,
             input_size=lm_input_size,
+            **connector_args
 
         )
     elif model_args.connector_type == "recurrent":
@@ -307,16 +309,30 @@ def main():
         )
     elif model_args.connector_type == "qformer":
         # Connector args are hardcoded, should be changed here
+        # qformer_config = {
+        #       "attention_probs_dropout_prob": 0.1,
+        #       "classifier_dropout": 0.1,
+        #       "cross_attention_frequency": 2,
+        #       "hidden_act": "gelu",
+        #       "hidden_dropout_prob": 0.1,
+        #       "initializer_range": 0.02,
+        #       "intermediate_size": 1024,
+        #       "max_position_embeddings": 1024,
+        #       "num_attention_heads": 8,
+        #       "num_hidden_layers": 4,
+        #       "position_embedding_type": "absolute",
+        # }
         qformer_config = {
               "attention_probs_dropout_prob": 0.1,
               "classifier_dropout": 0.1,
               "cross_attention_frequency": 2,
               "hidden_act": "gelu",
               "hidden_dropout_prob": 0.1,
+              "hidden_size": 256,
               "initializer_range": 0.02,
               "intermediate_size": 1024,
-              "max_position_embeddings": 1024,
-              "num_attention_heads": 8,
+              "max_position_embeddings": 256,
+              "num_attention_heads": 4,
               "num_hidden_layers": 4,
               "position_embedding_type": "absolute",
         }
