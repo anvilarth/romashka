@@ -6,7 +6,6 @@ from pathlib import Path
 from collections import OrderedDict
 
 import wandb
-
 os.environ["WANDB_MODE"] = "online"
 
 import warnings

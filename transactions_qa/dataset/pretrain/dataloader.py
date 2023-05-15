@@ -80,3 +80,35 @@ class TransactionCaptioningDataset:
             output['label'] = torch.cat([d['label'] for d in batch])
 
         return output
+
+
+class TransactionCaptioningDataModule(pl.LightningDataModule):
+    def __init__(self, train_dataset_config: dict = None, val_dataset_config: dict = None):
+        super().__init__()
+        self.train_dataset_config = train_dataset_config
+        self.val_dataset_config = val_dataset_config
+
+        if train_dataset_config is not None:
+            self.train_ds = TransactionCaptioningDataset(**train_dataset_config).build_dataset()
+
+        if val_dataset_config is not None:
+            self.val_ds = TransactionCaptioningDataset(**val_dataset_config).build_dataset()
+
+    def train_dataloader(self):
+        if self.train_dataset_config is None:
+            raise KeyError("train_dataset_config is None")
+        else:
+            self.train_ds.set_epoch(self.trainer.current_epoch)
+            return DataLoader(self.train_ds,
+                              batch_size=self.train_dataset_config['batch_size'],
+                              num_workers=self.train_dataset_config['num_workers'],
+                              collate_fn=TransactionCaptioningDataset.collate_fn)
+
+    def val_dataloader(self):
+        if self.val_dataset_config is None:
+            raise KeyError("train_dataset_config is None")
+        else:
+            return DataLoader(self.val_ds,
+                              batch_size=self.val_dataset_config['batch_size'],
+                              num_workers=self.val_dataset_config['num_workers'],
+                              collate_fn=TransactionCaptioningDataset.collate_fn)

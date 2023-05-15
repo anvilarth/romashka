@@ -88,6 +88,26 @@ class ModelArguments:
         metadata={"help": "A connector layer output size (as an embedding size of Language model)."},
     )
 
+    num_queries: Optional[int] = field(
+        default=32,
+        metadata={"help": "A number of trainable queries for Q-Former connector."},
+    )
+
+    shared_dim: Optional[int] = field(
+        default=768,
+        metadata={"help": "A shared dimension for contrastive loss calculation."},
+    )
+
+    num_attention_heads: Optional[int] = field(
+        default=4,
+        metadata={"help": "A number of attention heads for Q-Former connector."},
+    )
+
+    num_hidden_layers: Optional[int] = field(
+        default=4,
+        metadata={"help": "A number of hidden layers for Q-Former connector."},
+    )
+
     cache_dir: Optional[str] = field(
         default=None,
         metadata={"help": "Where do you want to store the pretrained models downloaded from huggingface.co"},
