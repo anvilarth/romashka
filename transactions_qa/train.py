@@ -366,13 +366,6 @@ def main():
     }
 
     if model_args.language_model_type == "encoder-decoder":
-        # model_ = EncoderSimpleModel(
-        #     language_model=lm_model,
-        #     transaction_model=transactions_model,
-        #     tokenizer=tokenizer,
-        #     connector=connector,
-        #     **lm_model_config
-        # )
         lm_model_config = {
             "do_freeze_tm": training_args.do_freeze_transactions_model,
             "do_freeze_lm": training_args.do_freeze_language_model,
@@ -396,13 +389,6 @@ def main():
             **lm_model_config
         )
     else:
-        # model_ = DecoderFrozenModel(
-        #     language_model=lm_model,
-        #     transaction_model=transactions_model,
-        #     tokenizer=tokenizer,
-        #     connector=connector,
-        #     **lm_model_config
-        # )
         lm_model_config = {
             "do_freeze_tm": training_args.do_freeze_transactions_model,
             "do_freeze_lm": training_args.do_freeze_language_model,

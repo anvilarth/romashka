@@ -255,8 +255,8 @@ class QFormerModel(nn.Module):
         )
 
         # Total contrastive loss
-        loss_contrastive = (F.cross_entropy(sim_s2t, targets, label_smoothing=0.1)
-                            + F.cross_entropy(sim_t2s, targets, label_smoothing=0.1)
+        loss_contrastive = (F.cross_entropy(sim_s2t, targets)  # label_smoothing=0.1
+                            + F.cross_entropy(sim_t2s, targets)  # label_smoothing=0.1
                             ) / 2
 
         return loss_contrastive
