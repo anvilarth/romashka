@@ -1,12 +1,12 @@
 import torch
 import torch.nn as nn
 from typing import Optional, Union, List, Dict, Any
-from transformers import PretrainedConfig
+from transformers import PretrainedConfig, PreTrainedTokenizerBase
 from romashka.transactions_qa.layers.initialization import (init_xavier_uniform_layers,
                                                             init_linear)
 from romashka.transactions_qa.layers.layers import TransformerEncoderLayer
-from romashka.transactions_qa.layers.qformer import QFromerConnector
-
+# from romashka.transactions_qa.layers.qformer_connector import QFromerConnector
+from romashka.transactions_qa.layers.qformer import QFormerModel
 
 CONNECTOR_TYPES = [
     "linear",
@@ -412,8 +412,7 @@ class TransformerConnector(nn.Module):
 
 def make_qformer_connector(output_size: int,
                            input_size: int,
-                           vocab_size: int,
-                           pad_token_id: int,
+                           tokenizer: Optional[PreTrainedTokenizerBase] = None,
                            config: Optional[Union[PretrainedConfig, Dict[str, Any]]] = None,
                            num_queries: Optional[int] = 32,
                            device: Optional[Union[torch.device, str]] = 'cpu'):
@@ -422,8 +421,7 @@ def make_qformer_connector(output_size: int,
     Args:
         output_size: an output size of an embeddings model (i.e. input size for the first connector layer);
         input_size: an input size of an autoregressive model (i.e. output size for the last connector layer);
-        vocab_size: a vocabulary size of LM (need to be passed AFTER extending it with special/additional tokens!);
-        pad_token_id: a pad_token_id from LM tokenizer;
+        tokenizer: a tokenizer from LM (need to be passed AFTER extending it with special/additional tokens!);
         config: a pretrained config for Q-Former model;
         num_queries: a number of queries for cross attention with embeddings
                     (equals to output sequence length of transactions history);
@@ -441,9 +439,85 @@ def make_qformer_connector(output_size: int,
     return QFromerConnector(
         output_size=output_size,
         input_size=input_size,
-        vocab_size=vocab_size,
-        pad_token_id=pad_token_id,
         num_queries=num_queries,
         config=config,
         device=device
     )
+
+
+DEFAULT_CONFIG = {
+    "text_model_name": "prajjwal1/bert-mini",  # bert-mini
+    "sequence_len": 384,
+    "num_queries": 32,
+    "shared_dim": 768,
+    "hidden_size": 256,
+    "num_attention_heads": 4,
+    "num_hidden_layers": 4,
+    "intermediate_size": 1024,
+    "cross_attention_frequency": 2,
+    "attention_probs_dropout_prob": 0.1,
+    "hidden_act": "gelu",
+    "hidden_dropout_prob": 0.1,
+    "initializer_range": 0.02,
+    "max_position_embeddings": 1024,
+    "max_text_sequence_len": 512,
+    "truncation_side": "right",
+    "position_embedding_type": "absolute",
+}
+
+
+class QFromerConnector(nn.Module):
+    """
+    Querying Transformer (Q-Former), used in BLIP-2.
+    """
+
+    def __init__(self,
+                 output_size: int,
+                 input_size: int,
+                 tokenizer: Optional[PreTrainedTokenizerBase] = None,
+                 num_queries: Optional[int] = 32,
+                 config: Optional[Dict[str, Any]] = None,
+                 device: Optional[Union[torch.device, str]] = 'cpu'):
+
+        super().__init__()
+        self.output_size = output_size  # output size of embedder model
+        self.input_size = input_size  # input size of second model / -> output shape for last linear layer
+        self.num_queries = num_queries
+        self.tokenizer = tokenizer
+
+        self.config = dict()
+        if config is None:
+            self.config = DEFAULT_CONFIG
+        else:
+            self.config = config
+
+        # Configure model dependent parameters
+        # usually set to LLM hidden_size
+        self.config['hidden_size'] = input_size if self.config.get('hidden_size') is None \
+            else self.config.get('hidden_size')
+        self.config['shared_dim'] = input_size if self.config.get('shared_dim') is None \
+            else self.config.get('shared_dim')
+
+        self.config['num_queries'] = num_queries if num_queries is not None else self.config['num_queries']
+        self.config['sequence_len'] = output_size  # equals to embedder output size
+        self.config['tokenizer'] = tokenizer
+
+        self.device = device
+        self._create_layers()
+
+    def _create_layers(self):
+        try:
+            self.qformer = QFormerModel(**self.config).to(self.device)
+        except Exception as e:
+            print(f"Error occurred during Q-Former connector creation:\n{e}")
+            raise AttributeError(f"Error occurred during Q-Former connector creation:\n{e}")
+
+    def forward(self, embeds: torch.Tensor,
+                output_attentions: Optional[bool] = False,
+                output_hidden_states: Optional[bool] = False,
+                return_dict: Optional[bool] = True,
+                *args, **kwargs) -> torch.Tensor:
+        outputs = self.qformer(sequence_embeds=embeds,
+                               output_attentions=output_attentions,
+                               is_train=False)
+        return outputs.get('sequence_features')

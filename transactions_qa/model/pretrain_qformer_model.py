@@ -11,19 +11,34 @@ import torch.nn.functional as F
 import transformers
 import pytorch_lightning as pl
 from pytorch_lightning.utilities import rank_zero_info
-from pytorch_lightning.loggers import WandbLogger
 
 from romashka.logging_handler import get_logger
-from romashka.transactions_qa.utils import seed_everything
-from romashka.transactions_qa.losses.infonce_loss import InfoNCE
-from romashka.transactions_qa.utils import (mask_padding, mask_lm_labels_padding)
+
+
+DEFAULT_CONFIG = {
+    "sequence_len": 384,
+    "num_queries": 32,
+    "shared_dim": 256,
+    "hidden_size": 256,
+    "num_attention_heads": 4,
+    "num_hidden_layers": 4,
+    "intermediate_size": 1024,
+    "cross_attention_frequency": 2,
+    "attention_probs_dropout_prob": 0.1,
+    "hidden_act": "gelu",
+    "hidden_dropout_prob": 0.1,
+    "initializer_range": 0.02,
+    "max_position_embeddings": 1024,
+    "max_text_sequence_len": 512,
+    "truncation_side": "right",
+    "position_embedding_type": "absolute",
+}
 
 
 class PretrainQFormerModel(pl.LightningModule):
     def __init__(self,
-                 language_model: nn.Module,
-                 transaction_model: nn.Module,
-                 tokenizer: transformers.PreTrainedTokenizerBase,
+                 language_model_name: str,
+                 sequence_encoder_model: nn.Module,
                  qformer: Optional[nn.Module] = None,
                  learning_rate: Optional[float] = 5e-5,
                  scheduler_type: Optional[Union[transformers.SchedulerType, str]] = "linear",
@@ -33,6 +48,7 @@ class PretrainQFormerModel(pl.LightningModule):
                  warmup_steps: Optional[int] = 100,
                  training_steps: Optional[int] = 10_000,
                  verbose_for_debug: Optional[bool] = False,
+                 qformer_kwargs: Optional[Dict[str, Any]] = None,
                  **additional_kwargs
                  ):
         super().__init__()
@@ -40,10 +56,13 @@ class PretrainQFormerModel(pl.LightningModule):
             name=self.__class__.__name__,
             logging_level="INFO"
         )
-        self.language_model = language_model
-        self.tokenizer = tokenizer
-        self.transaction_model = transaction_model
+        self.language_model_name = language_model_name
+        self.sequence_encoder_model = sequence_encoder_model
         self.qformer = qformer
+
+        self.qformer_kwargs = qformer_kwargs if qformer_kwargs is not None else DEFAULT_CONFIG
+        self.qformer_kwargs['text_model_name'] = self.language_model_name
+        self.qformer_kwargs['sequence_encoder_model'] = self.sequence_encoder_model
 
         self.warmup_steps: int = warmup_steps
         self.training_steps: int = training_steps
@@ -54,9 +73,7 @@ class PretrainQFormerModel(pl.LightningModule):
         self.adam_epsilon = adam_epsilon
 
         self._verbose_for_debug: bool = verbose_for_debug
-
-        self.save_hyperparameters(ignore=['_logger', 'language_model', 'tokenizer',
-                                          'transaction_model', 'qformer'])
+        self.save_hyperparameters(ignore=['_logger', 'sequence_encoder_model', 'qformer'])
 
         self._prepare_model()
 
@@ -97,53 +114,23 @@ class PretrainQFormerModel(pl.LightningModule):
         # Freeze Event Sequence encoder & LLM
         self._freeze_parameters()
 
-        # Set LM model type: encoder-decoder / decoder-only
-        self._set_model_type()
-
-        # Create losses for contrastive
-        self._create_losses()
-
-    def _set_model_type(self):
-        # For encoder-decoder models
-        if hasattr(self.language_model, "encoder"):
-            self._is_encoder_decoder = True
-        # For decoder-only
-        elif hasattr(self.language_model, "transformer") \
-                or ("gpt" in self.language_model.config._name_or_path.lower()) \
-                or ("opt" in self.language_model.config._name_or_path.lower()):
-            self._is_encoder_decoder = False
-        else:
-            raise NotImplementedError(f"Unknown model type: {type(self.language_model)}")
-
-        self._logger.info(f"Language model type: `{'encoder-decoder' if self._is_encoder_decoder else 'decoder'}`")
-
     def _freeze_parameters(self):
         # Freezing models weights
-        self.transaction_model.eval()
-        self._logger.info(f"Freezing transaction model's parameters...")
-        for param in self.transaction_model.parameters():
+        self.sequence_encoder_model.eval()
+        self._logger.info(f"Freezing sequence encoder model's parameters...")
+        for param in self.sequence_encoder_model.parameters():
             param.requires_grad = False
-
-        self.language_model.eval()
-        self._logger.info(f"Freezing language model's parameters...")
-        for param in self.language_model.parameters():
-            param.requires_grad = False
-
-    def _create_losses(self):
-        # Use contrastive loss for embeddings comparison
-        self.loss_fn = InfoNCE(negative_mode='paired')
 
     def model_step(self, batch: Union[Dict[str, torch.Tensor], Any],
                    output_attentions: Optional[bool] = True) -> Any:
         """
         Passes input batch through inner parts of module:
-        1) a transaction sequences through Sequence embedder model (i.e. transactions model)
+        1) input sequences through Sequence embedder model (i.e. sequence_encoder_model)
             -> to get embeddings [bs, hist_seq_len];
-        2) those transactions embeddings through Q-Former model
+        2) those sequences embeddings + text captions through Q-Former model
             to get output queries representation [bs, num_queries];
-        3) transaction captions through LM model -> to get a single embedding of CLS token
-            (aggregate all token sequence info in it);
-        4) Calculate Contrastive loss for embedding of CLS token vs. output queries representations
+        3) Calculate Contrastive loss for embedding of
+            text representations vs. output queries representations vs. sequences representations
             (mine negatives within batch).
         Args:
             batch: a prepared with chosen task batch of items;
@@ -154,79 +141,19 @@ class PretrainQFormerModel(pl.LightningModule):
             LM model's outputs with added attributes (based on values of `output_attentions`
             and `output_hidden_states`)
         """
-        # 1) a transaction sequences through Sequence embedder model (i.e. transactions model)
+        # 1) Sequences through Sequence embedder model (i.e. sequence_encoder_model)
         #     -> to get embeddings [bs, hist_seq_len];
-        # transactions model requires: ['mask', 'cat_features', 'num_features', 'meta_features']
-        # return: Tuple[
-        # torch.Tensor, - embeddings [bs, hist_seq_len]
-        # torch.Tensor - mask [bs, hist_seq_len]
-        # ]
-        transaction_mask = batch['mask']
-        batch_size = transaction_mask.size(0)
-        device = transaction_mask.device
+        sequences_embeddings, sequences_embeddings_mask = self.sequence_encoder_model.get_embs(batch)
 
-        transactions_embeddings, transactions_embeddings_mask = self.transaction_model.get_embs(batch)
-
-        # 2) those transactions embeddings through Q-Former model
-        # to get output queries representation [bs, num_queries];
-        transactions_embeddings = self.qformer(transactions_embeddings)
-
-        # 3.1) Tokenize + pad to max_length captions
+        # 2) those sequences embeddings + text captions through Q-Former model
         batch_captions = [caption[0] for caption in batch['captions']]
-        batch_captions_encoded = self.tokenizer(batch_captions,
-                                                padding=True, truncation=False,
-                                                return_tensors='pt').to(device)
-
-        # 3.2) Pass tokenized transaction captions through LM model -> last hisdden state of last token in sequence
-        lm_outputs = self.language_model(batch_captions_encoded['input_ids'],
-                                         attention_mask=batch_captions_encoded['attention_mask'],
-                                         output_attentions=output_attentions,
-                                         output_hidden_states=True,
-                                         )
-        last_hidden_state = lm_outputs['last_hidden_state']
-
-        # Get indexes of last token (before paddings)
-        sequence_lengths = (torch.ne(batch_captions_encoded['input_ids'],
-                                     self.tokenizer.pad_token_id).sum(-1) - 1).to(device)
-
-        # Get last token embedding
-        pooled_logits = last_hidden_state[torch.arange(batch_size, device=device), sequence_lengths, :]
-
-        # 3.3) Compare with each query to get the one with max similarity per batch sample (size: [bs, 1])
-        # pooled_logits_ = pooled_logits.unsqueeze(1).repeat(1, transactions_embeddings.size(1), 1)
-
-        # for each caption select positive and all neagtive pairs in batch (max per queries)
-        positive_queries = []
-        all_negative_queries = []
-
-        for bi, logits in enumerate(pooled_logits):
-            logits_ = logits[None, None].repeat(batch_size, transactions_embeddings.size(1), 1)
-            sim_ = F.cosine_similarity(logits_, transactions_embeddings, dim=2, eps=1e-6)
-            max_sim_queries_ids = sim_.argmax(1)  # max sim score per each query per each elem in batch -> size: [bs,]
-
-            # Positive pair -> max scored query in the SAME sample in batch
-            pos_query = transactions_embeddings[bi][max_sim_queries_ids[bi]]
-            positive_queries.append(pos_query.unsqueeze(0))
-
-            # Negative pairs: all max scored queries (with current caption) in OTHER samples in batch
-            negative_queries = [transactions_embeddings[i][max_sim_queries_ids[i]]
-                                for i in range(batch_size) if i != bi]
-            negative_queries = torch.vstack(negative_queries)
-            all_negative_queries.append(negative_queries.unsqueeze(0))
-
-        positive_queries = torch.vstack(positive_queries)  # [N * D] -> 1 positive pair
-        all_negative_queries = torch.vstack(all_negative_queries)  # [N * M * D] -> M negative pairs
-
-        # Calculate loss
-        loss = self.loss_fn(
-            pooled_logits,  # [N * D] -> 1 positive pair
-            positive_key=positive_queries,  # [N * D] -> 1 positive pair
-            negative_keys=all_negative_queries  # [N * M * D] -> M negative pairs
-            )
-
-        return dict(
-            loss=loss
+        outputs = self.qformer(
+            text=batch_captions,
+            sequence_embeds=sequences_embeddings,
+            is_train=True
         )
+
+        return outputs
 
     def training_step(self, batch, batch_idx: Optional[int] = None) -> Optional[Any]:
         r"""

@@ -6,9 +6,11 @@ from pathlib import Path
 from collections import OrderedDict
 
 import wandb
+
 os.environ["WANDB_MODE"] = "online"
 
 import warnings
+
 warnings.filterwarnings("ignore")
 
 import torch
@@ -43,7 +45,7 @@ from romashka.transactions_qa.dataset.dataloader import (TransactionQADataset, T
 from romashka.transactions_qa.transactions_model.model import TransactionsModel
 
 from romashka.transactions_qa.model import (EncoderSimpleModel, EncoderFrozenModel, EncoderRetrievalModel,
-                                           DecoderSimpleModel, DecoderFrozenModel, DecoderRetrievalModel)
+                                            DecoderSimpleModel, DecoderFrozenModel, DecoderRetrievalModel)
 
 from romashka.transactions_qa.model.tqa_model import TransactionQAModel
 from romashka.transactions_qa.layers.connector import (CONNECTOR_TYPES,
@@ -53,7 +55,6 @@ from romashka.transactions_qa.layers.connector import (CONNECTOR_TYPES,
                                                        make_transformer_connector,
                                                        make_qformer_connector)
 from romashka.transactions_qa.train_utils import get_warmup_steps
-
 
 from romashka.transactions_qa.tasks import AutoTask
 from romashka.transactions_qa.utils import (get_last_checkpoint, get_projections_maps)
@@ -182,7 +183,6 @@ def main():
 
     logger.info(f"Renaming & loading transactions model...")
     transactions_model.load_state_dict(renamed_state_dict)
-
 
     # Configure and load from HF hub LM model
     logger.info(f"Loading Language model: `{model_args.language_model_name_or_path}`...")
@@ -323,23 +323,28 @@ def main():
         #       "position_embedding_type": "absolute",
         # }
         qformer_config = {
-              "attention_probs_dropout_prob": 0.1,
-              "classifier_dropout": 0.1,
-              "cross_attention_frequency": 2,
-              "hidden_act": "gelu",
-              "hidden_dropout_prob": 0.1,
-              "hidden_size": 256,
-              "initializer_range": 0.02,
-              "intermediate_size": 1024,
-              "max_position_embeddings": 256,
-              "num_attention_heads": 4,
-              "num_hidden_layers": 4,
-              "position_embedding_type": "absolute",
+            "text_model_name": "prajjwal1/bert-mini",  # bert-mini
+            "sequence_len": 384,
+            "num_queries": 32,
+            "shared_dim": 768,
+            "hidden_size": 256,
+            "num_attention_heads": 4,
+            "num_hidden_layers": 4,
+            "intermediate_size": 1024,
+            "cross_attention_frequency": 2,
+            "attention_probs_dropout_prob": 0.1,
+            "hidden_act": "gelu",
+            "hidden_dropout_prob": 0.1,
+            "initializer_range": 0.02,
+            "max_position_embeddings": 1024,
+            "max_text_sequence_len": 512,
+            "truncation_side": "right",
+            "position_embedding_type": "absolute",
+            "device": device
         }
         connector_args = {
             'config': qformer_config,
-            'vocab_size': len(tokenizer),
-            "pad_token_id": tokenizer.pad_token_id,
+            'tokenizer': tokenizer,
             "num_queries": 32
         }
         connector = make_qformer_connector(
@@ -440,7 +445,7 @@ def main():
                                **transactionsQA_model_config,
                                **lm_model_config,  # as additional kwargs -> to save hyperparameters to checkpoint
                                **connector_args
-                              )
+                               )
 
     # Datasets & Dataloader & Other utils
     if training_args.do_train and "train" in data_files:
