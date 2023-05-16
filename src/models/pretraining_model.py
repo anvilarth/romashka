@@ -25,6 +25,7 @@ class MySeqEncoder(SeqEncoderContainer):
                 head_type='pretraining_last_output'
         ):
 
+        #TODO Fix this
         folder = '/home/jovyan/romashka'
         projections_maps = get_projections_maps(relative_folder=folder)
         transactions_model_config = {

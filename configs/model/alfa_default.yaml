@@ -13,5 +13,6 @@ scheduler:
   num_training_steps:  "${eval:'${trainer.max_epochs} * 16500'}"                                               
 
 encoder_type: 'whisper/tiny'
-head_type: 'last_output'
 task_name: ${task.task_name}
+num_classes: ${task.num_classes}
+head_type: ${task.head_type} 

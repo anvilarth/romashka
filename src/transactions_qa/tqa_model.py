@@ -15,7 +15,8 @@ from src.transactions_qa.layers.connector import (make_linear_connector,
                                                        make_recurrent_connector)
 from src.tasks.task_abstract import AbstractTask
 from src.utils.logging_handler import get_logger
-from src.transactions_qa.utils import get_split_indices, prepare_splitted_batch, collate_batch_dict
+from src.transactions_qa.utils import (get_split_indices, prepare_splitted_batch, collate_batch_dict, get_exponent_number, get_mantissa_number)
+
 
 from transformers import Adafactor
 from transformers.optimization import AdafactorSchedule
@@ -42,6 +43,7 @@ class TransactionQAModel(pl.LightningModule):
                  scale_parameter: Optional[bool] = False,
                  warmup_steps: Optional[int] = 100,
                  training_steps: Optional[int] = 10_000,
+                 use_numerical: Optional[bool] = False,
                  verbose_for_debug: Optional[bool] = False):
         super().__init__()
         self._logger = get_logger(
@@ -57,6 +59,14 @@ class TransactionQAModel(pl.LightningModule):
             embedding_model=self.transaction_model,
             autoregressive_model=self.language_model) \
             if connector is None else connector
+
+        self.use_numerical = use_numerical
+        self.mantissa_loss = nn.L1Loss()
+        self.exponent_loss = nn.CrossEntropyLoss()
+        self.exponent_head = nn.Linear(self.connector.get_input_size(), 17)
+        self.mantissa_head = nn.Linear(self.connector.get_input_size(), 1)
+        self.training_mode = 'lm'
+        
         self.tasks = tasks
         self.checkpoint_dir = checkpoint_dir
 
@@ -213,6 +223,7 @@ class TransactionQAModel(pl.LightningModule):
                           f"`embedding_dim`: {resized_embedds.embedding_dim}")
 
     def tokenize_texts(self, batch):
+        batch_size = batch['mask'].shape[0]
         device = batch['mask'].device
         transactions_embedding_mask = batch['mask']
 
@@ -220,16 +231,16 @@ class TransactionQAModel(pl.LightningModule):
         
         question_start_encoded = self.tokenizer(batch['question_start_string'],
                                         padding=True,
-                                        return_tensors='pt').to(device)
+                                        return_tensors='pt',
+                                        add_special_tokens=False).to(device)
 
-        question_start_tokens, question_start_tokens_mask = question_start_encoded.input_ids[:, :-1], question_start_encoded.attention_mask[:, :-1]
-
+        question_start_tokens, question_start_tokens_mask = question_start_encoded.input_ids, question_start_encoded.attention_mask
         ### Tokenizing question end
 
         question_target_encoded_batch = self.tokenizer(batch['question_end_string'],
                                                     padding=True,
-                                                    truncation=True,
-                                                    return_tensors='pt').to(device)
+                                                    return_tensors='pt',
+                                                    add_special_tokens=False).to(device)
 
         question_end_tokens_mask = question_target_encoded_batch.attention_mask
 
@@ -241,21 +252,25 @@ class TransactionQAModel(pl.LightningModule):
         )
 
         ###
+        # Not using add_skip_special_tokens to keet tensor in Long format
+        answer_template_encoded = self.tokenizer(batch['answer_start_string'],
+                                                        padding=True,
+                                                        return_tensors='pt'
+                                                        ).to(device)
 
         target_encoded_batch = self.tokenizer(batch['answer_target_string'],
                                         padding=True,
-                                        return_tensors='pt').to(device)
-
-
-        answer_template_encoded = self.tokenizer(batch['answer_start_string'],
-                                                        padding=True,
-                                                        return_tensors='pt').to(device)
+                                        return_tensors='pt',
+                                        add_special_tokens=False).to(device)
 
         batch_answer_encoded = torch.cat([answer_template_encoded.input_ids[:, :-1],
-                                          target_encoded_batch.input_ids], dim=1).to(device)
+                                          target_encoded_batch.input_ids], dim=1)
         
         batch_answer_mask = torch.cat([answer_template_encoded.attention_mask[:, :-1],
                                        target_encoded_batch.attention_mask], dim=1)
+
+        eos_mask = torch.ones(batch_size, 1, dtype=torch.long, device=device) 
+        eos_tokens = eos_mask * self.tokenizer.eos_token_id
 
         return dict(
             question_start_tokens=question_start_tokens,
@@ -263,10 +278,89 @@ class TransactionQAModel(pl.LightningModule):
             target_tokens=target_encoded_batch['input_ids'],
             answer_tokens=batch_answer_encoded,  # template + targets
             answer_mask=batch_answer_mask,
+            question_start_tokens_mask=question_start_tokens_mask,
+            question_end_tokens_mask=question_end_tokens_mask,
             encoder_input_mask=encoder_input_mask,
+            eos_tokens_mask=eos_mask,
+            eos_tokens=eos_tokens
         )
         
+    def construct_lm_input(self,qa_batch, batch):
+        question_start_embeddings_batch = self.language_model.encoder.embed_tokens(
+            qa_batch['question_start_tokens'])  # call for (embed_tokens): Embedding(32128, 512)
+        # question_end_tokens: torch.Size([batch_size, len(max_question_end_tokens)])
+        question_end_embeddings_batch = self.language_model.encoder.embed_tokens(
+            qa_batch['question_end_tokens'])  # call for (embed_tokens): Embedding(32128, 512)
 
+        transactions_embeddings = self.transaction_model.get_embs(batch)[0]
+
+        # next pass them to connector == linear mapping -> to LM inner dim
+        transactions_embeddings = self.connector(transactions_embeddings)
+
+        # Get general LM's encoder input as:
+        # Q_start_tokens + TRNS_embeddings + Q_end_tokens
+        encoder_input = torch.cat([question_start_embeddings_batch,
+                                   transactions_embeddings,
+                                   question_end_embeddings_batch], dim=1)
+        if 'encoder_input_mask' in qa_batch:
+            encoder_input_mask = qa_batch['encoder_input_mask']
+
+        else:
+            encoder_input_mask = torch.cat(
+                [qa_batch['question_start_tokens_mask'],
+                batch['mask'],
+                qa_batch['question_end_tokens_mask']],dim=1
+                )
+
+        # Create answers + masks for LM's decoder inputs
+        batch_answers = qa_batch['answer_tokens']
+        # was: torch.cat([qa_batch['answer_template_tokens'], qa_batch['target_tokens']], dim=1)
+        batch_answers_mask = qa_batch['answer_mask']
+        # torch.cat([qa_batch['answer_mask'], qa_batch['target_attention_mask']], dim=1)
+
+        return dict(inputs_embeds=encoder_input,
+                    attention_mask=encoder_input_mask,
+                    labels=batch_answers,
+                    decoder_attention_mask=batch_answers_mask
+        )
+    
+    def get_few_shot_batch(self, qa_batch, batch):
+        question_start_embeddings_batch = self.language_model.encoder.embed_tokens(qa_batch['question_start_tokens'])  
+        # removing <EOS> token
+        question_end_embeddings_batch = self.language_model.encoder.embed_tokens(qa_batch['question_end_tokens']) 
+        question_answer_embeddings_batch = self.language_model.encoder.embed_tokens(qa_batch['answer_tokens']) 
+        question_eos_embeddings_batch = self.language_model.encoder.embed_tokens(qa_batch['eos_tokens']) 
+
+        # Get transaction embedding
+        transactions_embeddings = self.transaction_model.get_embs(batch)[0]
+        transactions_embeddings = self.connector(transactions_embeddings)
+
+        # Get general LM's encoder input as:
+        # Q_start_tokens + TRNS_embeddings + Q_end_tokens
+        encoder_input = torch.cat([question_start_embeddings_batch,
+                                    transactions_embeddings,
+                                    question_end_embeddings_batch,
+                                    question_answer_embeddings_batch], dim=1)
+
+        encoder_input_mask = torch.cat([
+            qa_batch['question_start_tokens_mask'],
+            batch['mask'],
+            qa_batch['question_end_tokens_mask'],
+            qa_batch['answer_mask'],
+            qa_batch['eos_tokens_mask']],dim=1
+            )
+
+        # Create answers + masks for LM's decoder inputs
+        batch_answers = qa_batch['answer_tokens'][-1]
+        # was: torch.cat([qa_batch['answer_template_tokens'], qa_batch['target_tokens']], dim=1)
+        batch_answers_mask = qa_batch['answer_mask'][-1]
+
+        res = encoder_input.flatten(0,1)[:-(question_answer_embeddings_batch.shape[1] + qa_batch['eos_tokens_mask'].shape[1])].unsqueeze(0)
+        return dict(inputs_embeds=res,
+                    attention_mask=encoder_input_mask,
+                    labels=batch_answers,
+                    decoder_attention_mask=batch_answers_mask
+        )
 
     def model_step(self, batch, task_idx: Optional[int] = None) -> Tuple[Any, torch.Tensor]:
         # Sample single task
@@ -288,69 +382,31 @@ class TransactionQAModel(pl.LightningModule):
 
             batches.append(tmp_batch)
         
-        new_batch = collate_batch_dict(batches)
-
         if len(batches) == 0:
             return None, None
-
+        
+        new_batch = collate_batch_dict(batches)
         qa_batch = self.tokenize_texts(new_batch)
 
         transactions_history_lengths = batch['mask'].sum(1)
 
-        # Question template: to embedding of LM
-        # torch.Size([1, len(question_start_tokens))
-        question_start_embeddings_batch = self.language_model.encoder.embed_tokens(
-            qa_batch['question_start_tokens'])  # call for (embed_tokens): Embedding(32128, 512)
-        # question_end_tokens: torch.Size([batch_size, len(max_question_end_tokens)])
-        question_end_embeddings_batch = self.language_model.encoder.embed_tokens(
-            qa_batch['question_end_tokens'])  # call for (embed_tokens): Embedding(32128, 512)
-
-        # Answer template: encode + strip </s> (EOS) token
-        # answer_template_encoded = self.tokenizer.encode(task.answer_template,
-        #                                                 return_tensors='pt')[:-1].to(self.device)
-        # batch_answer_template_encoded = answer_template_encoded.repeat(batch_size, 1)
-        # batch_answer_mask = torch.ones(batch_size, answer_template_encoded.shape[1]).to(self.device)
-
-        # Get transactions embeddings for initial batch
-        # transactions model requires: ['mask', 'cat_features', 'num_features', 'meta_features']
-        # + optionally: 'time' - ??? maybe 'event_time' ???
-        # return: Tuple[
-        # torch.Tensor, - embeddings -> we need this
-        # torch.Tensor - mask
-        # ]
-        transactions_embeddings = self.transaction_model.get_embs(batch)[0]
-
-        # next pass them to connector == linear mapping -> to LM inner dim
-        transactions_embeddings = self.connector(transactions_embeddings)
-
-        # Get general LM's encoder input as:
-        # Q_start_tokens + TRNS_embeddings + Q_end_tokens
-        encoder_input = torch.cat([question_start_embeddings_batch,
-                                   transactions_embeddings,
-                                   question_end_embeddings_batch], dim=1)
-        if 'encoder_input_mask' in qa_batch:
-            encoder_input_mask = qa_batch['encoder_input_mask']
-
+        
+        if self.training_mode == 'few_shot':
+            model_input = self.get_few_shot_batch(qa_batch, batch)
+        elif self.training_mode == 'lm':
+            model_input = self.construct_lm_input(qa_batch, batch)
         else:
-            encoder_input_mask = torch.cat(
-                [qa_batch['question_start_attention_mask'],
-                batch['mask'],
-                qa_batch['question_end_attention_mask']],dim=1
-                )
-
-        # Create answers + masks for LM's decoder inputs
-        batch_answers = qa_batch['answer_tokens']
-        # was: torch.cat([qa_batch['answer_template_tokens'], qa_batch['target_tokens']], dim=1)
-        batch_answers_mask = qa_batch['answer_mask']
-        # torch.cat([qa_batch['answer_mask'], qa_batch['target_attention_mask']], dim=1)
+            raise NotImplementedError
 
         # Pass through LM
         # contains: ['loss', 'logits', 'past_key_values', 'encoder_last_hidden_state']
         # `logits` of size: [batch_size, max_pred_len, vocab_size]
-        lm_outputs = self.language_model(inputs_embeds=encoder_input,
-                                         attention_mask=encoder_input_mask,
-                                         labels=batch_answers,
-                                         decoder_attention_mask=batch_answers_mask)
+        lm_outputs = self.language_model(inputs_embeds=model_input['inputs_embeds'],
+                                         attention_mask=model_input['attention_mask'],
+                                         labels=model_input['labels'],
+                                         decoder_attention_mask=model_input['decoder_attention_mask'],
+                                         output_hidden_states=True,
+                                        )
 
         # Return question as:
         # Q_start_tokens + TRNS_embeddings + Q_end_tokens
@@ -359,11 +415,11 @@ class TransactionQAModel(pl.LightningModule):
         # Experimental !
         lm_outputs['transactions_history_lengths'] = transactions_history_lengths
 
-        lm_outputs['question_start_input_size'] = question_start_embeddings_batch.size(1)
-        lm_outputs['question_end_input_size'] = question_end_embeddings_batch.size(1)
-        lm_outputs['transactions_input_size'] = transactions_embeddings.size(1)
-        lm_outputs['total_input_size'] = encoder_input.size(1)
-        return lm_outputs, batch_answers
+        # lm_outputs['question_start_input_size'] = question_start_embeddings_batch.size(1)
+        # lm_outputs['question_end_input_size'] = question_end_embeddings_batch.size(1)
+        # lm_outputs['transactions_input_size'] = transactions_embeddings.size(1)
+        lm_outputs['total_input_size'] = model_input['inputs_embeds'].size(1)
+        return lm_outputs, model_input['labels']
 
     def training_step(self, batch, batch_idx: Optional[int] = None) -> Optional[Any]:
         r"""
@@ -389,6 +445,20 @@ class TransactionQAModel(pl.LightningModule):
             return None
 
         loss = outputs.loss
+
+        if self.use_numerical:
+            num_token_mask = (answer == self.tokenizer.convert_tokens_to_ids('<NUM>'))
+            embedding = outputs['decoder_hidden_states'][-1][num_token_mask]
+
+            exponent = self.exponent_head(embedding)
+            mantissa = self.mantissa_head(embedding).squeeze(1)
+
+            true_exponent = get_exponent_number(batch['label']).long() + 8
+            true_mantissa = get_mantissa_number(batch['label'])
+
+            mantissa_loss = self.mantissa_loss(mantissa / 10, true_mantissa / 10)
+            exponent_loss = self.exponent_loss(exponent, true_exponent)
+            loss += mantissa_loss + exponent_loss
 
         logging_dict = {
             'train_loss': loss,

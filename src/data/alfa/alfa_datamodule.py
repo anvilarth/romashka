@@ -134,10 +134,10 @@ class AlfaDataModule(pl.LightningDataModule):
 
 
 class AlfaPretrainingDataModule(AlfaDataModule):
-    def  __init__(self, splitter, rep, mode, *args, **kwargs):
+    def  __init__(self, splitter, mode, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.splitter = splitter
-        self.rep = rep
+        self.rep = splitter.split_count
         self.mode = mode
 
     def collate_fn(self, batch):

@@ -3,7 +3,7 @@ import torch.nn as nn
 
 
 class TransactionHead(nn.Module):
-    def __init__(self, head_type, input_size, cat_embedding_projections, num_embedding_projections):
+    def __init__(self, head_type, input_size, cat_embedding_projections, num_embedding_projections, num_classes=0):
         super().__init__()
 
         if head_type == 'linear':
@@ -25,6 +25,9 @@ class TransactionHead(nn.Module):
             self.head = LastOutputLinearHead(input_size)
         elif head_type == 'pretraining_last_output':
             self.head = LastOutputHead(input_size)
+        elif head_type == 'last_output_classification':
+            assert num_classes > 0
+            self.head = ClassificationHead(input_size, num_classes)
         else:
             raise NotImplementedError
     
@@ -44,16 +47,23 @@ class LastOutputHead(nn.Module):
 
 class LastOutputLinearHead(nn.Module):
     def __init__(self, input_size):
-        super().__init__()
+        super().__init__() 
+        self.last_output = LastOutputHead(input_size)      
         self.linear1 = nn.Linear(input_size, 1)
     
     def forward(self, x, mask):
-        device = mask.device
-        batch_size = mask.shape[0]
-        trx_index = mask.sum(1) - 1
-        output = x[torch.arange(batch_size, device=device), trx_index]
+        output = self.last_output(x, mask)
         return self.linear1(output).squeeze(1)
 
+class LastOutputClassificationHead(nn.Module):
+    def __init__(self, input_size, num_classes):
+        super().__init__() 
+        self.last_output = LastOutputHead(input_size)      
+        self.linear1 = nn.Linear(input_size, num_classes)
+    
+    def forward(self, x, mask):
+        output = self.last_output(x, mask)
+        return self.linear1(output)
 
 class LinearHead(nn.Module):
     def __init__(self, input_size):

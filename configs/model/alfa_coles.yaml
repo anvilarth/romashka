@@ -14,4 +14,4 @@ lr_scheduler_partial:
   _target_: transformers.get_linear_schedule_with_warmup
   _partial_: true
   num_warmup_steps: 100
-  num_training_steps:  "${eval:'${trainer.max_epochs} * 16500'}"   
+  num_training_steps:  "${eval:'${trainer.max_epochs} * 16500'}" 

@@ -1,1 +1,3 @@
 task_name: 'next_transactions_30_days_binary'
+num_classes: 1
+head_type: last_output

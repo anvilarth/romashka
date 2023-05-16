@@ -4,11 +4,10 @@ _target_: src.data.AlfaPretrainingDataModule
 splitter:
   _target_: ptls.frames.coles.split_strategy.SampleSlices
   split_count: 5
-  cnt_min: 10
-  cnt_max: 30 
+  cnt_min: 20
+  cnt_max: 60
   is_sorted: True
 
-rep: 5
 mode: 'coles'
 
 data_dir: ${paths.data_dir}

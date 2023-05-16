@@ -58,6 +58,7 @@ class AbstractTask(ABC):
     num_options: Optional[int] = 6  # ground truth + 5 additional options
     is_few_shot: Optional[bool] = False  # whether to provide few examples before question
     n_shot: Optional[int] = 1
+    use_numerical: Optional[bool] = False
 
     def __post_init__(self):
         # Fill in empty parameters with defaults

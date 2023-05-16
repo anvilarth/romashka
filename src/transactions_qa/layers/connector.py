@@ -61,6 +61,9 @@ class LinearConnector(nn.Module):
         self.input_size = input_size  # input size of LM model
         self.device = device
         self.layer = self._create_layer()
+    
+    def get_input_size(self):
+        return self.input_size
 
     def _create_layer(self) -> Optional[nn.Module]:
         try:
@@ -167,6 +170,9 @@ class ReccurrentConnector(nn.Module):
         except Exception as e:
             print(f"Error occurred during connector creation:\n{e}")
             raise AttributeError(f"Error occurred during connector creation:\n{e}")
+
+    def get_input_size(self):
+        return self.input_size
 
     def forward(self, x: torch.Tensor,
                 x_lengths: Optional[torch.Tensor] = None) -> torch.Tensor:

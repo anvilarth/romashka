@@ -70,6 +70,10 @@ class ModelArguments:
         default="main",
         metadata={"help": "The specific model version to use (can be a branch name, tag name or commit id)."},
     )
+    use_numerical: bool = field(
+        default=False,
+        metadata={"help": "Whether predict tokens using numerical module or not"},
+    )
     use_auth_token: bool = field(
         default=False,
         metadata={

@@ -42,6 +42,7 @@ class NextFeatureTask(AbstractTask):
         self.positive_answer_word = "Yes"
         self.negative_answer_word = "No"
         self.answers_options = ["Yes", "No"]
+        self.numerical_token = "<NUM>"
         # all options, for a sample can be reduced to [true_mcc_code + 4 other codes]
 
         self.answer_template = ""  # left empty for a first time
@@ -55,12 +56,14 @@ class NextFeatureTask(AbstractTask):
             if self.add_tokens_to_tokenizer:
                 new_tokens = [self.transactions_embeddings_start_token,
                             self.transactions_embeddings_end_token]
+                if self.use_numerical:
+                   new_tokens.append(self.numerical_token)
                 if self.task_special_token is not None:
                     new_tokens += [self.task_special_token]
                 self.extend_vocabulary(tokenizer=self.tokenizer,
                                     new_tokens=new_tokens,
                                     special=False)
-
+                                    
             self.positive_token = self.tokenizer(self.positive_answer_word).input_ids[0]
             self.negative_token = self.tokenizer(self.negative_answer_word).input_ids[0]
     
@@ -85,11 +88,14 @@ class NextFeatureTask(AbstractTask):
         # Target's questions numeric/categorical answers as str
 
         task_batch = self.generate_text_target(batch)
+
         if not task_batch:
             return dict()
 
         target_batch = task_batch['label']
-        
+        if self.use_numerical:
+            target_batch = [self.numerical_token] * len(target_batch)
+
         transactions_embedding_mask = task_batch['mask']  # bool Tensor [batch_size, seq_len]
         # Masking elements which we want to predict
 
@@ -166,6 +172,7 @@ class NextCatFeatureTaskBinary(NextFeatureTask):
             metrics[stage + self.task_name + '_accuracy'] = task_metrics['accuracy']
 
         return metrics 
+
 @dataclass
 class DefaultTaskBinary(NextCatFeatureTaskBinary):
     def __post_init__(self):
@@ -410,7 +417,7 @@ class NextCatFeatureTaskMulti(NextFeatureTask):
     def __post_init__(self):
 
         super().__post_init__()
-        self.criterion = nn.MSELoss()
+        self.criterion = nn.CrossEntropyLoss()
         self.task_name = "next_cat_feature_multi"
         self.target_feature_name = 'mcc_category'  # 28 unique values
         self.is_open_ended_task = False  # for a default for this task
@@ -487,11 +494,16 @@ class NextCatFeatureTaskMulti(NextFeatureTask):
         return processed, processed_answers
 
     def calculate_metrics(self, outputs, answers, task_metrics, stage):
+        batch_size = answers.shape[0]
+        device = answers.device
         metrics = {}
         if self.task_type == 'text':
             preds, targets = self.process_outputs(outputs, answers)
         else:
-            preds, targets = torch.sigmoid(outputs), answers
+            indices = torch.cat([torch.randint(0, self.num_classes, size=(batch_size, self.num_options - 1), device=device), answers.unsqueeze(1)], dim=1)
+            preds = outputs.gather(1, indices).argmax(1, keepdim=True)
+            preds_processed = torch.take_along_dim(indices, preds, dim=1)
+            preds, targets = preds_processed.squeeze(1), answers
         
         if 'accuracy' in task_metrics:
             task_metrics['accuracy'](preds, targets)
@@ -504,6 +516,7 @@ class NextMCCFeatureTaskMulti(NextCatFeatureTaskMulti):
     def __post_init__(self):
         
         super().__post_init__()
+        self.criterion = nn.CrossEntropyLoss(ignore_index=0)
 
         self.task_name = "next_mcc_multi"
         self.target_feature_name = 'mcc_category'
@@ -512,7 +525,8 @@ class NextMCCFeatureTaskMulti(NextCatFeatureTaskMulti):
         self.metrics = nn.ModuleDict({
             'accuracy': Accuracy(task='multiclass',
                                  average='weighted',
-                                 num_classes=self.num_classes)
+                                 num_classes=self.num_classes,
+                                 ignore_index=0)
         })
 
         self.update_feature_index()
@@ -531,13 +545,14 @@ class NextNumTransactionTaskMulti(NextCatFeatureTaskMulti):
         super().__post_init__()
         self.task_name = "next_num_30days_multi"
         self.target_feature_name = 'mcc_category'
-        self.num_classes = 200 + 1 # Adding fake class to calculate
+        self.num_classes = 200 
         self.N = 30
 
         self.metrics = nn.ModuleDict({
             'accuracy': Accuracy(task='multiclass',
                                  average='weighted',
-                                 num_classes=self.num_classes)
+                                 num_classes=self.num_classes, # Adding fake class to calculate
+                                 ignore_index=0)
         })
 
         self.update_feature_index()
@@ -556,81 +571,10 @@ class NextNumTransactionTaskMulti(NextCatFeatureTaskMulti):
         if any(trx_index == -1):
             return {}
         # TODO: fix adding 1 (bincount error with negative values)
-        batch['label'] = torch.clamp(torch.gather(labels, 1, trx_index), 0, self.num_classes).squeeze(1).long() + 1
+        # clipping in range [1, self.num_classes]
+        batch['label'] = torch.clamp(torch.gather(labels, 1, trx_index), 0, self.num_classes - 2).squeeze(1).long() + 1
         batch['mask'] = padding_mask
         return batch
-
-@dataclass
-class NextNumFeatureTaskMulti(NextFeatureTask):
-    def __post_init__(self):
-
-        super().__post_init__()
-        self.task_name = "next_num_feature_multi"
-        self.target_feature_name = 'amnt'  # 108 unique values
-        self.is_open_ended_task = False  # for a default for this task
-
-        self.update_feature_index()
-
-        self.question_templates = [
-            ("This is the client's transaction history ",
-             "Which merchant category will the next transactions have merchant?"),
-        ]
-
-        # all options, for a sample can be reduced to [true_mcc_code + 4 other codes]
-        self.buckets = torch.linspace(0, 1, 100)
-        self.answers_options = [str(i) for i in range(28)]
-
-        self.answer_template = ""  # left empty for a first time
-        self.num_options = 6  # ground truth + 5 additional options
-        self.metrics = nn.ModuleDict({
-            "accuracy": Accuracy(task='multiclass', num_classes=self.num_options),
-        })
-
-    def generate_target(self, batch: Any, **kwargs) -> Any:
-        target_feature_batch = batch[self.target_feature_type][self.target_feature_index]  # Tensor [batch_size, seq_len]
-
-        # Construct target values 
-        # Target's questions numeric/categorical answers as str
-        trx_index = batch['mask'].sum(1, keepdim=True) - 1
-        input_labels = torch.gather(target_feature_batch, 1, trx_index)
-        target_batch = list(map(lambda x: str(x.item()), input_labels))
-
-        return target_batch, trx_index
-
-    def generate_target_question(self, question_end, target_batch, **kwargs) -> Any:
-        target_batch_options = []  # a list of str target options
-        for gt_target in target_batch:
-            target_options = {gt_target.item()}
-            while len(target_options) < self.num_options:
-                target_options.add(random.sample(self.answers_options, k=1)[0])
-
-            # shuffle
-            target_options = random.sample(list(target_options), k=len(target_options))
-            # connect with separator
-            target_options = "".join([self.multichoice_separator % target for target in target_options])
-            target_batch_options.append(target_options)
-
-        question_target_batch = [question_end + " OPTIONS:" + target_options for target_options in
-                                 target_batch_options]  # as strings
-
-        return question_target_batch
-
-    def process_outputs(self, outputs, answers: torch.Tensor):
-        targets = (answers[:, -2] == self.positive_token).long()
-        preds = torch.sigmoid(outputs.logits[:, 0, self.positive_token] - outputs.logits[:, 0, self.negative_token])
-
-        return targets, preds
-
-    def calculate_metrics(self, outputs, answers, task_metrics, stage):
-        metrics = {}
-
-        targets, preds = self.process_outputs(outputs, answers)
-        
-        if 'accuracy' in task_metrics:
-            task_metrics['accuracy'](preds, targets)
-            metrics[stage + self.task_name + '_accuracy'] = task_metrics['accuracy']
-
-        return metrics 
 
 @dataclass
 class NextCatFeatureOpenEnded(NextFeatureTask):
@@ -694,6 +638,7 @@ class NextCatFeatureOpenEnded(NextFeatureTask):
 class NextMCCFeatureOpenEnded(NextCatFeatureOpenEnded):
     def __post_init__(self):
         super().__post_init__()
+        self.criterion = nn.CrossEntropyLoss(ignore_index=0)
         
         self.task_name = "next_mcc_open_ended"
         self.target_feature_name = 'mcc_category'
@@ -702,7 +647,8 @@ class NextMCCFeatureOpenEnded(NextCatFeatureOpenEnded):
         self.metrics = nn.ModuleDict({
             "accuracy": Accuracy(task='multiclass',
             num_classes=self.num_classes,
-            average='weighted' )
+            average='weighted',
+            ignore_index=0)
         })
 
         self.update_feature_index()
@@ -719,13 +665,14 @@ class NextNumTransactionTaskOpenEnded(NextCatFeatureOpenEnded):
         super().__post_init__()
         self.task_name = "next_num_30days_open_ended"
         self.target_feature_name = 'mcc_category'
-        self.num_classes = 200 + 1 # Adding fake class to calculate
+        self.num_classes = 200 # Adding fake class to calculate
         self.N = 30
 
         self.metrics = nn.ModuleDict({
             'accuracy': Accuracy(task='multiclass',
                                  average='weighted',
-                                 num_classes=self.num_classes)
+                                 num_classes=self.num_classes,
+                                 ignore_index=0)
         })
 
         self.update_feature_index()
@@ -744,6 +691,6 @@ class NextNumTransactionTaskOpenEnded(NextCatFeatureOpenEnded):
         if any(trx_index == -1):
             return {}
         # TODO: fix adding 1 (bincount error with negative values)
-        batch['label'] = torch.clamp(torch.gather(labels, 1, trx_index), 0, self.num_classes).squeeze(1).long() + 1
+        batch['label'] = torch.clamp(torch.gather(labels, 1, trx_index), 0, self.num_classes - 2).squeeze(1).long() + 1
         batch['mask'] = padding_mask
         return batch

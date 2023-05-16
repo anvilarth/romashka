@@ -195,3 +195,10 @@ def get_split_indices(batch, number_tasks):
     indices = torch.arange(batch_size, device=device)
     splitted = torch.tensor_split(indices, number_of_tasks)
     return splitted
+
+def get_exponent_number(f):
+    mask = (f != 0)
+    return torch.floor(torch.log10(abs(f))).int() * mask
+
+def get_mantissa_number(f):
+    return f/10**get_exponent_number(f)

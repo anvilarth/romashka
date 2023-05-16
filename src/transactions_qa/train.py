@@ -150,7 +150,7 @@ def main():
 
     # Load weights
     ckpt = torch.load(model_args.transactions_model_name_or_path, map_location='cpu')
-    transactions_model.load_state_dict(ckpt)
+    transactions_model.load_state_dict(ckpt, strict=False)
 
     # Configure and load from HF hub LM model
     logger.info(f"Loading Language model: `{model_args.language_model_name_or_path}`...")
@@ -199,6 +199,7 @@ def main():
         task_kwargs = tasks_kwargs[task_i] if task_i < len(tasks_kwargs) else {}
         if "tokenizer" not in task_kwargs:
             task_kwargs['tokenizer'] = tokenizer
+        task_kwargs['use_numerical'] = model_args.use_numerical
         task = AutoTask.get(task_name=task_name, **task_kwargs)
         tasks.append(task)
     logger.info(f"Created {len(tasks)} tasks.")
@@ -270,6 +271,7 @@ def main():
         "scale_parameter": training_args.scale_parameter,
         "optimizer_name": training_args.optimizer_name,
         "scheduler_name": training_args.scheduler_name,
+        "use_numerical": model_args.use_numerical,
     }
 
     model = TransactionQAModel(

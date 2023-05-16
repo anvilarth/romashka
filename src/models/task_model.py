@@ -24,6 +24,7 @@ class TaskModule(LightningModule):
         task_name,
         encoder_type='whisper/tiny',
         head_type='linear',
+        num_classes=0,
     ):
         super().__init__()
 
@@ -44,7 +45,8 @@ class TaskModule(LightningModule):
             "meta_embedding_projections": projections_maps.get('meta_embedding_projections'),
             "encoder_type": encoder_type,
             "head_type": head_type,
-            "embedding_dropout": 0.1
+            "embedding_dropout": 0.1,
+            "num_classes": num_classes
         }
 
         self.transactions_model = TransactionsModel(**transactions_model_config)
@@ -89,7 +91,7 @@ class TaskModule(LightningModule):
 
         loss = self.criterion(outputs, answers)
 
-        metrics_scores = self.task.calculate_metrics(outputs, answers, self.metrics)
+        metrics_scores = self.task.calculate_metrics(outputs, answers, self.metrics, stage='val_')
 
         # update and log metrics
         self.log("val_loss",loss, on_step=False, on_epoch=True, prog_bar=True, batch_size=batch_size)
@@ -110,7 +112,7 @@ class TaskModule(LightningModule):
 
         loss = self.criterion(outputs, answers)
 
-        metrics_scores = self.task.calculate_metrics(outputs, answers, self.metrics)
+        metrics_scores = self.task.calculate_metrics(outputs, answers, self.metrics,  stage='test_')
         for metric_key in metrics_scores:
             metrics_scores[metric_key] = metrics_scores.pop(metric_key)
 
