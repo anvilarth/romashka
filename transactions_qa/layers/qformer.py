@@ -124,13 +124,9 @@ class QFormerModel(nn.Module):
         """
         Creates selected number of queries.
         """
-        try:
-            self.query_tokens_embeddings = torch.nn.Parameter(
-                torch.zeros(1, self.num_queries, self.hidden_size)).to(self.device)
-            self.query_tokens_embeddings.data.normal_(mean=0.0, std=self.initializer_range)
-        except Exception as e:
-            print(f"Error occurred during Q-Former queries creation:\n{e}")
-            raise AttributeError(f"Error occurred during Q-Former queries creation:\n{e}")
+        self.query_tokens_embeddings = torch.nn.Parameter(
+                torch.zeros((1, self.num_queries, self.hidden_size), device=self.device), requires_grad=True) #.to(self.device)
+        self.query_tokens_embeddings.data.normal_(mean=0.0, std=self.initializer_range)
         self._logger.info(f"{self.num_queries} queries created.")
 
     def _create_projections(self):

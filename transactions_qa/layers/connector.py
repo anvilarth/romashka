@@ -6,6 +6,7 @@ from romashka.transactions_qa.layers.initialization import (init_xavier_uniform_
                                                             init_linear)
 from romashka.transactions_qa.layers.layers import TransformerEncoderLayer
 # from romashka.transactions_qa.layers.qformer_connector import QFromerConnector
+from romashka.transactions_qa.layers.qformer_connector_hf import HFQFromerConnector
 from romashka.transactions_qa.layers.qformer import QFormerModel
 
 CONNECTOR_TYPES = [
@@ -132,7 +133,7 @@ def make_recurrent_connector(layer_type: str,
           f"and move to device: {device}.")
 
     try:
-        layer = ReccurrentConnector(
+        layer = RecurrentConnector(
             layer_type=layer_type,
             num_recurrent_layers=num_recurrent_layers,
             is_bidirectional=is_bidirectional,
@@ -412,9 +413,12 @@ class TransformerConnector(nn.Module):
 
 def make_qformer_connector(output_size: int,
                            input_size: int,
+                           vocab_size: Optional[int] = None,
+                           pad_token_id: Optional[int] = None,
                            tokenizer: Optional[PreTrainedTokenizerBase] = None,
                            config: Optional[Union[PretrainedConfig, Dict[str, Any]]] = None,
                            num_queries: Optional[int] = 32,
+                           from_hf: Optional[bool] = True,
                            device: Optional[Union[torch.device, str]] = 'cpu'):
     """
     Creates a connector based on Querying Transformer (Q-Former), used in BLIP-2.
@@ -435,14 +439,25 @@ def make_qformer_connector(output_size: int,
     print(f"Input dimension of autoregressive model: {input_size}")
     print(f"Creating connector from {output_size} to {input_size} "
           f"and move to device: {device}.")
-
-    return QFromerConnector(
-        output_size=output_size,
-        input_size=input_size,
-        num_queries=num_queries,
-        config=config,
-        device=device
-    )
+    if from_hf:
+        return HFQFromerConnector(
+            output_size=output_size,
+            input_size=input_size,
+            vocab_size=vocab_size,
+            pad_token_id=pad_token_id,
+            num_queries=num_queries,
+            config=config,
+            device=device
+        )
+    else:
+        return QFromerConnector(
+            output_size=output_size,
+            input_size=input_size,
+            tokenizer=tokenizer,
+            num_queries=num_queries,
+            config=config,
+            device=device
+        )
 
 
 DEFAULT_CONFIG = {

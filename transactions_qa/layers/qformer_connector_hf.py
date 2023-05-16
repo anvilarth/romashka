@@ -7,7 +7,6 @@ from romashka.transactions_qa.layers.initialization import (init_xavier_uniform_
                                                             init_linear)
 
 DEFAULT_CONFIG = {
-    "text_model_name": "prajjwal1/bert-mini",  # bert-mini
     "sequence_len": 384,
     "num_queries": 32,
     "shared_dim": 768,
@@ -27,7 +26,7 @@ DEFAULT_CONFIG = {
 }
 
 
-class QFromerConnector(nn.Module):
+class HFQFromerConnector(nn.Module):
     """
     Querying Transformer (Q-Former), used in BLIP-2.
     """

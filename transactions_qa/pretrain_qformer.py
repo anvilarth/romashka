@@ -45,15 +45,15 @@ from romashka.transactions_qa.utils import (get_last_checkpoint, get_projections
 
 
 def main():
-    parser = HfArgumentParser((ModelArguments, DataTrainingArguments, TrainingArguments, TasksArguments))
+    parser = HfArgumentParser((ModelArguments, DataTrainingArguments, TrainingArguments))
 
     if len(sys.argv) == 2 and sys.argv[1].endswith(".json"):
         # If we pass only one argument to the script and it's the path to a json file,
         # let's parse it to get our arguments.
-        model_args, data_args, training_args, tasks_args = parser.parse_json_file(
+        model_args, data_args, training_args = parser.parse_json_file(
             json_file=os.path.abspath(sys.argv[1]))
     else:
-        model_args, data_args, training_args, tasks_args = parser.parse_args_into_dataclasses()
+        model_args, data_args, training_args = parser.parse_args_into_dataclasses()
 
     pl.seed_everything(training_args.seed)
     # Set up logging
@@ -331,3 +331,19 @@ def main():
         callbacks=[checkpoint_callback, lr_monitor_callback])
 
     trainer.fit(model=full_model, datamodule=datamodule)
+
+
+if __name__ == '__main__':
+    import os
+
+    # os.environ['HF_DATASETS_OFFLINE'] = '1'  # offline mode for HF datasets
+    # os.environ['TRANSFORMERS_OFFLINE'] = '1'  # offline mode for HF Transformers
+    # os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # disable DataParallel for test
+
+    # Pretrained models are downloaded and locally cached at: ~/.cache/huggingface/transformers/.
+    # This is the default directory given by the shell environment variable TRANSFORMERS_CACHE.
+    # os.environ['TRANSFORMERS_CACHE'] = "/Users/abdullaeva/Documents/Projects/TransactionsQA/checkpoints/cache"
+    # or "/home/jovyan/.cache/huggingface/hub"
+    # os.environ['HF_DATASETS_CACHE'] = "/Users/abdullaeva/Documents/Projects/TransactionsQA/checkpoints/cache"
+    # or "/home/jovyan/.cache/huggingface/datasets"
+    main()
