@@ -17,7 +17,7 @@ logger = get_logger(
 )
 
 from romashka.transactions_qa.dataset.serializers import AbstractSerializer
-from romashka.transactions_qa.dataset.pretrain.data_generator import text_batches_generator
+from romashka.transactions_qa.dataset.pretrain.data_generator import text_batches_generator_proc
 
 
 class TransactionCaptioningDataset:
@@ -39,10 +39,8 @@ class TransactionCaptioningDataset:
         self.buffer_size = buffer_size
 
     def create_generator(self, dataset):
-        return text_batches_generator(dataset,
-                                      batch_size=self.generator_batch_size,
-                                      sub_seq_len=self.sub_seq_len,
-                                      serializer=self.serializer)
+        return text_batches_generator_proc(dataset,
+                                           batch_size=self.generator_batch_size)
 
     def build_dataset(self):
         # Somehow it is important to pass dataset using gen_kwargs, because sharding is done using it

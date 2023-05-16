@@ -2,6 +2,7 @@ import gc
 import torch
 import pickle
 import numpy as np
+from time import time
 from typing import List, Optional
 
 # Set up logging
@@ -35,11 +36,11 @@ def segment(sequence: np.ndarray,
     return segmented_sequence
 
 
-def text_batches_generator(list_of_paths: List[str],
-                           batch_size: Optional[int] = 1,
-                           sub_seq_len: Optional[int] = 10,
-                           serializer: Optional[AbstractSerializer] = None,
-                           verbose: Optional[bool] = False):
+def text_batches_generator_raw(list_of_paths: List[str],
+                               batch_size: Optional[int] = 1,
+                               sub_seq_len: Optional[int] = 10,
+                               serializer: Optional[AbstractSerializer] = None,
+                               verbose: Optional[bool] = False):
     """
     Infinite generator for time-based data reading and collation in padded batches.
     Args:
@@ -74,6 +75,7 @@ def text_batches_generator(list_of_paths: List[str],
 
         # 1) Split all buckets in file to separate sub_histories (independed of app_id (== user_id))
         # but with respect to paddings (mask out pad values in transactions)
+        start = time()
         for idx in range(len(products)):
             bucket, product, app_id = padded_sequences[idx], products[idx], app_ids[idx]
 
@@ -91,7 +93,8 @@ def text_batches_generator(list_of_paths: List[str],
                     splitted_sub_sequences.append(bucket_)
                     splitted_app_ids.append(np.full((bucket_.shape[0],), app_id[jdx]))
                     splitted_product_ids.append(np.full((bucket_.shape[0],), product[jdx]))
-
+        end = time()
+        print(f"Time for split file data to segments = {(end - start) * 1000} ms.")
         splitted_app_ids = np.concatenate(splitted_app_ids)
         splitted_product_ids = np.concatenate(splitted_product_ids)
         splitted_sub_sequences = np.vstack(splitted_sub_sequences)
@@ -113,10 +116,60 @@ def text_batches_generator(list_of_paths: List[str],
 
             # 4) Generate text captions here: 1 per sequence -> num_captions == batch_size
             if serializer is not None:
+                start = time()
                 batch_captions = [serializer.serialize_batch(features=hist_features.swapaxes(0, 1))
                                   for hist_features in batch_sequences]
+                end = time()
+                print(f"Time for single sample serialization = {(end - start) * 1000} ms.")
             else:
                 batch_captions = [""] * len(batch_sequences)
+
+            # As shapes: [n_features, batch_size, hist_seq_len]
+            ret = dict(
+                num_features=torch.FloatTensor(batch_sequences[:, num_features_indices]).transpose(0, 1),
+                cat_features=torch.LongTensor(batch_sequences[:, cat_features_indices]).transpose(0, 1),
+                mask=torch.BoolTensor(batch_mask),
+                meta_features=torch.LongTensor(batch_products).unsqueeze(0),
+                app_id=torch.LongTensor(batch_app_ids),
+                captions=batch_captions
+            )
+
+            yield ret
+
+
+def text_batches_generator_proc(list_of_paths: List[str],
+                                batch_size: Optional[int] = 1,
+                                verbose: Optional[bool] = False):
+    """
+    Infinite generator for time-based data reading and collation in padded batches.
+    Args:
+        list_of_paths: List[str], a list of paths to data files;
+        batch_size: int, a number of samples in a single batch;
+        verbose: bool, indicates whether to print results.
+
+    Returns:
+        a dict of features (as tensors) and captions (as strings).
+    """
+    for path in list_of_paths:
+        # Faster loading (probably)
+        if verbose:
+            print(f'reading {path}')
+
+        gc.disable()
+        with open(path, 'rb') as f:
+            data = pickle.load(f)
+        gc.enable()
+
+        padded_sequences, products, app_ids = data['padded_sequences'], data['products'], data['app_id']
+        captions = data['captions']
+
+        # 2) With given batch_size iterate over sub_histories
+        for kdx in range(0, len(padded_sequences), batch_size):
+            batch_sequences = padded_sequences[kdx: kdx + batch_size]
+            batch_products = products[kdx: kdx + batch_size]
+            batch_app_ids = app_ids[kdx: kdx + batch_size]
+            batch_captions = captions[kdx: kdx + batch_size]
+            batch_mask = np.ones((batch_size, batch_sequences.shape[-1]), dtype=int)  # as no padding added
 
             # As shapes: [n_features, batch_size, hist_seq_len]
             ret = dict(
