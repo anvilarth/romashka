@@ -78,6 +78,16 @@ class ModelArguments:
         },
     )
 
+    connector_model_name_or_path: Optional[str] = field(
+        default=None,
+        metadata={
+            "help": (
+                "The connector model checkpoint for weights initialization. "
+                "Don't set if you want to train a model from scratch."
+            )
+        },
+    )
+
     connector_input_size: Optional[int] = field(
         default=None,
         metadata={"help": "A connector layer input size (as an embedding size of Transactions model)."},

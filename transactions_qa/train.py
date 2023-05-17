@@ -322,13 +322,12 @@ def main():
         #       "position_embedding_type": "absolute",
         # }
         qformer_config = {
-            "text_model_name": "prajjwal1/bert-mini",  # bert-mini
             "sequence_len": 384,
             "num_queries": 32,
-            "shared_dim": 768,
-            "hidden_size": 256,
-            "num_attention_heads": 4,
-            "num_hidden_layers": 4,
+            "shared_dim": model_args.shared_dim,
+            "hidden_size": 512,
+            "num_attention_heads": model_args.num_attention_heads,
+            "num_hidden_layers": model_args.num_hidden_layers,
             "intermediate_size": 1024,
             "cross_attention_frequency": 2,
             "attention_probs_dropout_prob": 0.1,
@@ -339,12 +338,18 @@ def main():
             "max_text_sequence_len": 512,
             "truncation_side": "right",
             "position_embedding_type": "absolute",
-            "device": device
         }
+        if model_args.connector_model_name_or_path is not None:
+            qformer_config['text_model_name'] = model_args.connector_model_name_or_path,  # bert-mini/small/base
+
         connector_args = {
             'config': qformer_config,
             'tokenizer': tokenizer,
-            "num_queries": 32
+            'from_hf': True,
+            "from_checkpoint": model_args.connector_model_name_or_path is not None,
+            "vocab_size": len(tokenizer),
+            "pad_token_id": tokenizer.pad_token_id,
+            "num_queries": model_args.num_queries
         }
         connector = make_qformer_connector(
             output_size=trns_output_size,

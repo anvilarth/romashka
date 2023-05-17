@@ -146,6 +146,7 @@ class QFormerModel(nn.Module):
 
     def forward(self,
                 sequence_embeds: torch.Tensor,
+                sequence_attention_mask: Optional[torch.Tensor] = None,
                 text: Optional[Union[str, List[str]]] = None,
                 output_attentions: Optional[bool] = False,
                 is_train: Optional[bool] = False,
@@ -157,7 +158,8 @@ class QFormerModel(nn.Module):
         device = sequence_embeds.device
         sequence_embeds_attention_mask = torch.ones(sequence_embeds.size()[:-1],
                                                     dtype=torch.long,
-                                                    device=device)
+                                                    device=device) \
+            if sequence_attention_mask is None else sequence_attention_mask
 
         query_tokens = self.query_tokens_embeddings.expand(batch_size, -1, -1)
 

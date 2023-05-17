@@ -1,8 +1,11 @@
+import os
 import torch
 from torch import nn
 from typing import Optional, Union, List, Dict, Any
 
 from transformers import Blip2QFormerConfig, Blip2QFormerModel
+
+from romashka.logging_handler import get_logger
 from romashka.transactions_qa.layers.initialization import (init_xavier_uniform_layers,
                                                             init_linear)
 
@@ -37,9 +40,15 @@ class HFQFromerConnector(nn.Module):
                  pad_token_id: int,
                  num_queries: Optional[int] = 32,
                  config: Optional[Union[Blip2QFormerConfig, Dict[str, Any]]] = None,
-                 device: Optional[Union[torch.device, str]] = 'cpu'):
+                 device: Optional[Union[torch.device, str]] = 'cpu',
+                 from_checkpoint: Optional[bool] = False):
 
         super().__init__()
+        self._logger = get_logger(
+            name=self.__class__.__name__,
+            logging_level="INFO"
+        )
+
         self.output_size = output_size  # output size of embedder model
         self.input_size = input_size  # input size of second model / -> output shape for last linear layer
         self.num_queries = num_queries
@@ -62,19 +71,40 @@ class HFQFromerConnector(nn.Module):
             self.config = Blip2QFormerConfig(**self.config)
 
         self.device = device
-        self._create_layers()
+        self._create_layers(from_checkpoint=from_checkpoint)
 
-    def _create_layers(self):
+    def _create_layers(self, from_checkpoint: Optional[bool] = False ):
         try:
-            self.qformer = Blip2QFormerModel(self.config).to(self.device)
+            self.qformer = Blip2QFormerModel(self.config)
+            if from_checkpoint and hasattr(self.config, 'text_model_name'):
+                self._init_from_checkpoint(getattr(self.config, 'text_model_name'))
+            self.qformer.to(self.device)
 
             self.query_tokens_embeddings = torch.nn.Parameter(
                 torch.zeros(1, self.num_queries, self.config.hidden_size)).to(self.device)
             self.lm_projection_layer = torch.nn.Linear(self.config.hidden_size,
                                                        self.input_size).to(self.device)
         except Exception as e:
-            print(f"Error occurred during Q-Former connector creation:\n{e}")
+            self._logger.error(f"Error occurred during Q-Former connector creation:\n{e}")
             raise AttributeError(f"Error occurred during Q-Former connector creation:\n{e}")
+
+    def _init_from_checkpoint(self, ckpt_path: str):
+        self._logger.info(f"Initializing connector Q-Former from checkpoint: {ckpt_path}")
+        if os.path.isfile(ckpt_path):
+            checkpoint = torch.load(ckpt_path, map_location="cpu")
+        else:
+            raise RuntimeError(f"Checkpoint path is invalid or doesn't exist: {ckpt_path}")
+
+        num_params_to_fill = len(
+            [param for param_name, param in self.named_parameters()
+             if ("crossattention" not in param_name)
+             and (param_name not in ['query_tokens_embeddings', 'qformer.layernorm.weight', 'qformer.layernorm.bias',
+                                     'lm_projection_layer.weight', 'lm_projection_layer.bias'])])
+        num_params_to_fill_with = len(checkpoint)
+        self._logger.info(f"Connector params to fill: {num_params_to_fill} vs. "
+                          f"from checkpoint: {num_params_to_fill_with}")
+        self.load_state_dict(checkpoint, strict=False)
+        self._logger.info(f"Connector weights initialized from checkpoint: {ckpt_path}")
 
     def forward(self, embeds: torch.Tensor,
                 output_attentions: Optional[bool] = False,

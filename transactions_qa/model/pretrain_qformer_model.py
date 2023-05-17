@@ -142,7 +142,7 @@ class PretrainQFormerModel(pl.LightningModule):
             and `output_hidden_states`)
         """
         # 1) Sequences through Sequence embedder model (i.e. sequence_encoder_model)
-        #     -> to get embeddings [bs, hist_seq_len];
+        #     -> to get embeddings [bs, hist_seq_len, 384];
         sequences_embeddings, sequences_embeddings_mask = self.sequence_encoder_model.get_embs(batch)
 
         # 2) those sequences embeddings + text captions through Q-Former model
@@ -150,6 +150,7 @@ class PretrainQFormerModel(pl.LightningModule):
         outputs = self.qformer(
             text=batch_captions,
             sequence_embeds=sequences_embeddings,
+            sequence_mask=sequences_embeddings_mask,
             is_train=True
         )
 

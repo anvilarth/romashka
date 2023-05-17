@@ -419,6 +419,7 @@ def make_qformer_connector(output_size: int,
                            config: Optional[Union[PretrainedConfig, Dict[str, Any]]] = None,
                            num_queries: Optional[int] = 32,
                            from_hf: Optional[bool] = True,
+                           from_checkpoint: Optional[bool] = False,
                            device: Optional[Union[torch.device, str]] = 'cpu'):
     """
     Creates a connector based on Querying Transformer (Q-Former), used in BLIP-2.
@@ -447,6 +448,7 @@ def make_qformer_connector(output_size: int,
             pad_token_id=pad_token_id,
             num_queries=num_queries,
             config=config,
+            from_checkpoint=from_checkpoint,
             device=device
         )
     else:
