@@ -282,7 +282,7 @@ class TransactionQAModel(pl.LightningModule):
             question_end_tokens_mask=question_end_tokens_mask,
             encoder_input_mask=encoder_input_mask,
             eos_tokens_mask=eos_mask,
-            eos_tokens=eos_tokens
+            eos_tokens=eos_tokens,
         )
         
     def construct_lm_input(self,qa_batch, batch):
@@ -390,7 +390,6 @@ class TransactionQAModel(pl.LightningModule):
 
         transactions_history_lengths = batch['mask'].sum(1)
 
-        
         if self.training_mode == 'few_shot':
             model_input = self.get_few_shot_batch(qa_batch, batch)
         elif self.training_mode == 'lm':
@@ -407,7 +406,16 @@ class TransactionQAModel(pl.LightningModule):
                                          decoder_attention_mask=model_input['decoder_attention_mask'],
                                          output_hidden_states=True,
                                         )
+        if self.use_numerical:
+            num_token_mask = (model_input['labels'] == self.tokenizer.convert_tokens_to_ids('<NUM>'))
+            embedding = lm_outputs['decoder_hidden_states'][-1][num_token_mask]
 
+            exponent = self.exponent_head(embedding)
+            mantissa = self.mantissa_head(embedding).squeeze(1)
+            
+            lm_outputs['exponent'] = exponent
+            lm_outputs['mantissa'] = mantissa
+            
         # Return question as:
         # Q_start_tokens + TRNS_embeddings + Q_end_tokens
         lm_outputs['question_encoded'] = torch.cat([qa_batch['question_start_tokens'],
@@ -419,6 +427,8 @@ class TransactionQAModel(pl.LightningModule):
         # lm_outputs['question_end_input_size'] = question_end_embeddings_batch.size(1)
         # lm_outputs['transactions_input_size'] = transactions_embeddings.size(1)
         lm_outputs['total_input_size'] = model_input['inputs_embeds'].size(1)
+        lm_outputs['label'] = new_batch['raw_labels']
+
         return lm_outputs, model_input['labels']
 
     def training_step(self, batch, batch_idx: Optional[int] = None) -> Optional[Any]:
@@ -447,17 +457,15 @@ class TransactionQAModel(pl.LightningModule):
         loss = outputs.loss
 
         if self.use_numerical:
-            num_token_mask = (answer == self.tokenizer.convert_tokens_to_ids('<NUM>'))
-            embedding = outputs['decoder_hidden_states'][-1][num_token_mask]
+            mantissa = outputs['mantissa']
+            exponent = outputs['exponent']
 
-            exponent = self.exponent_head(embedding)
-            mantissa = self.mantissa_head(embedding).squeeze(1)
-
-            true_exponent = get_exponent_number(batch['label']).long() + 8
-            true_mantissa = get_mantissa_number(batch['label'])
+            true_exponent = get_exponent_number(outputs['label']).long() + 8
+            true_mantissa = get_mantissa_number(outputs['label'])
 
             mantissa_loss = self.mantissa_loss(mantissa / 10, true_mantissa / 10)
             exponent_loss = self.exponent_loss(exponent, true_exponent)
+
             loss += mantissa_loss + exponent_loss
 
         logging_dict = {

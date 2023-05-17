@@ -1,3 +1,4 @@
+from tokenize import Exponent
 import torch
 import torch.nn as nn
 import random
@@ -9,7 +10,7 @@ from typing import (Dict, Tuple, List,
 
 import transformers
 from torchmetrics.text.rouge import ROUGEScore
-from torchmetrics import AUROC
+from torchmetrics import AUROC, MeanAbsoluteError
 from torchmetrics.classification import BinaryAccuracy, Accuracy
 from src.transactions_qa.evaluation.eval_processings_utils import convert_to_numeric
 
@@ -92,7 +93,7 @@ class NextFeatureTask(AbstractTask):
         if not task_batch:
             return dict()
 
-        target_batch = task_batch['label']
+        target_batch = task_batch['text_label']
         if self.use_numerical:
             target_batch = [self.numerical_token] * len(target_batch)
 
@@ -112,6 +113,7 @@ class NextFeatureTask(AbstractTask):
             answer_target_string=target_batch,
             answer_start_string=answer_template,
             question_end_string=question_target_batch,
+            raw_labels=task_batch['label'],
         )
 
     def process_outputs(self, outputs, answers: torch.Tensor):
@@ -146,7 +148,7 @@ class NextCatFeatureTaskBinary(NextFeatureTask):
             return {}
         
         input_labels = batch['label']
-        batch['label'] = list(map(lambda x: self.positive_answer_word if x else self.negative_answer_word, input_labels))
+        batch['text_label'] = list(map(lambda x: self.positive_answer_word if x else self.negative_answer_word, input_labels))
         return batch
     
     def process_outputs(self, outputs, answers: torch.Tensor):
@@ -234,7 +236,7 @@ class NextNumFeatureTaskBinary(NextFeatureTask):
 
         batch = self.prepare_task_batch(batch, **kwargs)
         input_labels = batch['label']
-        batch['label'] = list(map(lambda x: self.positive_answer_word if x else self.negative_answer_word, input_labels))
+        batch['text_label'] = list(map(lambda x: self.positive_answer_word if x else self.negative_answer_word, input_labels))
         return batch
     
     def process_outputs(self, outputs, answers: torch.Tensor):
@@ -409,7 +411,7 @@ class NextAmnt30DaysTaskBinary(NextNumFeatureTaskBinary):
             return None
 
         input_labels = batch['label']
-        batch['label'] = list(map(lambda x: 'Yes' if x else 'No', input_labels))
+        batch['text_label'] = list(map(lambda x: 'Yes' if x else 'No', input_labels))
         return batch
 
 @dataclass
@@ -458,7 +460,7 @@ class NextCatFeatureTaskMulti(NextFeatureTask):
             return {}
 
         input_labels = batch['label']
-        batch['label'] = list(map(lambda x: str(x.item()), input_labels))
+        batch['text_label'] = list(map(lambda x: str(x.item()), input_labels))
         return batch
 
     def filter_range(self, value):
@@ -577,7 +579,7 @@ class NextNumTransactionTaskMulti(NextCatFeatureTaskMulti):
         return batch
 
 @dataclass
-class NextCatFeatureOpenEnded(NextFeatureTask):
+class NextFeatureOpenEnded(NextFeatureTask):
     def __post_init__(self):
         super().__post_init__()
         self.num_classes = -1
@@ -603,7 +605,7 @@ class NextCatFeatureOpenEnded(NextFeatureTask):
 
         input_labels = batch['label']
         
-        batch['label'] = list(map(lambda x: str(x.item()), input_labels))
+        batch['text_label'] = list(map(lambda x: str(x.item()), input_labels))
         return batch
 
     def filter_range(self, value):
@@ -614,7 +616,7 @@ class NextCatFeatureOpenEnded(NextFeatureTask):
                                                           skip_special_tokens=True)
         
         answers_decoded = self.tokenizer.batch_decode(answers, skip_special_tokens=True)
-        processed_answers =  torch.tensor(list(map(lambda x: convert_to_numeric(x, -1, verbose=False), answers_decoded)), device=answers.device)
+        processed_answers =  torch.tensor(list(map(lambda x: self.filter_range(convert_to_numeric(x, -1, verbose=False)), answers_decoded)), device=answers.device)
 
         processed = torch.tensor(list(map(lambda x: self.filter_range(convert_to_numeric(x, -1, verbose=False)), predictions_decoded)), device=answers.device)
         
@@ -635,7 +637,7 @@ class NextCatFeatureOpenEnded(NextFeatureTask):
         return metrics 
 
 @dataclass
-class NextMCCFeatureOpenEnded(NextCatFeatureOpenEnded):
+class NextMCCFeatureOpenEnded(NextFeatureOpenEnded):
     def __post_init__(self):
         super().__post_init__()
         self.criterion = nn.CrossEntropyLoss(ignore_index=0)
@@ -659,7 +661,7 @@ class NextMCCFeatureOpenEnded(NextCatFeatureOpenEnded):
         ]
 
 @dataclass
-class NextNumTransactionTaskOpenEnded(NextCatFeatureOpenEnded):
+class NextNumTransactionTaskOpenEnded(NextFeatureOpenEnded):
     def __post_init__(self):
         
         super().__post_init__()
@@ -694,3 +696,101 @@ class NextNumTransactionTaskOpenEnded(NextCatFeatureOpenEnded):
         batch['label'] = torch.clamp(torch.gather(labels, 1, trx_index), 0, self.num_classes - 2).squeeze(1).long() + 1
         batch['mask'] = padding_mask
         return batch
+
+@dataclass
+class NextAmntOpenEnded(NextFeatureOpenEnded):
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.metrics = nn.ModuleDict({
+            "mae": MeanAbsoluteError(),
+        })
+        self.criterion = nn.L1Loss()
+        
+        self.task_name = "next_amnt_open_ended"
+        self.target_feature_name = 'amnt'
+
+        self.update_feature_index()
+
+        self.question_templates = [
+            ("This is the client's transaction history ",
+             "What amount will the next transactions have?"),
+        ]
+    
+    def filter_range(self, value):
+        return round(value, 2)
+    
+    def process_num_outputs(self, outputs, answers: torch.Tensor):
+        processed_answers = outputs['label']
+
+        exponent = outputs['exponent']
+        mantissa = outputs['mantissa']
+
+        processed = 10 ** (exponent.argmax(1) - 8) * mantissa
+        
+        return processed, processed_answers
+
+    def calculate_metrics(self, outputs, answers, task_metrics, stage):
+        metrics = {}
+
+        if self.task_type == 'text':
+            preds, targets = self.process_outputs(outputs, answers)
+        elif self.use_numerical:
+            preds, targets = self.process_num_outputs(outputs, answers)
+        else:
+            preds, targets = torch.sigmoid(outputs), answers
+
+        if 'mae' in task_metrics:
+            task_metrics['mae'](preds, targets)
+            metrics[stage + self.task_name + '_mae'] = task_metrics['mae']
+
+        return metrics 
+
+@dataclass
+class NextHourOpenEnded(NextFeatureOpenEnded):
+    def __post_init__(self):
+        super().__post_init__()
+
+        self.metrics = nn.ModuleDict({
+            "mae": MeanAbsoluteError(),
+        })
+        self.criterion = nn.L1Loss()
+        
+        self.task_name = "next_hour_open_ended"
+        self.target_feature_name = 'hour_diff'
+
+        self.update_feature_index()
+
+        self.question_templates = [
+            ("This is the client's transaction history ",
+             "How many hours until the next transaction?"),
+        ]
+    
+    def filter_range(self, value):
+        return round(value, 2)
+    
+    def process_num_outputs(self, outputs, answers: torch.Tensor):
+        processed_answers = outputs['label']
+
+        exponent = outputs['exponent']
+        mantissa = outputs['mantissa']
+
+        processed = 10 ** (exponent.argmax(1) - 8) * mantissa
+        
+        return processed, processed_answers
+
+    def calculate_metrics(self, outputs, answers, task_metrics, stage):
+        metrics = {}
+
+        if self.task_type == 'text':
+            preds, targets = self.process_outputs(outputs, answers)
+        elif self.use_numerical:
+            preds, targets = self.process_num_outputs(outputs, answers)
+        else:
+            preds, targets = torch.sigmoid(outputs), answers
+
+        if 'mae' in task_metrics:
+            task_metrics['mae'](preds, targets)
+            metrics[stage + self.task_name + '_mae'] = task_metrics['mae']
+
+        return metrics 

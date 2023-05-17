@@ -171,7 +171,7 @@ def init_layers(module: nn.Module):
 def collate_batch_dict(batches):
     final_batch = {}
     for key in batches[0]:
-        if key == 'mask':
+        if key == 'mask' or key == 'raw_labels':
             final_batch[key] = torch.cat([elem[key] for elem in batches], dim=0)
         else:
             final_batch[key] = sum([elem[key] for elem in batches], [])
@@ -181,7 +181,7 @@ def collate_batch_dict(batches):
 def prepare_splitted_batch(batch, split_indices):
     new_batch = {}
     for key in batch:
-        if batch[key].dim() == 1 or key == 'mask':
+        if batch[key].dim() == 1 or key == 'mask' or key == 'raw_labels':
             new_batch[key] = batch[key][split_indices]
         else:
             new_batch[key] = batch[key][:, split_indices]
@@ -201,4 +201,4 @@ def get_exponent_number(f):
     return torch.floor(torch.log10(abs(f))).int() * mask
 
 def get_mantissa_number(f):
-    return f/10**get_exponent_number(f)
+    return f / 10**get_exponent_number(f).float()

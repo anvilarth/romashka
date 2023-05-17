@@ -13,7 +13,9 @@ from .next_feature_tasks import (NextMCCFeatureTaskBinary,
                                  NextMCCFeatureTaskMulti,
                                  NextNumTransactionTaskMulti,
                                  NextMCCFeatureOpenEnded,
-                                 NextNumTransactionTaskOpenEnded)
+                                 NextNumTransactionTaskOpenEnded,
+                                 NextAmntOpenEnded,
+                                 NextHourOpenEnded)
 
 __all__ = [
     "AbstractTask",
@@ -31,5 +33,7 @@ __all__ = [
     "NextMCCFeatureTaskMulti",
     "NextMCCFeatureOpenEnded",
     "NextNumTransactionTaskMulti",
-    "NextNumTransactionTaskOpenEnded"
+    "NextNumTransactionTaskOpenEnded",
+    "NextAmntOpenEnded",
+    "NextHourOpenEnded",
 ]
