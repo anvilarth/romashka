@@ -108,6 +108,11 @@ class ModelArguments:
         metadata={"help": "A shared dimension for contrastive loss calculation."},
     )
 
+    intermediate_size: Optional[int] = field(
+        default=1024,
+        metadata={"help": "An intermediate dimension for Q-Former connector (usually 1024 or 2048)."},
+    )
+
     num_attention_heads: Optional[int] = field(
         default=4,
         metadata={"help": "A number of attention heads for Q-Former connector."},

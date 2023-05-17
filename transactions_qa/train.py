@@ -328,7 +328,7 @@ def main():
             "hidden_size": 512,
             "num_attention_heads": model_args.num_attention_heads,
             "num_hidden_layers": model_args.num_hidden_layers,
-            "intermediate_size": 1024,
+            "intermediate_size": model_args.intermediate_size,
             "cross_attention_frequency": 2,
             "attention_probs_dropout_prob": 0.1,
             "hidden_act": "gelu",
