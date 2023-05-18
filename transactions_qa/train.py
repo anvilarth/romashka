@@ -335,8 +335,6 @@ def main():
             "hidden_dropout_prob": 0.1,
             "initializer_range": 0.02,
             "max_position_embeddings": 1024,
-            "max_text_sequence_len": 512,
-            "truncation_side": "right",
             "position_embedding_type": "absolute",
         }
         if model_args.connector_model_name_or_path is not None:
@@ -344,7 +342,6 @@ def main():
 
         connector_args = {
             'config': qformer_config,
-            'tokenizer': tokenizer,
             'from_hf': True,
             "from_checkpoint": model_args.connector_model_name_or_path is not None,
             "vocab_size": len(tokenizer),

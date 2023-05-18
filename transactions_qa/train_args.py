@@ -114,7 +114,7 @@ class ModelArguments:
     )
 
     num_attention_heads: Optional[int] = field(
-        default=4,
+        default=8,
         metadata={"help": "A number of attention heads for Q-Former connector."},
     )
 

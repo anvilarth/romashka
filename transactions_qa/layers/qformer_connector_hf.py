@@ -10,12 +10,8 @@ from romashka.transactions_qa.layers.initialization import (init_xavier_uniform_
                                                             init_linear)
 
 DEFAULT_CONFIG = {
-    "sequence_len": 384,
-    "num_queries": 32,
-    "shared_dim": 768,
-    "hidden_size": 256,
-    "num_attention_heads": 4,
     "num_hidden_layers": 4,
+    "num_attention_heads": 8,
     "intermediate_size": 1024,
     "cross_attention_frequency": 2,
     "attention_probs_dropout_prob": 0.1,
@@ -23,9 +19,9 @@ DEFAULT_CONFIG = {
     "hidden_dropout_prob": 0.1,
     "initializer_range": 0.02,
     "max_position_embeddings": 1024,
-    "max_text_sequence_len": 512,
-    "truncation_side": "right",
-    "position_embedding_type": "absolute",
+    "layer_norm_eps": 1e-12,
+    "position_embedding_type": 'absolute',
+    "cross_attention_frequency": 2,
 }
 
 
