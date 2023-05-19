@@ -7,6 +7,7 @@ from romashka.transactions_qa.tasks.context_mcc_tasks import (MostFrequentMCCCod
                                                               MostFrequentMCCCodeTaskOpenEnded,
                                                               LeastFrequentMCCCodeTaskOpenEnded,
                                                               LastMCCCodeTaskOpenEnded,
+                                                              OccurenceMCCCodeTaskBinary,
                                                               ruMostFrequentMCCCodeTaskBinary,
                                                               ruMostFrequentMCCCodeTaskMulti,
                                                               ruMostFrequentMCCCodeTaskOpenEnded)
@@ -21,12 +22,14 @@ from romashka.transactions_qa.tasks.context_mcc_category_tasks import (MostFrequ
                                                                        MostFrequentMCCCategoryTaskMulti,
                                                                        MostFrequentMCCCategoryTaskOpenEnded,
                                                                        LeastFrequentMCCCategoryTaskOpenEnded,
-                                                                       LastMCCCategoryTaskOpenEnded)
+                                                                       LastMCCCategoryTaskOpenEnded,
+                                                                       OccurenceMCCCategoryTaskBinary)
 from romashka.transactions_qa.tasks.context_weekday_tasks import (MostFrequentDayOfWeekTaskBinary,
                                                                   MostFrequentDayOfWeekTaskOpenEnded,
                                                                   MostFrequentDayOfWeekTaskMulti,
                                                                   LastDayOfWeekTaskOpenEnded,
-                                                                  LeastFrequentDayOfWeekTaskOpenEnded)
+                                                                  LeastFrequentDayOfWeekTaskOpenEnded,
+                                                                  OccurenceDayOfWeekTaskBinary)
 
 from romashka.transactions_qa.tasks.next_feature_tasks import (NextMCCFeatureTaskBinary,
                                                                NextAmntFeatureTaskBinary,
@@ -57,6 +60,7 @@ AUTO_TASKS = [
         ("ru_most_frequent_mcc_code_binary", ruMostFrequentMCCCodeTaskBinary),
         ("ru_most_frequent_mcc_code_multi", ruMostFrequentMCCCodeTaskMulti),
         ("ru_most_frequent_mcc_code_open-ended", ruMostFrequentMCCCodeTaskOpenEnded),
+        ("occurrence_mcc_code_binary", OccurenceMCCCodeTaskBinary),
         # Amount
         ("mean_binned_amount_binary", MeanAmountBinnedTaskBinary),
         ("mean_numeric_amount_binary", MeanAmountNumericTaskBinary),
@@ -71,12 +75,14 @@ AUTO_TASKS = [
         ("most_frequent_mcc_category_open-ended", MostFrequentMCCCategoryTaskOpenEnded),
         ("least_frequent_mcc_category_open-ended", LeastFrequentMCCCategoryTaskOpenEnded),
         ("last_mcc_category_open-ended", LastMCCCategoryTaskOpenEnded),
+        ("occurrence_mcc_category_binary", OccurenceMCCCategoryTaskBinary),
         # Day of week
         ("most_frequent_day_of_week_multi", MostFrequentDayOfWeekTaskMulti),
         ("most_frequent_day_of_week_binary", MostFrequentDayOfWeekTaskBinary),
         ("most_frequent_day_of_week_open-ended", MostFrequentDayOfWeekTaskOpenEnded),
         ("last_day_of_week_open-ended", LastDayOfWeekTaskOpenEnded),
         ("least_frequent_day_of_week_open-ended", LeastFrequentDayOfWeekTaskOpenEnded),
+        ("occurrence_day_of_week_binary", OccurenceDayOfWeekTaskBinary),
         # Predictive
         ("default", DefaultTask),
         ("next_mcc_binary", NextMCCFeatureTaskBinary),

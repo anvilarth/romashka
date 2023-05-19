@@ -1,4 +1,5 @@
 import dataclasses
+import itertools
 
 import torch
 import torch.nn as nn
@@ -10,7 +11,6 @@ from typing import (Dict, Tuple, List,
                     Any, Optional, Union)
 
 import transformers
-import tokenizers
 from torchmetrics.text.rouge import ROUGEScore
 
 from romashka.logging_handler import get_logger
@@ -44,6 +44,8 @@ class AbstractTask(ABC):
     target_feature_type: Optional[str] = None
     task_specific_config: Optional[Dict[str, Any]] = None
     metrics: Optional[Union[Dict[str, Any], nn.ModuleDict]] = None
+    starting_prompts: Optional[List[str]] = None
+    ending_prompts: Optional[List[str]] = None
     question_templates: Optional[List[Tuple[str, str]]] = None  # (starting, ending)
     answer_template: Optional[str] = None
     answers_options: Optional[List[str]] = None
@@ -80,9 +82,6 @@ class AbstractTask(ABC):
         } if self.task_specific_config is None else self.task_specific_config
         # Init metrics
         self.metrics = nn.ModuleDict({"rouge": ROUGEScore()} if self.metrics is None else self.metrics)
-        self.question_templates = [
-            ("This is the client's transaction history ", "")] \
-            if self.question_templates is None else self.question_templates
         self.answer_template = [
             ""  # empty for default
         ] if self.answer_template is None else self.answer_template
@@ -190,8 +189,6 @@ class AbstractTask(ABC):
         if return_ids:
             return {token: tokenizer(token)['input_ids'][0] for token in new_tokens}
 
-
-
     def custom_tokenize(self, sequence: Union[str, List[str]],
                         **kwargs) -> Dict[str, Union[List[int], torch.Tensor]]:
         """
@@ -239,7 +236,6 @@ class AbstractTask(ABC):
                             for pretokenized_sequence in pretokenized]
         return sequence, is_pre_tokenized
 
-
     def update(self, new_attr: Dict[str, Any]):
         """
         Updates the parameters of class with provided {key: value} pair(-s)
@@ -252,3 +248,20 @@ class AbstractTask(ABC):
             if hasattr(self, key):
                 setattr(self, key, value)
                 logger.info(f"For Task attribute: {key} set value = {value}")
+
+    @classmethod
+    def generate_question_templates(cls,
+                                    starting_options: List[str],
+                                    ending_options: List[str]) -> List[Tuple[str, str]]:
+        """
+        Created all possible combinations of starting + ending of a question for the selected task.
+        Args:
+            starting_options: a list of starting prompts;
+            ending_options:  a list of starting prompts (i.e. questions itself);
+
+        Returns:
+            a List[Tuple[str, str]] - a sequence of tuples (question_start, question_end).
+        """
+        logger.info(f"Given {len(starting_options)} starting options and {len(ending_options)} ending options "
+                    f"results in {len(starting_options) * len(ending_options)} total combinations.")
+        return list(itertools.product(starting_options, ending_options))
