@@ -123,6 +123,11 @@ class ModelArguments:
         metadata={"help": "A number of hidden layers for Q-Former connector."},
     )
 
+    connector_hidden_size: Optional[int] = field(
+        default=512,
+        metadata={"help": "A size of a hidden layers of Q-Former connector."},
+    )
+
     cache_dir: Optional[str] = field(
         default=None,
         metadata={"help": "Where do you want to store the pretrained models downloaded from huggingface.co"},

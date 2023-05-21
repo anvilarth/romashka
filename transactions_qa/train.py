@@ -322,10 +322,7 @@ def main():
         #       "position_embedding_type": "absolute",
         # }
         qformer_config = {
-            "sequence_len": 384,
-            "num_queries": 32,
-            "shared_dim": model_args.shared_dim,
-            "hidden_size": 512,
+            "hidden_size": model_args.connector_hidden_size,
             "num_attention_heads": model_args.num_attention_heads,
             "num_hidden_layers": model_args.num_hidden_layers,
             "intermediate_size": model_args.intermediate_size,
@@ -513,7 +510,6 @@ def main():
         gpus=len(available_gpus),
         auto_select_gpus=True,
         log_every_n_steps=100,
-        # val_check_interval=training_args.val_check_interval,
         reload_dataloaders_every_n_epochs=1,
         gradient_clip_val=training_args.gradient_clip_val,
         accumulate_grad_batches=training_args.gradient_accumulation_steps,
