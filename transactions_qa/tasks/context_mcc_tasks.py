@@ -971,11 +971,18 @@ class OccurenceMCCCodeTaskBinary(CategoricalTaskAbstract):
                                                  mask=mask_.to("cpu")).long()  # get feature without padding
             features_, counts = torch.unique(feature_masked, return_counts=True)
 
-            # get inverse probabilities -> less frequent - more probably to be asked
-            inv_counts_probs = 1 - (counts / counts.sum())
-            inv_counts_probs = inv_counts_probs / inv_counts_probs.sum()
-            # sample single index from probs
-            selected_feature_ = features_[torch.multinomial(inv_counts_probs, 1)].long()
+            # Only single value of this feature in transactions history
+            if counts.size(0) == 1:
+                selected_feature_ = self.sample_random_negative(features_[0], answers_options=self.answers_options)
+            else:
+                # get inverse probabilities -> less frequent - more probably to be asked
+                # print(f"counts: {counts}")
+                inv_counts_probs = 1 - (counts / counts.sum())
+                # print(f"1 - (counts / counts.sum() = {inv_counts_probs}")
+                inv_counts_probs = inv_counts_probs / inv_counts_probs.sum()
+                # print(f"inv_counts_probs / inv_counts_probs.sum() = {inv_counts_probs}\n")
+                # sample single index from probs
+                selected_feature_ = features_[torch.multinomial(inv_counts_probs, 1)].long()
             target_feature_value_batch.append(selected_feature_)
 
             # get feature values that haven't been occurred in history

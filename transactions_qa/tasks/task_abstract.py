@@ -1,5 +1,7 @@
+import random
 import dataclasses
 import itertools
+import numpy as np
 
 import torch
 import torch.nn as nn
@@ -265,3 +267,4 @@ class AbstractTask(ABC):
         logger.info(f"Given {len(starting_options)} starting options and {len(ending_options)} ending options "
                     f"results in {len(starting_options) * len(ending_options)} total combinations.")
         return list(itertools.product(starting_options, ending_options))
+
