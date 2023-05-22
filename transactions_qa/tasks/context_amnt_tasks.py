@@ -752,28 +752,28 @@ class MeanAmountNumericTaskOpenEnded(NumericTaskAbstract):
             "mae": MeanAbsoluteError(),
             "mse": MeanSquaredError()
         }
-        self.question_templates = [
-            ("This is the client's transaction history: ",
-             ". What is the mean amount of clients' transactions?"),
-            ("This is the client's transaction history: ",
-             ". Which is the mean amount of clients' transactions?"),
-            ("You are given the client's transaction history: ",
-             ". Answer the question: what is the mean amount of clients' transactions?"),
-            ("You are given the client's transaction history: ",
-             ". Answer the question: which is the mean amount of clients' transactions throughout the history?"),
-            ("This is the client's transaction history: ",
-             ". Can you please answer the question: what is the mean amount of clients' transactions?"),
-            ("This is the client's transaction history: ",
-             ". Identify what was the mean amount of clients' transactions over the whole history?"),
-            ("This is the client's transaction history: ",
-             ". Would you answer the question: what is the mean amount of clients' transactions?"),
-            ("This is the client's transaction history: ",
-             ". Find out what is the mean amount of clients' transactions?"),
-            ("You are given the client's transaction history: ",
-             ". Calculate the mean amount of clients' transactions across the entire history?"),
-            ("You are given the client's transaction history: ",
-             ". Can you calculate the mean amount of transactions of this client?")
+
+        self.starting_prompts = [
+            "This is the client's transaction history:",
+            "You are given the client's transaction history:",
+            "The client's transaction history is given as a context:"
         ]
+
+        self.ending_prompts = [
+            ". What is the mean amount of clients' transactions?",
+            ". Which is the mean amount of clients' transactions?",
+            ". Answer the question: what is the mean amount of clients' transactions?",
+            ". Answer the question: which is the mean amount of clients' transactions throughout the history?",
+            ". Can you please answer the question: what is the mean amount of clients' transactions?",
+            ". Identify what was the mean amount of clients' transactions over the whole history?",
+            ". Would you answer the question: what is the mean amount of clients' transactions?",
+            ". Find out what is the mean amount of clients' transactions?",
+            ". Calculate the mean amount of clients' transactions across the entire history?",
+            ". Can you calculate the mean amount of transactions of this client?"
+        ]
+
+        self.question_templates = self.generate_question_templates(self.starting_prompts,
+                                                                   self.ending_prompts)
 
         # all options for a target feature
         self.binary_answer_options: Dict[str, str] = {"positive": "Yes", "negative": "No"}
@@ -981,28 +981,28 @@ class MinAmountNumericTaskOpenEnded(NumericTaskAbstract):
             "mae": MeanAbsoluteError(),
             "mse": MeanSquaredError()
         }
-        self.question_templates = [
-            ("This is the client's transaction history: ",
-             ". What is the minimum value of the transaction amount occurred throughout the transaction history?"),
-            ("This is the client's transaction history: ",
-             ". What is the smallest value of the transaction amount encountered throughout the transaction history?"),
-            ("This is the client's transaction history: ",
-             ". Choose the minimum transaction amount that occurred during the whole transaction history."),
-            ("This is the client's transaction history: ",
-             ". Find out what is the minimum transaction amount that occurred during the whole transaction history."),
-            ("This is the client's transaction history: ",
-             ". Can you please answer the question: what is the smallest value of the transaction amount encountered throughout the transaction history?"),
-            ("You are given the client's transaction history: ",
-             ". Determine the smallest amount of transaction across the entire transactions history?"),
-            ("You are given the client's transaction history: ",
-             ". Select the smallest transaction amount that encountered across the entire transaction history."),
-            ("You are given the client's transaction history: ",
-             ". Choose the minimum amount of transaction that occurred during the history."),
-            ("You are given the client's transaction history: ",
-             ". Can you find out which transactions amount is the smallest?"),
-            ("You are given the client's transaction history: ",
-             ". Answer the question: what is the smallest value of the transaction amount?"),
+
+        self.starting_prompts = [
+            "This is the client's transaction history:",
+            "You are given the client's transaction history:",
+            "The client's transaction history is given as a context:"
         ]
+
+        self.ending_prompts = [
+            ". What is the minimum value of the transaction amount occurred throughout the transaction history?",
+            ". What is the smallest value of the transaction amount encountered throughout the transaction history?",
+            ". Choose the minimum transaction amount that occurred during the whole transaction history.",
+            ". Find out what is the minimum transaction amount that occurred during the whole transaction history.",
+            ". Can you please answer the question: what is the smallest value of the transaction amount encountered throughout the transaction history?",
+            ". Determine the smallest amount of transaction across the entire transactions history?",
+            ". Select the smallest transaction amount that encountered across the entire transaction history.",
+            ". Choose the minimum amount of transaction that occurred during the history.",
+            ". Can you find out which transactions amount is the smallest?",
+            ". Answer the question: what is the smallest value of the transaction amount?"
+        ]
+
+        self.question_templates = self.generate_question_templates(self.starting_prompts,
+                                                                   self.ending_prompts)
 
         # all options for a target feature
         self.binary_answer_options: Dict[str, str] = {"positive": "Yes", "negative": "No"}
@@ -1210,29 +1210,28 @@ class MaxAmountNumericTaskOpenEnded(NumericTaskAbstract):
             "mae": MeanAbsoluteError(),
             "mse": MeanSquaredError()
         }
-        self.question_templates = [
-            ("This is the client's transaction history: ",
-             ". What is the maximum value of the transaction amount occurred throughout the transaction history?"),
-            ("This is the client's transaction history: ",
-             ". What is the larges value of the transaction amount encountered throughout the transaction history?"),
-            ("This is the client's transaction history: ",
-             ". Choose the maximum transaction amount that occurred during the whole transaction history."),
-            ("This is the client's transaction history: ",
-             ". Find out what is the maximum transaction amount that occurred during the whole transaction history."),
-            ("This is the client's transaction history: ",
-             ". Can you please answer the question: what is the larges value of the transaction amount "
-             "encountered throughout the transaction history?"),
-            ("You are given the client's transaction history: ",
-             ". Determine the larges amount of transaction across the entire transactions history?"),
-            ("You are given the client's transaction history: ",
-             ". Select the largest transaction amount that encountered across the entire transaction history."),
-            ("You are given the client's transaction history: ",
-             ". Choose the maximum amount of transaction that occurred during the history."),
-            ("You are given the client's transaction history: ",
-             ". Can you find out which transactions amount is the largest?"),
-            ("You are given the client's transaction history: ",
-             ". Answer the question: what is the largest value of the transaction amount?"),
+
+        self.starting_prompts = [
+            "This is the client's transaction history:",
+            "You are given the client's transaction history:",
+            "The client's transaction history is given as a context:"
         ]
+
+        self.ending_prompts = [
+            ". What is the maximum value of the transaction amount occurred throughout the transaction history?",
+            ". What is the largest value of the transaction amount encountered throughout the transaction history?",
+            ". Choose the maximum transaction amount that occurred during the whole transaction history.",
+            ". Find out what is the maximum transaction amount that occurred during the whole transaction history.",
+            ". Can you please answer the question: what is the largest value of the transaction amount encountered throughout the transaction history?",
+            ". Determine the largest amount of transaction across the entire transactions history?",
+            ". Select the largest transaction amount that encountered across the entire transaction history.",
+            ". Choose the maximum amount of transaction that occurred during the history.",
+            ". Can you find out which transactions amount is the largest?",
+            ". Answer the question: what is the largest value of the transaction amount?"
+        ]
+
+        self.question_templates = self.generate_question_templates(self.starting_prompts,
+                                                                   self.ending_prompts)
 
         # all options for a target feature
         self.binary_answer_options: Dict[str, str] = {"positive": "Yes", "negative": "No"}
@@ -1435,30 +1434,29 @@ class LastAmountNumericTaskOpenEnded(NumericTaskAbstract):
             "mae": MeanAbsoluteError(),
             "mse": MeanSquaredError()
         }
-        self.question_templates = [
-            ("This is the client's transaction history: ",
-             ". What is the amount of the last transaction that occurred in history?"),
-            ("You are given the client's transaction history: ",
-             ". What is the amount of the very last transaction encountered in the transaction history?"),
-            ("This is the client's transaction history: ",
-             ". Choose the last transaction amount."),
-            ("You are given the client's transaction history: ",
-             ". Select the amount of the most recently occurred transaction."),
-            ("This is the client's transaction history: ",
-             ". Find out what is the amount of last transaction that occurred in history."),
-            ("This is the client's transaction history: ",
-             ". Can you please answer the question: what is the amount of the most recent transaction?"),
-            ("This is the client's transaction history: ",
-             ". Determine the amount of the last transaction in history?"),
-            ("You are given the client's transaction history: ",
-             ". Select the amount of the last transaction that encountered in history."),
-            ("You are given the client's transaction history: ",
-             ". Choose the amount of the most recent transaction in the history"),
-            ("You are given the client's transaction history: ",
-             ". Can you find out of which amount was the most recent transaction?"),
-            ("You are given the client's transaction history: ",
-             ". Answer the question: what is the amount of the latest transaction?"),
+
+        self.starting_prompts = [
+            "This is the client's transaction history:",
+            "You are given the client's transaction history:",
+            "The client's transaction history is given as a context:"
         ]
+
+        self.ending_prompts = [
+            ". What is the amount of the last transaction that occurred in history?",
+            ". What is the amount of the very last transaction encountered in the transaction history?",
+            ". Choose the last transaction amount.",
+            ". Select the amount of the most recently occurred transaction.",
+            ". Find out what is the amount of last transaction that occurred in history.",
+            ". Can you please answer the question: what is the amount of the most recent transaction?",
+            ". Determine the amount of the last transaction in history?",
+            ". Select the amount of the last transaction that encountered in history.",
+            ". Choose the amount of the most recent transaction in the history",
+            ". Can you find out of which amount was the most recent transaction?",
+            ". Answer the question: what is the amount of the latest transaction?"
+        ]
+
+        self.question_templates = self.generate_question_templates(self.starting_prompts,
+                                                                   self.ending_prompts)
 
         # all options for a target feature
         self.binary_answer_options: Dict[str, str] = {"positive": "Yes", "negative": "No"}

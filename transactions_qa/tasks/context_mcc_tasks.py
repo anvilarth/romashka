@@ -33,14 +33,29 @@ class MostFrequentMCCCodeTaskMulti(CategoricalTaskAbstract):
                                  num_classes=self.num_classes)
         })
 
-        self.question_templates = [
-            ("This is the client's transaction history ",
-             ". Which MCC code is the most frequent?"),
-            ("This is the client's transaction history ",
-             ". Select the most frequent MCC code."),
-            ("You are given the client's transaction history ",
-             ". Choose the most frequent MCC code."),
+        self.starting_prompts = [
+            "This is the client's transaction history:",
+            "You are given the client's transaction history:",
+            "The client's transaction history is given as a context:"
         ]
+
+        self.ending_prompts = [
+            ". Which MCC code is the most frequent?",
+            ". Choose the most frequent MCC code.",
+            ". Which MCC code is the most frequent in all clint's transactions?",
+            ". Answer the question: which MCC code is the most frequent?",
+            ". Select the most frequent MCC code.",
+            ". Answer the question: which MCC code is the most frequent within "
+            "clients' transactions throughout the history?",
+            ". Find out which MCC code is the most frequent in history?",
+            ". Which MCC code is the most frequent within clients' transactions throughout the history?",
+            ". Identify which MCC code is the most frequent within clients' transactions?",
+            ". Can you find out which MCC code is the most frequent?"
+        ]
+
+        self.question_templates = self.generate_question_templates(self.starting_prompts,
+                                                                   self.ending_prompts)
+
         # all options, for a sample can be reduced to [true_mcc_code + 4 other codes]
         self.answers_options = [str(i) for i in range(self.num_classes)]
         self.answer_template = ""  # left empty for a first time
@@ -186,33 +201,33 @@ class MostFrequentMCCCodeTaskBinary(AbstractTask):
         self.metrics = nn.ModuleDict({
             "rouge": ROUGEScore()
         })
-        self.question_templates = [
-            ("This is the client's transaction history ",
-             ". Is %s MCC code is the most frequent? Yes or No?"),
-            ("You are given the client's transaction history ",
-             ". Is %s MCC code is the most frequent? Choose one: Yes or No?"),
-            ("This is the client's transaction history ",
-             ". Is the most frequent MCC code of all client's transactions is %s? Yes or No?"),
-            ("You are given the client's transaction history ",
-             ". Is it true or false: the most frequent MCC code of all client's transactions is %s? Yes or No?"),
-            ("This is the client's transaction history ",
-             ". Define whether the following statement is correct: the most frequent MCC code "
-             "of all client's transactions is %s. Choose: Yes or No?"),
-            ("You are given the client's transaction history ",
-             " Identify if the statement that the most frequent MCC code is %s is correct? Yes or No?"),
-            ("This is the client's transaction history ",
-             ". Determine whether the following statement is true: %s is the most frequent MCC code "
-             "within all client's transactions. Choose: Yes or No?"),
-            ("You are given the client's transaction history ",
-             ". Is the statement correct: the most frequent MCC code of all client's transactions is %s. "
-             "Choose one: Yes or No?"),
-            ("This is the client's transaction history ",
-             ". Answer the question whether or not the following statement is true: the most frequent "
-             "MCC code is %s. Yes or No?"),
-            ("You are given the client's transaction history ",
-             ". Find out whether or not the following statement is true: the most frequent MCC code is %s. "
-             "Answer only: Yes or No?"),
+
+        self.starting_prompts = [
+            "This is the client's transaction history:",
+            "You are given the client's transaction history:",
+            "The client's transaction history is given as a context:"
         ]
+
+        self.ending_prompts = [
+            ". Is %s MCC code is the most frequent? Yes or No?",
+            ". Is %s MCC code is the most frequent? Choose one: Yes or No?",
+            ". Is the most frequent MCC code of all client's transactions is %s? Yes or No?",
+            ". Is it true or false: the most frequent MCC code of all client's transactions is %s? Yes or No?",
+            ". Define whether the following statement is correct: the most frequent MCC code "
+            "of all client's transactions is %s. Choose: Yes or No?",
+            " Identify if the statement that the most frequent MCC code is %s is correct? Yes or No?",
+            ". Determine whether the following statement is true: %s is the most frequent MCC code "
+            "within all client's transactions. Choose: Yes or No?",
+            ". Is the statement correct: the most frequent MCC code of all client's transactions is %s. "
+            "Choose one: Yes or No?",
+            ". Answer the question whether or not the following statement is true: the most frequent "
+            "MCC code is %s. Yes or No?",
+            ". Find out whether or not the following statement is true: the most frequent MCC code is %s. "
+            "Answer only: Yes or No?"
+        ]
+
+        self.question_templates = self.generate_question_templates(self.starting_prompts,
+                                                                   self.ending_prompts)
 
         # all options for a target feature
         self.answers_options: List[str] = [str(i) for i in range(self.num_classes)]
@@ -370,29 +385,29 @@ class MostFrequentMCCCodeTaskOpenEnded(AbstractTask):
         self.metrics = nn.ModuleDict({
             "rouge": ROUGEScore()
         })
-        self.question_templates = [
-            ("This is the client's transaction history ",
-             ". Which MCC code is the most frequent?"),
-            ("You are given the client's transaction history ",
-             ". Choose the most frequent MCC code."),
-            ("This is the client's transaction history ",
-             ". Which MCC code is the most frequent in all clint's transactions?"),
-            ("You are given the client's transaction history ",
-             ". Answer the question: which MCC code is the most frequent?"),
-            ("This is the client's transaction history ",
-             ". Select the most frequent MCC code."),
-            ("You are given the client's transaction history ",
-             ". Answer the question: which MCC code is the most frequent within "
-             "clients' transactions throughout the history?"),
-            ("This is the client's transaction history ",
-             ". Find out which MCC code is the most frequent in history?"),
-            ("You are given the client's transaction history ",
-             ". Which MCC code is the most frequent within clients' transactions throughout the history?"),
-            ("This is the client's transaction history ",
-             ". Identify which MCC code is the most frequent within clients' transactions?"),
-            ("You are given the client's transaction history ",
-             ". Can you find out which MCC code is the most frequent?"),
+
+        self.starting_prompts = [
+            "This is the client's transaction history:",
+            "You are given the client's transaction history:",
+            "The client's transaction history is given as a context:"
         ]
+
+        self.ending_prompts = [
+            ". Which MCC code is the most frequent?",
+            ". Choose the most frequent MCC code.",
+            ". Which MCC code is the most frequent in all clint's transactions?",
+            ". Answer the question: which MCC code is the most frequent?",
+            ". Select the most frequent MCC code.",
+            ". Answer the question: which MCC code is the most frequent within "
+            "clients' transactions throughout the history?",
+            ". Find out which MCC code is the most frequent in history?",
+            ". Which MCC code is the most frequent within clients' transactions throughout the history?",
+            ". Identify which MCC code is the most frequent within clients' transactions?",
+            ". Can you find out which MCC code is the most frequent?"
+        ]
+
+        self.question_templates = self.generate_question_templates(self.starting_prompts,
+                                                                   self.ending_prompts)
 
         # all options for a target feature - it is not actually required here, but still
         self.answers_options = [str(i) for i in range(self.num_classes)]
@@ -527,29 +542,29 @@ class LeastFrequentMCCCodeTaskOpenEnded(AbstractTask):
         self.metrics = nn.ModuleDict({
             "rouge": ROUGEScore()
         })
-        self.question_templates = [
-            ("This is the client's transaction history ",
-             ". Which MCC code is the least frequent from it?"),
-            ("You are given the client's transaction history ",
-             ". Choose the most infrequent MCC code from transactions history."),
-            ("This is the client's transaction history ",
-             ". Which MCC code is the most rare in all clint's transactions?"),
-            ("You are given the client's transaction history ",
-             ". Answer the question: which MCC code is the most rare?"),
-            ("This is the client's transaction history ",
-             ". Select the most infrequent MCC code."),
-            ("You are given the client's transaction history ",
-             ". Answer the question: which MCC code is the least frequent within "
-             "clients' transactions throughout the history?"),
-            ("This is the client's transaction history ",
-             ". Find out which MCC code is the least frequent in history?"),
-            ("You are given the client's transaction history ",
-             ". Which MCC code is the most rare within clients' transactions throughout the history?"),
-            ("This is the client's transaction history ",
-             ". Identify which MCC code is the most infrequent within clients' transactions?"),
-            ("You are given the client's transaction history ",
-             ". Can you find out which MCC code is the most rare?"),
+
+        self.starting_prompts = [
+            "This is the client's transaction history:",
+            "You are given the client's transaction history:",
+            "The client's transaction history is given as a context:"
         ]
+
+        self.ending_prompts = [
+            ". Which MCC code is the least frequent from it?",
+            ". Choose the most infrequent MCC code from transactions history.",
+            ". Which MCC code is the most rare in all clint's transactions?",
+            ". Answer the question: which MCC code is the most rare?",
+            ". Select the most infrequent MCC code.",
+            ". Answer the question: which MCC code is the least frequent within "
+            "clients' transactions throughout the history?",
+            ". Find out which MCC code is the least frequent in history?",
+            ". Which MCC code is the most rare within clients' transactions throughout the history?",
+            ". Identify which MCC code is the most infrequent within clients' transactions?",
+            ". Can you find out which MCC code is the most rare?"
+        ]
+
+        self.question_templates = self.generate_question_templates(self.starting_prompts,
+                                                                   self.ending_prompts)
 
         # all options for a target feature - it is not actually required here, but still
         self.answers_options = [str(i) for i in range(self.num_classes)]
@@ -684,30 +699,29 @@ class LastMCCCodeTaskOpenEnded(AbstractTask):
         self.metrics = nn.ModuleDict({
             "rouge": ROUGEScore()
         })
-        self.question_templates = [
-            ("This is the client's transaction history: ",
-             ". What is the MCC code of the last transaction that occurred in history?"),
-            ("You are given the client's transaction history: ",
-             ". What is the MCC code of the very last transaction encountered in the transaction history?"),
-            ("This is the client's transaction history: ",
-             ". Choose the last transaction MCC code."),
-            ("You are given the client's transaction history: ",
-             ". Select the MCC code of the most recently occurred transaction."),
-            ("This is the client's transaction history: ",
-             ". Find out what is the MCC code of last transaction that occurred in history."),
-            ("This is the client's transaction history: ",
-             ". Can you please answer the question: what is the MCC code of the most recent transaction?"),
-            ("This is the client's transaction history: ",
-             ". Determine the MCC code of the last transaction in history?"),
-            ("You are given the client's transaction history: ",
-             ". Select the MCC code of the last transaction that encountered in history."),
-            ("You are given the client's transaction history: ",
-             ". Choose the MCC code of the most recent transaction in the history"),
-            ("You are given the client's transaction history: ",
-             ". Can you find out of which MCC code was the most recent transaction?"),
-            ("You are given the client's transaction history: ",
-             ". Answer the question: what is the MCC code of the latest transaction?"),
+
+        self.starting_prompts = [
+            "This is the client's transaction history:",
+            "You are given the client's transaction history:",
+            "The client's transaction history is given as a context:"
         ]
+
+        self.ending_prompts = [
+            ". What is the MCC code of the last transaction that occurred in history?",
+            ". What is the MCC code of the very last transaction encountered in the transaction history?",
+            ". Choose the last transaction MCC code.",
+            ". Select the MCC code of the most recently occurred transaction.",
+            ". Find out what is the MCC code of last transaction that occurred in history.",
+            ". Can you please answer the question: what is the MCC code of the most recent transaction?",
+            ". Determine the MCC code of the last transaction in history?",
+            ". Select the MCC code of the last transaction that encountered in history.",
+            ". Choose the MCC code of the most recent transaction in the history",
+            ". Can you find out of which MCC code was the most recent transaction?",
+            ". Answer the question: what is the MCC code of the latest transaction?"
+        ]
+
+        self.question_templates = self.generate_question_templates(self.starting_prompts,
+                                                                   self.ending_prompts)
 
         # all options for a target feature - it is not actually required here, but still
         self.answers_options = [str(i) for i in range(self.num_classes)]
@@ -880,6 +894,7 @@ class ruMostFrequentMCCCodeTaskOpenEnded(MostFrequentMCCCodeTaskOpenEnded):
         super().__post_init__()
 
         self.task_name = "ru_most_frequent_mcc_code_open-ended"
+
         self.question_templates = [
             ("Это история транзакций клиента: ",
              ". Какой был самый частый MCC код транзакции?"),

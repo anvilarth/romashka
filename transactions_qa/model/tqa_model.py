@@ -245,6 +245,7 @@ class TransactionQAModel(pl.LightningModule):
         loss = outputs['loss']
 
         # Calc metrics
+        metrics_scores = {}
         try:
             metrics_scores = task.calculate_metrics(outputs, batch_answers, self.metrics[task.task_name])
         except Exception as e:
