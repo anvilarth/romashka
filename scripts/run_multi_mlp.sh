@@ -46,6 +46,7 @@ python src/transactions_qa/train.py \
 --group_name="predictive_tasks_single_mode" \
 --run_name="tqa_200k-steps_ft=all_amnt_hour_open_$model_name" \
 --use_numerical=True \
+--num_head='mlp' \
 
 
 

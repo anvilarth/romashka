@@ -591,9 +591,12 @@ class NextFeatureOpenEnded(NextFeatureTask):
         # Construct target values 
         # Target's questions numeric/categorical answers as str
         trx_index = batch['mask'].sum(1, keepdim=True) - 1
-        batch['label'] = torch.gather(target_feature_batch, 1, trx_index).squeeze(1)
+        batch['label'] = self.process_labels(torch.gather(target_feature_batch, 1, trx_index).squeeze(1))
         batch['mask'][:, trx_index.flatten()] = 0
         return batch
+    
+    def process_labels(self, labels):
+        return labels
 
     def generate_target_question(self, question_end: Any, target_batch: Any, **kwargs) -> Any:
         return [question_end for _ in range(len(target_batch))] 
@@ -605,7 +608,7 @@ class NextFeatureOpenEnded(NextFeatureTask):
 
         input_labels = batch['label']
         
-        batch['text_label'] = list(map(lambda x: str(x.item()), input_labels))
+        batch['text_label'] = list(map(lambda x: str(round(x.item(), 2)), input_labels))
         return batch
 
     def filter_range(self, value):
@@ -685,6 +688,9 @@ class NextNumTransactionTaskOpenEnded(NextFeatureOpenEnded):
         ]
 
         self.answers_options = [str(i) for i in range(self.num_classes)]
+    
+    def process_labels(self, labels):
+        return torch.clamp(labels, 0, self.num_classes - 2).squeeze(1).long() + 1
 
     def prepare_task_batch(self, batch: Dict[str, Any], **kwargs):
         _, labels, _, padding_mask = make_time_batch(batch, number_days=self.N)
@@ -693,7 +699,7 @@ class NextNumTransactionTaskOpenEnded(NextFeatureOpenEnded):
         if any(trx_index == -1):
             return {}
         # TODO: fix adding 1 (bincount error with negative values)
-        batch['label'] = torch.clamp(torch.gather(labels, 1, trx_index), 0, self.num_classes - 2).squeeze(1).long() + 1
+        batch['label'] = self.process_labels(torch.gather(labels, 1, trx_index))
         batch['mask'] = padding_mask
         return batch
 
@@ -716,17 +722,16 @@ class NextAmntOpenEnded(NextFeatureOpenEnded):
             ("This is the client's transaction history ",
              "What amount will the next transactions have?"),
         ]
-    
+
     def filter_range(self, value):
         return round(value, 2)
+
+    def process_labels(self, labels):
+        return torch.round(labels, decimals=2)
     
     def process_num_outputs(self, outputs, answers: torch.Tensor):
         processed_answers = outputs['label']
-
-        exponent = outputs['exponent']
-        mantissa = outputs['mantissa']
-
-        processed = 10 ** (exponent.argmax(1) - 8) * mantissa
+        processed = outputs['preds']
         
         return processed, processed_answers
 
@@ -734,11 +739,12 @@ class NextAmntOpenEnded(NextFeatureOpenEnded):
         metrics = {}
 
         if self.task_type == 'text':
-            preds, targets = self.process_outputs(outputs, answers)
-        elif self.use_numerical:
-            preds, targets = self.process_num_outputs(outputs, answers)
+            if self.use_numerical:
+                preds, targets = self.process_num_outputs(outputs, answers)
+            else:
+                preds, targets = self.process_outputs(outputs, answers)
         else:
-            preds, targets = torch.sigmoid(outputs), answers
+            raise NotImplementedError
 
         if 'mae' in task_metrics:
             task_metrics['mae'](preds, targets)
@@ -768,14 +774,13 @@ class NextHourOpenEnded(NextFeatureOpenEnded):
     
     def filter_range(self, value):
         return round(value, 2)
+
+    def process_labels(self, labels):
+        return torch.round(labels, decimals=2)
     
     def process_num_outputs(self, outputs, answers: torch.Tensor):
         processed_answers = outputs['label']
-
-        exponent = outputs['exponent']
-        mantissa = outputs['mantissa']
-
-        processed = 10 ** (exponent.argmax(1) - 8) * mantissa
+        processed = outputs['preds']
         
         return processed, processed_answers
 
@@ -783,9 +788,10 @@ class NextHourOpenEnded(NextFeatureOpenEnded):
         metrics = {}
 
         if self.task_type == 'text':
-            preds, targets = self.process_outputs(outputs, answers)
-        elif self.use_numerical:
-            preds, targets = self.process_num_outputs(outputs, answers)
+            if self.use_numerical:
+                preds, targets = self.process_num_outputs(outputs, answers)
+            else:
+                preds, targets = self.process_outputs(outputs, answers)
         else:
             preds, targets = torch.sigmoid(outputs), answers
 

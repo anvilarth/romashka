@@ -272,6 +272,7 @@ def main():
         "optimizer_name": training_args.optimizer_name,
         "scheduler_name": training_args.scheduler_name,
         "use_numerical": model_args.use_numerical,
+        "num_head": model_args.num_head,
     }
 
     model = TransactionQAModel(

@@ -74,6 +74,10 @@ class ModelArguments:
         default=False,
         metadata={"help": "Whether predict tokens using numerical module or not"},
     )
+    num_head: str = field(
+        default='linear',
+        metadata={"help": "Type of head which is in use for predicting numerical values"},
+    )
     use_auth_token: bool = field(
         default=False,
         metadata={

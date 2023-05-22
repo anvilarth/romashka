@@ -16,9 +16,9 @@ from src.transactions_qa.layers.connector import (make_linear_connector,
 from src.tasks.task_abstract import AbstractTask
 from src.utils.logging_handler import get_logger
 from src.transactions_qa.utils import (get_split_indices, prepare_splitted_batch, collate_batch_dict, get_exponent_number, get_mantissa_number)
+from src.transactions_qa.layers.numerical_head import LinearHead, MLPHead
 
-
-from transformers import Adafactor
+from transformers import Adafactor, GenerationConfig
 from transformers.optimization import AdafactorSchedule
 
 from copy import deepcopy
@@ -44,7 +44,8 @@ class TransactionQAModel(pl.LightningModule):
                  warmup_steps: Optional[int] = 100,
                  training_steps: Optional[int] = 10_000,
                  use_numerical: Optional[bool] = False,
-                 verbose_for_debug: Optional[bool] = False):
+                 verbose_for_debug: Optional[bool] = False,
+                 num_head: Optional[str] = 'linear'):
         super().__init__()
         self._logger = get_logger(
             name=self.__class__.__name__,
@@ -63,8 +64,15 @@ class TransactionQAModel(pl.LightningModule):
         self.use_numerical = use_numerical
         self.mantissa_loss = nn.L1Loss()
         self.exponent_loss = nn.CrossEntropyLoss()
-        self.exponent_head = nn.Linear(self.connector.get_input_size(), 17)
-        self.mantissa_head = nn.Linear(self.connector.get_input_size(), 1)
+
+        if num_head == 'linear':
+            self.exponent_head = LinearHead(self.connector.get_input_size(), 17)
+            self.mantissa_head = LinearHead(self.connector.get_input_size(), 1)
+            
+        elif num_head == 'mlp':
+            self.exponent_head = MLPHead(self.connector.get_input_size(), 17)
+            self.mantissa_head = MLPHead(self.connector.get_input_size(), 1)
+
         self.training_mode = 'lm'
         
         self.tasks = tasks
@@ -100,6 +108,7 @@ class TransactionQAModel(pl.LightningModule):
         self.columns = ["epoch", "step #", "task",
                         "question", "prediction", "truth",
                         "transactions_history_lengths"]
+
         self.log_eval_predictions_table = wandb.Table(columns=self.columns)
         self.log_eval_steps_counter = 0
         self.num_eval_batches_to_log = 10
@@ -362,11 +371,15 @@ class TransactionQAModel(pl.LightningModule):
                     decoder_attention_mask=batch_answers_mask
         )
 
-    def model_step(self, batch, task_idx: Optional[int] = None) -> Tuple[Any, torch.Tensor]:
+    def model_step(self, batch, generate=False, task_idx: Optional[int] = None) -> Tuple[Any, torch.Tensor]:
         # Sample single task
         # if task_idx is None:
         #     task_idx = 0
         # task = self.tasks[task_idx]
+
+        if generate:
+            generation_config = GenerationConfig(**generation_options)
+            return self.model.generate(qa_batch, generation_config)
 
         NUM_TASKS = len(self.tasks)
         splitted = get_split_indices(batch, len(self.tasks))
@@ -400,6 +413,7 @@ class TransactionQAModel(pl.LightningModule):
         # Pass through LM
         # contains: ['loss', 'logits', 'past_key_values', 'encoder_last_hidden_state']
         # `logits` of size: [batch_size, max_pred_len, vocab_size]
+
         lm_outputs = self.language_model(inputs_embeds=model_input['inputs_embeds'],
                                          attention_mask=model_input['attention_mask'],
                                          labels=model_input['labels'],
@@ -415,6 +429,9 @@ class TransactionQAModel(pl.LightningModule):
             
             lm_outputs['exponent'] = exponent
             lm_outputs['mantissa'] = mantissa
+            
+            # On our torch version torch.pow(10, 0) = 0, but torch.pow(10, 0.0) = 1 WTF
+            lm_outputs['preds'] = 10 ** (exponent.argmax(1).float() - 8) * mantissa
             
         # Return question as:
         # Q_start_tokens + TRNS_embeddings + Q_end_tokens
@@ -547,6 +564,7 @@ class TransactionQAModel(pl.LightningModule):
         # for i, (pred, answer, question) in enumerate(zip(predictions_decoded, batch_answers_decoded, batch_questions_decoded)):
         #     print(f"\t#{i}{question}:\tpredicted: {pred}, answer: {answer}")
 
+
         # Calc metrics
         try: 
             metrics_scores = task.calculate_metrics(outputs, batch_answers, self.val_metrics[task.task_name], stage='val_')
@@ -576,7 +594,8 @@ class TransactionQAModel(pl.LightningModule):
                                  questions=outputs.question_encoded.detach().cpu(),
                                  transactions_history_lengths=outputs['transactions_history_lengths'].detach().cpu(),
                                  predictions_table=self.log_eval_predictions_table,
-                                 log_counter=self.log_eval_steps_counter)
+                                 log_counter=self.log_eval_steps_counter,
+                                 outputs=outputs)
             self.log_eval_steps_counter += 1
         return loss
 
@@ -685,6 +704,105 @@ class TransactionQAModel(pl.LightningModule):
             batch_idx=batch_idx
         )
 
+    def _predict_with_generate_step_task(self, batch: Any, task_idx: int,
+                                         calculate_metrics: Optional[bool] = False,
+                                         verbose: Optional[bool] = False,
+                                         batch_idx: Optional[int] = 0,
+                                         return_embeddings: Optional[bool] = False,
+                                         return_logits: Optional[bool] = False) -> Dict[str, Any]:
+        """
+        Predict with generate() function for single task.
+        Args:
+            batch: Current batch;
+            task_idx: selected task index;
+            batch_idx: Index of current batch.
+
+        Returns:
+            results: as dictionary, where:
+                keys are - metrics / predictions / answers / questions.
+        """
+        task = self.tasks[task_idx]
+        qa_batch = task.process_input_batch(batch)
+        batch_answers = qa_batch['answer_tokens'].long() if "answer_tokens" in qa_batch else None
+
+        # Get parameters for generation from model
+        generation_config = self.model.generation_config
+
+        # Whether to restrict outputs of generation to small subspace of vocabulary
+        if generation_config.get("create_allowed_token_ids", False) \
+                and (generation_config.get("allowed_token_ids") is None):
+            if 'binary' in task.task_name:
+                answer_options = list(task.binary_answer_options.values())
+            else:
+                answer_options = list(task.answers_options)
+            allowed_token_ids = [i[0] for i in
+                                 self.model.tokenizer(answer_options, add_special_tokens=False).input_ids]
+        elif generation_config.get("allowed_token_ids") is not None:
+            allowed_token_ids = generation_config.get("allowed_token_ids")
+        else:
+            allowed_token_ids = None
+
+        # Whether to create create_stopping_criteria
+        stopping_criteria = None
+        if generation_config.get("create_stopping_criteria", False) and (allowed_token_ids is not None):
+            stopping_criteria = AnsweredQACriteria(prompt_length=0,
+                                                   answer_tokens_ids=allowed_token_ids)
+        elif generation_config.get("create_stopping_criteria", False):
+            self._logger.warning(f"Unable to create stopping criteria, no `allowed_token_ids` provided!")
+
+        predictions = self.model.generate(
+            questions=qa_batch['question_end_tokens'],
+            transactions_batch=batch,
+            prefix_prompt=qa_batch['question_start_tokens'],
+            answer_template=task.answer_template,
+            max_new_tokens=generation_config.get("max_new_tokens", False),
+            min_new_tokens=generation_config.get("min_new_tokens", False),
+            top_p=generation_config.get("top_p", False),
+            temperature=generation_config.get("temperature", False),
+            filter_value=generation_config.get("filter_value", False),
+            allowed_token_ids=allowed_token_ids,
+            hidden_dims_indexes=generation_config.get("hidden_dims_indexes", False),
+            stopping_criteria=stopping_criteria,
+            seed=generation_config.get("seed", False)
+        )
+
+        # as list of strings
+        predictions_decoded = self.model.tokenizer.batch_decode(predictions['generated_texts'],
+                                                                skip_special_tokens=True)
+        batch_answers_decoded = self.model.tokenizer.batch_decode(batch_answers,
+                                                                  skip_special_tokens=True) \
+            if batch_answers is not None else None
+        batch_questions_decoded = self.model.tokenizer.batch_decode(qa_batch['question_end_tokens'].detach().cpu(),
+                                                                    skip_special_tokens=True)
+
+        if verbose:
+            self._logger.info("----- Prediction step -----")
+            self._logger.info(f"Generated for batch #{batch_idx}:\n{predictions_decoded}")
+
+        # Calc metrics
+        metrics_scores = {}
+        if calculate_metrics:
+            for metric_name, metric in task.metrics.items():
+                try:
+                    metrics_scores[metric_name] = metric(predictions_decoded,
+                                                         batch_answers_decoded)
+                except Exception as e:
+                    self._logger.error(f"error occurred during task metric `{metric_name}` calculation:\n{e}")
+
+        outputs = {
+            "predictions": predictions_decoded,
+            "questions": batch_questions_decoded,
+            "metrics": metrics_scores,
+            "batch_idx": batch_idx
+        }
+        if batch_answers is not None:
+            outputs['answers'] = batch_answers_decoded
+        if return_embeddings:
+            outputs['embeddings'] = predictions['output_embeddings']
+        if return_logits:
+            outputs['logits'] = predictions['output_logits']
+        return outputs
+
     def on_validation_epoch_start(self) -> None:
         print(f"\n----------- Validation start ----------\n")
         # Reset log counter
@@ -703,11 +821,21 @@ class TransactionQAModel(pl.LightningModule):
                         predictions_table: wandb.Table,
                         log_counter: int,
                         transactions_history_lengths: Optional[torch.Tensor] = [],
-                        task_name: Optional[str] = "default"):
-        predictions_decoded = self.tokenizer.batch_decode(logits.argmax(2),
+                        task_name: Optional[str] = "default",
+                        outputs: Optional[torch.Tensor] = None):
+        
+    
+        if self.use_numerical:
+            predictions_decoded = list(map(lambda x: str(round(x.item(), 2)), outputs['preds']))
+            answers_decoded = list(map(lambda x: str(round(x.item(), 2)), outputs['label']))
+
+        else:
+            predictions_decoded = self.tokenizer.batch_decode(logits.argmax(2),
+                                                        skip_special_tokens=True)
+        
+            answers_decoded = self.tokenizer.batch_decode(answers,
                                                           skip_special_tokens=True)
-        answers_decoded = self.tokenizer.batch_decode(answers,
-                                                      skip_special_tokens=True)
+        
         questions_decoded = self.tokenizer.batch_decode(questions,
                                                         skip_special_tokens=True)
 
