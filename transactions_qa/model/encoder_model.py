@@ -81,6 +81,7 @@ class EncoderSimpleModel(nn.Module):
                                  "Try running on your own risk.")
 
     def _prepare_model(self):
+        print(f"Call EncoderModel._prepare_model()")
         # Set language model architecture type / family (i.e. T5/...)
         self._set_language_model_arch_type()
 

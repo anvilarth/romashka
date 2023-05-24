@@ -15,6 +15,7 @@ class EncoderSingleRetrievalModel(EncoderSimpleModel):
     """
     Encoder-decoder model with single retrieval token appended to the very end of the sequence.
     """
+
     def __init__(self,
                  language_model: nn.Module,
                  transaction_model: nn.Module,
@@ -36,7 +37,10 @@ class EncoderSingleRetrievalModel(EncoderSimpleModel):
                  transactions_embeddings_start_token: Optional[str] = r"[trx]",
                  transactions_embeddings_end_token: Optional[str] = r"[/trx]",
                  generation_config: Optional[Dict[str, Any]] = None,
+                 device: Optional[Union[torch.device, str]] = 'cpu',
                  is_debug: Optional[bool] = False):
+
+        self.device = device
 
         self._transactions_embeddings_start_token = transactions_embeddings_start_token
         self._transactions_embeddings_end_token = transactions_embeddings_end_token
@@ -66,7 +70,9 @@ class EncoderSingleRetrievalModel(EncoderSimpleModel):
                          is_debug=is_debug)
 
     def _prepare_model(self):
+        print(f"Call EncoderSingleRetrievalModel._prepare_model()")
         super()._prepare_model()
+        print(f"Back to call EncoderSingleRetrievalModel._prepare_model()")
 
         self.whitespace_token_id = torch.Tensor(self.tokenizer.encode(" ")).long()
         self.eos_token_id = torch.Tensor([self.tokenizer.eos_token_id]).long()
@@ -151,9 +157,11 @@ class EncoderSingleRetrievalModel(EncoderSimpleModel):
 
         # Transactions embeddings start/end
         self.transactions_start_embedding = nn.Parameter(
-            torch.normal(mean=torch.zeros(params_dim), std=torch.ones(params_dim)), requires_grad=True)
+            torch.normal(mean=torch.zeros(params_dim), std=torch.ones(params_dim)),
+            requires_grad=True)
         self.transactions_end_embedding = nn.Parameter(
-            torch.normal(mean=torch.zeros(params_dim), std=torch.ones(params_dim)), requires_grad=True)
+            torch.normal(mean=torch.zeros(params_dim), std=torch.ones(params_dim)),
+            requires_grad=True)
         self._logger.info(f"Initialized trainable parameters for transactions embeddings start/end tokens.")
 
     def _create_retrieval_parameters(self):
@@ -172,7 +180,6 @@ class EncoderSingleRetrievalModel(EncoderSimpleModel):
         self.transactions_ret_token2id_mapping = AbstractTask.extend_vocabulary(
             new_tokens=[self.ret_token],
             tokenizer=self.tokenizer,
-            # model=self.language_model,  # -> optionally
             return_ids=True
         )
         self._logger.info(f"Retrieval tokens added to tokenizer: {len(self.ret_token)}\ntoken: {self.ret_token}.")
@@ -271,11 +278,25 @@ class EncoderSingleRetrievalModel(EncoderSimpleModel):
         mask = input_tokens_ids == self.transactions_end_token_id
         input_embeddings[mask] = self.transactions_end_embedding
 
+    def has_ret_token(self, input_tokens_ids: Union[List[int], torch.Tensor]) -> bool:
+        """
+        Checks whether transactions retrieval token id already contained in given ids.
+        """
+        return (input_tokens_ids == self.ret_token_id).sum() > 0
+
     def has_eos_token(self, input_tokens_ids: Union[List[int], torch.Tensor]) -> bool:
         """
         Checks whether EOS token id already contained in given ids.
         """
         return (input_tokens_ids == self.tokenizer.eos_token_id).sum() > 0
+
+    def replace_ret_token(self, input_tokens_ids: Union[List[int], torch.Tensor],
+                          input_embeddings: torch.Tensor):
+        """
+        Replace retrieval embeddings with trainable parameters.
+        """
+        mask = input_tokens_ids == self.ret_token_id
+        input_embeddings[mask] = self.ret_embedding
 
     def update_trainable_embeddings(self,
                                     start_token_embedding: torch.Tensor,
@@ -335,16 +356,19 @@ class EncoderSingleRetrievalModel(EncoderSimpleModel):
             transactions_embeddings = self.connector(transactions_embeddings)
 
         # 3) Update trainable embeddings in LM Embedding layer
-        self.update_trainable_embeddings(start_token_embedding=self.transactions_start_embedding,
-                                         end_token_embedding=self.transactions_end_embedding,
-                                         ret_token_embedding=self.ret_embedding)
+        # self.update_trainable_embeddings(start_token_embedding=self.transactions_start_embedding,
+        #                                  end_token_embedding=self.transactions_end_embedding,
+        #                                  ret_token_embedding=self.ret_embedding)
 
         # 4) Questions: to embedding of LM - torch.Size([1, len(question_start_tokens))
-        # !!! Trainable [trx] token embedding is already updated in LM embedding matrix
         question_start_embeddings = self.language_model_tokens_embedding_func(
             batch['question_start_tokens'])  # call for (embed_tokens): Embedding(vocab_size, model_hidden_dim)
         question_start_attention_mask = batch['question_start_tokens_mask']
         question_start_embeddings_batch = question_start_embeddings.repeat(batch_size, 1, 1)
+
+        # Insert trainable parameter if it already ends with [trx]
+        if self.has_start_token(batch['question_start_tokens']):
+            self.replace_start_token(batch['question_start_tokens'], question_start_embeddings)
 
         # 5) Question ends: to embedding of LM
         # 5.1) Strip paddings from questions endings!!!
@@ -384,10 +408,17 @@ class EncoderSingleRetrievalModel(EncoderSimpleModel):
         question_end_attention_mask = (~mask_padding(question_end_tokens_full)).long()
 
         # Question ends: to embedding of LM
-        # !!! Trainable [/trx] and [RET] token embeddings are already updated in LM embedding matrix
         # question_end_tokens: torch.Size([batch_size, len(max_question_end_tokens)])
         question_end_embeddings_batch = self.language_model_tokens_embedding_func(
             question_end_tokens_full)
+
+        # Fill injection ending tokens embeddings with trainable parameters
+        if self.has_end_token(question_end_tokens_full):
+            self.replace_end_token(question_end_tokens_full, question_end_embeddings_batch)
+
+        # Fill injection ending tokens embeddings with trainable parameters
+        if self.has_ret_token(question_end_tokens_full):
+            self.replace_ret_token(question_end_tokens_full, question_end_embeddings_batch)
 
         # 6) LM input
         # 6.1) Get general LM's encoder input as:
