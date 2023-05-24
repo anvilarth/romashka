@@ -532,7 +532,8 @@ class TransactionQAModel(pl.LightningModule):
         if self.trainer.global_step % 25 == 0:  # don't make logging too much
             for param_name, param in self.model.named_parameters():
                 if param_name.startswith("transactions_start_embedding") \
-                        or param_name.startswith("transactions_end_embedding")  \
+                        or param_name.startswith("transactions_end_embedding") \
+                        or param_name.startswith("ret_embedding") \
                         or param_name.startswith("projection_layers")\
                         or param_name.startswith("connector.query_tokens_embeddings"):
                     if param.grad is not None:

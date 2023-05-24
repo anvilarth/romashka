@@ -5,6 +5,7 @@ from romashka.transactions_qa.model.decoder_retrieval_model import DecoderRetrie
 from romashka.transactions_qa.model.encoder_model import EncoderSimpleModel
 from romashka.transactions_qa.model.encoder_frozen_model import EncoderFrozenModel
 from romashka.transactions_qa.model.encoder_retrieval_model import EncoderRetrievalModel
+from romashka.transactions_qa.model.encoder_single_retrieval_model import EncoderSingleRetrievalModel
 
 __all__ = [
     "DecoderSimpleModel",
@@ -12,5 +13,6 @@ __all__ = [
     "DecoderRetrievalModel",
     "EncoderSimpleModel",
     "EncoderFrozenModel",
-    "EncoderRetrievalModel"
+    "EncoderRetrievalModel",
+    "EncoderSingleRetrievalModel"
 ]

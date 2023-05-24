@@ -880,7 +880,7 @@ class OccurenceMCCCategoryTaskBinary(CategoricalTaskAbstract):
         # all options for a target feature
         self.answers_options: List[str] = [str(i) for i in range(1, self.num_classes + 1)]
         self.binary_answer_options: Dict[str, str] = {"positive": "Yes", "negative": "No"}
-        self.answer_template: str = "Answer: "  # left empty for a first time
+        self.answer_template: str = " "  # left empty for a first time
         self.add_tokens_to_tokenizer = True
 
         super().__post_init__()

@@ -66,6 +66,7 @@ class DecoderRetrievalModel(DecoderSimpleModel):
 
     def _prepare_model(self):
         super()._prepare_model()
+
         self._create_trainable_parameters()
         self._create_losses()
 
