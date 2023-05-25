@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import functools
+import itertools
 import pandas as pd
 from abc import ABC, abstractmethod
 
@@ -186,3 +187,20 @@ class AbstractTask(ABC):
         for key, value in new_attr.items():
             if hasattr(self, key):
                 setattr(self, key, value)
+    
+    @classmethod
+    def generate_question_templates(cls,
+                                    starting_options: List[str],
+                                    ending_options: List[str]) -> List[Tuple[str, str]]:
+        """
+        Created all possible combinations of starting + ending of a question for the selected task.
+        Args:
+            starting_options: a list of starting prompts;
+            ending_options:  a list of starting prompts (i.e. questions itself);
+
+        Returns:
+            a List[Tuple[str, str]] - a sequence of tuples (question_start, question_end).
+        """
+        logger.info(f"Given {len(starting_options)} starting options and {len(ending_options)} ending options "
+                    f"results in {len(starting_options) * len(ending_options)} total combinations.")
+        return list(itertools.product(starting_options, ending_options))

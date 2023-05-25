@@ -35,15 +35,22 @@ class NextFeatureTask(AbstractTask):
             "accuracy": BinaryAccuracy()
         })
 
-        self.question_templates = [
-            ("This is the client's transaction history ",
-             "Will the next transactions have merchant category code 2? Yes or No?"),
+        self.starting_prompts = [
+            "This is the client's transaction history:",
+            "You are given the client's transaction history:",
+            "The client's transaction history is given as a context:",
+            "The following is the client's transaction history:",
+            "The client's transaction history is listed below:"
         ]
+        self.ending_prompts = ["Test prompt"]
+        self.question_templates = self.generate_question_templates(self.starting_prompts,
+                                                                   self.ending_prompts)
 
         self.positive_answer_word = "Yes"
         self.negative_answer_word = "No"
         self.answers_options = ["Yes", "No"]
         self.numerical_token = "<NUM>"
+        self.val_token = " <VAL>" if self.use_numerical else ""
         # all options, for a sample can be reduced to [true_mcc_code + 4 other codes]
 
         self.answer_template = ""  # left empty for a first time
@@ -59,6 +66,8 @@ class NextFeatureTask(AbstractTask):
                             self.transactions_embeddings_end_token]
                 if self.use_numerical:
                    new_tokens.append(self.numerical_token)
+                   new_tokens.append(self.val_token)
+
                 if self.task_special_token is not None:
                     new_tokens += [self.task_special_token]
                 self.extend_vocabulary(tokenizer=self.tokenizer,
@@ -186,10 +195,12 @@ class DefaultTaskBinary(NextCatFeatureTaskBinary):
 
         self.update_feature_index()
 
-        self.question_templates = [
-            ("This is the client's transaction history ",
-             "Will the client have a credit default? Yes or No?"),
+        self.ending_prompts = [
+            ". Will the client have a default?",
+            ". The client will have a default, right?",
+            ". The client is going to have a default?",
         ]
+        self.question_templates = self.generate_question_templates(self.starting_prompts, self.ending_prompts)
     
     def prepare_task_batch(self, batch: Dict[str, Any], **kwargs):
         batch['label'] = batch['label'].float()
@@ -206,10 +217,16 @@ class NextMCCFeatureTaskBinary(NextCatFeatureTaskBinary):
 
         self.update_feature_index()
 
-        self.question_templates = [
-            ("This is the client's transaction history ",
-             "Will the next transactions have merchant category code 2? Yes or No?"),
+
+        self.ending_prompts = [
+            ". Determine if the next transaction will have an MCC code 2?",
+            ". Will the next transactions have merchant category code 2? Yes or No?",
+            ". Will the next transactions have merchant category code 2? Choose one: Yes or No",
+            ". Is the upcoming transaction going to have merchant category code 2?",
+            ". Find out whether or not the following statement is true: the next transactions MCC code is 2. Answer only: Yes or No?",
         ]
+
+        self.question_templates = self.generate_question_templates(self.starting_prompts, self.ending_prompts)
 
 @dataclass
 class NextNumFeatureTaskBinary(NextFeatureTask):
@@ -271,10 +288,16 @@ class NextAmntFeatureTaskBinary(NextNumFeatureTaskBinary):
         self.update_feature_index()
 
         self.threshold = 0.41
-        self.question_templates = [
-            ("This is the client's transaction history ",
-             f"Will the next transactions have amount more than {self.threshold}? Yes or No?"),
+
+        self.ending_prompts = [
+            f". Determine if the next transaction will have amount more than {self.threshold}?",
+            f". Will the next transactions have amount more than {self.threshold}? Yes or No?",
+            f". Will the next transactions have amount more than {self.threshold}? Choose one: Yes or No",
+            f". Is the upcoming transaction going to have amount more than {self.threshold}?",
+            f". Find out whether or not the following statement is true: the next transactions amount is more than {self.threshold}. Answer only: Yes or No?",
         ]
+
+        self.question_templates = self.generate_question_templates(self.starting_prompts, self.ending_prompts)
 
 @dataclass
 class NextHourFeatureTaskBinary(NextNumFeatureTaskBinary):
@@ -362,10 +385,15 @@ class NextAmnt30DaysTaskBinary(NextNumFeatureTaskBinary):
         })
 
         self.threshold = 2.27
-        self.question_templates = [
-            ("This is the client's transaction history ",
-             "Will there be more transactions of more than 2.27 in the next 30 days? Yes or No?"),
+        self.ending_prompts = [
+            f". Determine if in 30 days the next transaction will have amount more than {self.threshold}?",
+            f". Will the next transactions have amount more than {self.threshold}? Yes or No?",
+            f". Will the next transactions have amount more than {self.threshold}? Choose one: Yes or No",
+            f". Is the upcoming transaction going to have amount more than {self.threshold}?",
+            f". Find out whether or not the following statement is true: the next transactions amount is more than {self.threshold}. Answer only: Yes or No?",
         ]
+        
+        self.question_templates = self.generate_question_templates(self.starting_prompts, self.ending_prompts)
 
         self.positive_answer_word = "Yes"
         self.negative_answer_word = "No"
@@ -720,7 +748,7 @@ class NextAmntOpenEnded(NextFeatureOpenEnded):
 
         self.question_templates = [
             ("This is the client's transaction history ",
-             "What amount will the next transactions have?"),
+             "The task is to predict on what amount will the client make the next transactions? The answer must be in range from 0 to 1" + self.val_token),
         ]
 
     def filter_range(self, value):
@@ -769,7 +797,7 @@ class NextHourOpenEnded(NextFeatureOpenEnded):
 
         self.question_templates = [
             ("This is the client's transaction history ",
-             "How many hours until the next transaction?"),
+             "The task is to predict how many hours until the client will make the next transaction? The answer is should in range from 0 to 40" + self.val_token),
         ]
     
     def filter_range(self, value):

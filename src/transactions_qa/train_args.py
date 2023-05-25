@@ -74,6 +74,10 @@ class ModelArguments:
         default=False,
         metadata={"help": "Whether predict tokens using numerical module or not"},
     )
+    numerical_context: str = field(
+        default='context',
+        metadata={"help": "Whether use question context for token prediction or not"},
+    )
     num_head: str = field(
         default='linear',
         metadata={"help": "Type of head which is in use for predicting numerical values"},
