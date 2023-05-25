@@ -27,8 +27,8 @@ class EncoderSingleRetrievalModel(EncoderSimpleModel):
                  do_freeze_lm: Optional[bool] = False,
                  do_freeze_lm_embeddings: Optional[bool] = False,
                  do_freeze_connector: Optional[bool] = False,
-                 min_trns_tokens: Optional[int] = 50,  # equals to max transactions history size
-                 max_trns_tokens: Optional[int] = 150,  # equals to min transactions history size
+                 min_ret_tokens: Optional[int] = 50,  # equals to max transactions history size
+                 max_ret_tokens: Optional[int] = 150,  # equals to min transactions history size
                  n_retrieval_layers: Optional[List[int]] = None,
                  retrieval_loss_temperature: Optional[float] = 1.0,
                  embeddings_dropout_p: Optional[float] = 0.1,
@@ -45,8 +45,8 @@ class EncoderSingleRetrievalModel(EncoderSimpleModel):
         self._transactions_embeddings_start_token = transactions_embeddings_start_token
         self._transactions_embeddings_end_token = transactions_embeddings_end_token
 
-        self.min_embeddings_injection_tokens = min_trns_tokens
-        self.max_embeddings_injection_tokens = max_trns_tokens
+        self.min_embeddings_injection_tokens = min_ret_tokens
+        self.max_embeddings_injection_tokens = max_ret_tokens
         self.ret_token = "[RET]"
 
         self._n_retrieval_layers = n_retrieval_layers
@@ -533,7 +533,7 @@ class EncoderSingleRetrievalModel(EncoderSimpleModel):
 
         # Full mask for RET tokens location: [bs, seq_len, model_dim]
         ret_tokens_full_mask = torch.cat([
-            torch.zeros((input_embedds.size(0), input_embedds.size(1) - ret_tokens_question_end_mask.size(-1))),
+            torch.zeros((input_embedds.size(0), input_embedds.size(1) - ret_tokens_question_end_mask.size(-1))).to(input_embedds.device),
             ret_tokens_question_end_mask
         ], dim=1).bool()
 
@@ -579,7 +579,7 @@ class EncoderSingleRetrievalModel(EncoderSimpleModel):
 
         # Targets
         batch_size = input_embedds.size(0)
-        targets = torch.linspace(0, batch_size - 1, batch_size, dtype=int)
+        targets = torch.linspace(0, batch_size - 1, batch_size, dtype=int).to(input_embedds.device)
 
         # Total contrastive loss
         # as mean of:
