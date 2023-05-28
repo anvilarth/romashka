@@ -155,7 +155,8 @@ class DecoderSimpleModel(nn.Module):
         Configures the tokenizer for the model (optionally,
         can be performed before passing tokenizer instance to the model).
         """
-        self.register_buffer("whitespace_token_id", torch.Tensor(self.tokenizer.encode(' ')).long())
+        self.register_buffer("whitespace_token_id",
+                             torch.Tensor(self.tokenizer.encode(' ', add_special_tokens=False)).long())
         # self.whitespace_token_id = torch.Tensor(self.tokenizer.encode(' ')).long()
 
         if self.language_model_arch_type == "OPT":
@@ -439,7 +440,7 @@ class DecoderSimpleModel(nn.Module):
         # Checks whether a connector requires mask argument
         if self.inspect_forward_signature("mask", self.connector):
             transactions_history_embeddings = self.connector(transactions_history_embeddings,
-                                                     mask=transactions_embeddings_mask)
+                                                             mask=transactions_embeddings_mask)
         else:
             transactions_history_embeddings = self.connector(transactions_history_embeddings)
 

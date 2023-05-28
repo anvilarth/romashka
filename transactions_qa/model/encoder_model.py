@@ -81,7 +81,6 @@ class EncoderSimpleModel(nn.Module):
                                  "Try running on your own risk.")
 
     def _prepare_model(self):
-        print(f"Call EncoderModel._prepare_model()")
         # Set language model architecture type / family (i.e. T5/...)
         self._set_language_model_arch_type()
 
@@ -138,9 +137,8 @@ class EncoderSimpleModel(nn.Module):
         Configures the tokenizer for the model (optionally,
         can be performed before passing tokenizer instance to the model).
         """
-        self.register_buffer("whitespace_token_id", torch.Tensor(self.tokenizer.encode(' ')).long())
-        # self.whitespace_token_id = torch.Tensor(self.tokenizer.encode(' ')).long()
-        # todo: here any number of extra/additional tokens can be added to tokenizer's vocab
+        self.register_buffer("whitespace_token_id",
+                             torch.Tensor(self.tokenizer.encode(' ', add_special_tokens=False)).long())
 
     def _set_generation_config(self):
         """

@@ -452,7 +452,7 @@ class EncoderRetrievalModel(EncoderSimpleModel):
                                 ret_embeddings: torch.Tensor,
                                 output_hidden_states: Optional[bool] = False) -> Dict[str, torch.Tensor]:
         """
-        Calculate contrastive retrival loss based on InfoNCE loss implementation.
+        Calculate contrastive retrieval loss based on InfoNCE loss implementation.
         Args:
             outputs: a LLM outputs, containing: 'logits', 'hidden_states', etc.
             ret_start_i: a starting index of transactions embeddings injection;

@@ -163,6 +163,42 @@ def mask_lm_labels_padding(input_ids: torch.Tensor,
     return labels
 
 
+def get_exponent_number(f: torch.Tensor) -> torch.Tensor:
+    """
+    Extract from an input floating point number a number, which is used to scale significand / mantissa
+    by an integer exponent of a fixed base.
+    Args:
+        f (torch.Tensor): a floating point tensor of numbers
+    Returns:
+        (torch.Tensor): a tensor of exponent parts.
+    """
+    mask = (f != 0)
+    return torch.floor(torch.log10(abs(f))).int() * mask
+
+
+def get_mantissa_number(f: torch.Tensor) -> torch.Tensor:
+    """
+    Extract from a floating point input number an floating point significand / mantissa with a fixed precision.
+    Args:
+        f (torch.Tensor): a floating point tensor of numbers
+    Returns:
+        (torch.Tensor): a tensor of mantissa parts.
+    """
+    return f / 10**get_exponent_number(f).float()
+
+
+def get_number_from_parts(mantissa: torch.Tensor, exponent: torch.Tensor) -> torch.Tensor:
+    """
+    Construct floating point number from mantissa and exponent parts.
+    Args:
+        mantissa (torch.Tensor): a tensor of mantissa parts;
+        exponent (torch.Tensor): a tensor of exponent parts;
+    Returns:
+        (torch.Tensor): a tensor of floating point tensor of numbers.
+    """
+    return torch.FloatTensor([10]).pow(exponent) * mantissa.squeeze()
+
+
 def get_last_checkpoint(folder):
     content = os.listdir(folder)
     checkpoints = [
