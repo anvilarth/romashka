@@ -17,6 +17,9 @@ class CategoricalTaskAbstract(AbstractTask, ABC):
     """
     Parent class for all tasks with categorical target feature.
     """
+    # Needed to switch model in to numeric mode processing
+    numeric_inputs: Optional[bool] = False
+    numeric_outputs: Optional[bool] = False
 
     num_classes: Optional[int] = None
     ignore_class_index: Optional[int] = None

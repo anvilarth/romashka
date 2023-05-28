@@ -199,7 +199,7 @@ class MostFrequentDayOfWeekTaskMulti(CategoricalTaskAbstract):
 
 
 @dataclass
-class MostFrequentDayOfWeekTaskBinary(AbstractTask):
+class MostFrequentDayOfWeekTaskBinary(CategoricalTaskAbstract):
 
     def __post_init__(self):
         self.task_name = "most_frequent_day_of_week_binary"
@@ -374,7 +374,7 @@ class MostFrequentDayOfWeekTaskBinary(AbstractTask):
 
 
 @dataclass
-class MostFrequentDayOfWeekTaskOpenEnded(AbstractTask):
+class MostFrequentDayOfWeekTaskOpenEnded(CategoricalTaskAbstract):
 
     def __post_init__(self):
         self.task_name = "most_frequent_day_of_week_open-ended"
@@ -530,7 +530,7 @@ class MostFrequentDayOfWeekTaskOpenEnded(AbstractTask):
 
 
 @dataclass
-class LeastFrequentDayOfWeekTaskOpenEnded(AbstractTask):
+class LeastFrequentDayOfWeekTaskOpenEnded(CategoricalTaskAbstract):
 
     def __post_init__(self):
         self.task_name = "least_frequent_day_of_week_open-ended"
@@ -685,7 +685,7 @@ class LeastFrequentDayOfWeekTaskOpenEnded(AbstractTask):
 
 
 @dataclass
-class LastDayOfWeekTaskOpenEnded(AbstractTask):
+class LastDayOfWeekTaskOpenEnded(CategoricalTaskAbstract):
 
     def __post_init__(self):
         self.task_name = "last_day_of_week_open-ended"

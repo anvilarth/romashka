@@ -190,7 +190,7 @@ class MostFrequentMCCCategoryTaskMulti(CategoricalTaskAbstract):
 
 
 @dataclass
-class MostFrequentMCCCategoryTaskBinary(AbstractTask):
+class MostFrequentMCCCategoryTaskBinary(CategoricalTaskAbstract):
 
     def __post_init__(self):
         self.task_name = "most_frequent_mcc_category_binary"
@@ -374,7 +374,7 @@ class MostFrequentMCCCategoryTaskBinary(AbstractTask):
 
 
 @dataclass
-class MostFrequentMCCCategoryTaskOpenEnded(AbstractTask):
+class MostFrequentMCCCategoryTaskOpenEnded(CategoricalTaskAbstract):
 
     def __post_init__(self):
         self.task_name = "most_frequent_mcc_category_open-ended"
@@ -530,7 +530,7 @@ class MostFrequentMCCCategoryTaskOpenEnded(AbstractTask):
         return {}
 
 @dataclass
-class LeastFrequentMCCCategoryTaskOpenEnded(AbstractTask):
+class LeastFrequentMCCCategoryTaskOpenEnded(CategoricalTaskAbstract):
 
     def __post_init__(self):
         self.task_name = "least_frequent_mcc_category_open-ended"
@@ -686,7 +686,7 @@ class LeastFrequentMCCCategoryTaskOpenEnded(AbstractTask):
 
 
 @dataclass
-class LastMCCCategoryTaskOpenEnded(AbstractTask):
+class LastMCCCategoryTaskOpenEnded(CategoricalTaskAbstract):
 
     def __post_init__(self):
         self.task_name = "last_mcc_category_open-ended"

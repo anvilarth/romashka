@@ -34,6 +34,10 @@ class MeanAmountBinnedTaskBinary(NumericTaskAbstract):
         self.target_feature_name = 'amnt'  # [0, 1] range of values
         self.task_special_token = "[mean_binned_AMNT_binary]"
         self.is_open_ended_task = False  # for a default for this task
+        # Select to not to convert integer range to floating point number
+        # (with required processing of output predictions & answers)
+        self.numeric_outputs: Optional[bool] = False
+
         self.metrics = {
             "accuracy": BinaryAccuracy()
         }
@@ -167,6 +171,8 @@ class MeanAmountBinnedTaskBinary(NumericTaskAbstract):
             answer_tokens=batch_answer_encoded,  # template + targets
             answer_mask=batch_answer_mask,
             encoder_input_mask=encoder_input_mask,
+            with_numeric_input=self.numeric_inputs,
+            with_numeric_output=self.numeric_outputs
         )
 
     def generate_target(self, batch: Any, **kwargs) -> Tuple[List[str], List[str]]:
@@ -283,6 +289,10 @@ class MeanAmountNumericTaskBinary(NumericTaskAbstract):
         self.task_special_token = "[mean_numeric_AMNT_binary]"
         self.target_feature_index = num_features_names.index(self.target_feature_name)
         self.is_open_ended_task = False  # for a default for this task
+        # Select to not to convert integer range to floating point number
+        # (with required processing of output predictions & answers)
+        self.numeric_outputs: Optional[bool] = False
+
         self.metrics = {
             "accuracy": BinaryAccuracy()
         }
@@ -420,6 +430,8 @@ class MeanAmountNumericTaskBinary(NumericTaskAbstract):
             answer_tokens=batch_answer_encoded,  # template + targets
             answer_mask=batch_answer_mask,
             encoder_input_mask=encoder_input_mask,
+            with_numeric_input=self.numeric_inputs,
+            with_numeric_output=self.numeric_outputs
         )
 
     def generate_target(self, batch: Any, **kwargs) -> Tuple[List[str], List[str]]:
@@ -524,6 +536,9 @@ class MeanAmountBinnedTaskOpenEnded(NumericTaskAbstract):
         self.task_special_token = "[mean_binned_AMNT_openended]"
         self.target_feature_index = num_features_names.index(self.target_feature_name)
         self.is_open_ended_task = True  # for a default for this task
+        # Select to not to convert integer range to floating point number
+        # (with required processing of output predictions & answers)
+        self.numeric_outputs: Optional[bool] = False
 
         self.question_templates = [
             ("This is the client's transaction history: ",
@@ -669,6 +684,8 @@ class MeanAmountBinnedTaskOpenEnded(NumericTaskAbstract):
             answer_tokens=batch_answer_encoded,  # template + targets
             answer_mask=batch_answer_mask,
             encoder_input_mask=encoder_input_mask,
+            with_numeric_input=self.numeric_inputs,
+            with_numeric_output=self.numeric_outputs
         )
 
     def generate_target(self, batch: Any, **kwargs) -> Tuple[List[str], List[str]]:
@@ -898,6 +915,8 @@ class MeanAmountNumericTaskOpenEnded(NumericTaskAbstract):
             answer_tokens=batch_answer_encoded,  # template + targets
             answer_mask=batch_answer_mask,
             encoder_input_mask=encoder_input_mask,
+            with_numeric_input=self.numeric_inputs,
+            with_numeric_output=self.numeric_outputs
         )
 
     def generate_target(self, batch: Any, **kwargs) -> Tuple[List[str], List[str]]:
@@ -1127,6 +1146,8 @@ class MinAmountNumericTaskOpenEnded(NumericTaskAbstract):
             answer_tokens=batch_answer_encoded,  # template + targets
             answer_mask=batch_answer_mask,
             encoder_input_mask=encoder_input_mask,
+            with_numeric_input=self.numeric_inputs,
+            with_numeric_output=self.numeric_outputs
         )
 
     def generate_target(self, batch: Any, **kwargs) -> Tuple[List[str], List[str]]:
@@ -1351,6 +1372,8 @@ class MaxAmountNumericTaskOpenEnded(NumericTaskAbstract):
             answer_tokens=batch_answer_encoded,  # template + targets
             answer_mask=batch_answer_mask,
             encoder_input_mask=encoder_input_mask,
+            with_numeric_input=self.numeric_inputs,
+            with_numeric_output=self.numeric_outputs
         )
 
     def generate_target(self, batch: Any, **kwargs) -> Tuple[List[str], List[str]]:
@@ -1576,6 +1599,8 @@ class LastAmountNumericTaskOpenEnded(NumericTaskAbstract):
             answer_tokens=batch_answer_encoded,  # template + targets
             answer_mask=batch_answer_mask,
             encoder_input_mask=encoder_input_mask,
+            with_numeric_input=self.numeric_inputs,
+            with_numeric_output=self.numeric_outputs
         )
 
     def generate_target(self, batch: Any, **kwargs) -> Tuple[List[str], List[str]]:

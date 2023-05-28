@@ -228,8 +228,8 @@ class EncoderNumericModel(EncoderSimpleModel):
     def forward(self, batch: Union[Dict[str, torch.Tensor], Any],
                 output_attentions: Optional[bool] = True,
                 output_hidden_states: Optional[bool] = True,
-                with_numeric_input: Optional[bool] = True,
-                with_numeric_output: Optional[bool] = True,
+                with_numeric_input: Optional[bool] = None,
+                with_numeric_output: Optional[bool] = None,
                 is_train: Optional[bool] = True) -> Any:
         """
         Passes input batch through:
@@ -256,6 +256,14 @@ class EncoderNumericModel(EncoderSimpleModel):
         transaction_mask = batch['mask']
         batch_size = transaction_mask.size(0)
         device = transaction_mask.device
+        with_numeric_input = with_numeric_input if with_numeric_input is not None else batch.get('with_numeric_input',
+                                                                                                 False)
+        with_numeric_output = with_numeric_output if with_numeric_output is not None else batch.get(
+            'with_numeric_output',
+            False)
+
+        # print(f"forward() on batch with with_numeric_input = {with_numeric_input} "
+        #       f"and with_numeric_output = {with_numeric_output}.")
 
         transactions_embeddings, transactions_embeddings_mask = self.transaction_model.get_embs(batch)
 
@@ -315,7 +323,8 @@ class EncoderNumericModel(EncoderSimpleModel):
                                                               numeric_tokens_num_embeddings_ \
                                                              .repeat(numeric_tokens_text_embeddings_.size(0), 1)], 1)
                 # Pass through projection layer
-                numeric_tokens_joined_embedding_ = self.text_numeric_projection(numeric_tokens_joined_embedding_).unsqueeze(0)
+                numeric_tokens_joined_embedding_ = self.text_numeric_projection(
+                    numeric_tokens_joined_embedding_).unsqueeze(0)
 
                 # Replace in final embeddings sequence
                 tokens_text_embeddings_[numeric_mask_] = numeric_tokens_joined_embedding_
@@ -441,7 +450,8 @@ class EncoderNumericModel(EncoderSimpleModel):
                 outputs['exponent_predictions'] = numeric_loss_output.get('exponent_predictions')
                 outputs['mantissa_predictions'] = numeric_loss_output.get('mantissa_predictions')
 
-                outputs['numeric_answers'] = lm_outputs['numeric_answers']
+                outputs['numeric_answers'] = get_number_from_parts(lm_outputs['numeric_answers'][:, 0],
+                                                                   lm_outputs['numeric_answers'][:, 1])
                 outputs['token_type_answers'] = numeric_loss_output.get('token_type_answers')
                 outputs['exponent_answers'] = numeric_loss_output.get('exponent_answers')
                 outputs['mantissa_answers'] = numeric_loss_output.get('mantissa_answers')
@@ -603,7 +613,8 @@ class EncoderNumericModel(EncoderSimpleModel):
 
         # 2) Numeric tokens loss
         # On validation take predicted: numeric_answer_tokens_pred.bool()
-        numeric_tokens_hidden_states = last_hidden_state.reshape(-1, hidden_dim)[outputs['answer_numeric_mask'].view(-1)]
+        numeric_tokens_hidden_states = last_hidden_state.reshape(-1, hidden_dim)[
+            outputs['answer_numeric_mask'].view(-1)]
 
         # Answers as pairs of [mantissa, exponent]
         numeric_answers_mantissa = outputs['numeric_answers'][:, 0]

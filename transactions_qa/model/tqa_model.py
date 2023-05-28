@@ -133,6 +133,9 @@ class TransactionQAModel(pl.LightningModule):
         task = self.tasks[task_idx]
         qa_batch = task.process_input_batch(batch)
 
+        # print(f"model_step() on task: {task.task_name} with with_numeric_input = {qa_batch['with_numeric_input']} "
+        #       f"and with_numeric_output = {qa_batch['with_numeric_output']}.")
+
         if len(qa_batch) == 0:
             return None, None
 

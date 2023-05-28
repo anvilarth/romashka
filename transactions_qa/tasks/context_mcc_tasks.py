@@ -166,7 +166,9 @@ class MostFrequentMCCCodeTaskMulti(CategoricalTaskAbstract):
             target_attention_mask=target_encoded_batch['attention_mask'],
             answer_tokens=batch_answer_encoded,  # template + targets
             answer_mask=batch_answer_mask,
-            encoder_input_mask=encoder_input_mask
+            encoder_input_mask=encoder_input_mask,
+            with_numeric_input=self.numeric_inputs,
+            with_numeric_output=self.numeric_outputs
         )
 
     def calculate_metrics(self, outputs: Any, answers: torch.Tensor,
@@ -190,7 +192,7 @@ class MostFrequentMCCCodeTaskMulti(CategoricalTaskAbstract):
 
 
 @dataclass
-class MostFrequentMCCCodeTaskBinary(AbstractTask):
+class MostFrequentMCCCodeTaskBinary(CategoricalTaskAbstract):
 
     def __post_init__(self):
         self.task_name = "most_frequent_mcc_code_binary"
@@ -350,7 +352,9 @@ class MostFrequentMCCCodeTaskBinary(AbstractTask):
             target_attention_mask=target_encoded_batch['attention_mask'],
             answer_tokens=batch_answer_encoded,  # template + targets
             answer_mask=batch_answer_mask,
-            encoder_input_mask=encoder_input_mask
+            encoder_input_mask=encoder_input_mask,
+            with_numeric_input=self.numeric_inputs,
+            with_numeric_output=self.numeric_outputs
         )
 
     def calculate_metrics(self, outputs: Any, answers: torch.Tensor,
@@ -374,7 +378,7 @@ class MostFrequentMCCCodeTaskBinary(AbstractTask):
 
 
 @dataclass
-class MostFrequentMCCCodeTaskOpenEnded(AbstractTask):
+class MostFrequentMCCCodeTaskOpenEnded(CategoricalTaskAbstract):
 
     def __post_init__(self):
         self.task_name = "most_frequent_mcc_code_open-ended"
@@ -507,7 +511,9 @@ class MostFrequentMCCCodeTaskOpenEnded(AbstractTask):
             target_attention_mask=target_encoded_batch['attention_mask'],
             answer_tokens=batch_answer_encoded,  # template + targets
             answer_mask=batch_answer_mask,
-            encoder_input_mask=encoder_input_mask
+            encoder_input_mask=encoder_input_mask,
+            with_numeric_input=self.numeric_inputs,
+            with_numeric_output=self.numeric_outputs
         )
 
     def calculate_metrics(self, outputs: Any, answers: torch.Tensor,
@@ -531,7 +537,7 @@ class MostFrequentMCCCodeTaskOpenEnded(AbstractTask):
 
 
 @dataclass
-class LeastFrequentMCCCodeTaskOpenEnded(AbstractTask):
+class LeastFrequentMCCCodeTaskOpenEnded(CategoricalTaskAbstract):
 
     def __post_init__(self):
         self.task_name = "least_frequent_mcc_code_open-ended"
@@ -664,7 +670,9 @@ class LeastFrequentMCCCodeTaskOpenEnded(AbstractTask):
             target_attention_mask=target_encoded_batch['attention_mask'],
             answer_tokens=batch_answer_encoded,  # template + targets
             answer_mask=batch_answer_mask,
-            encoder_input_mask=encoder_input_mask
+            encoder_input_mask=encoder_input_mask,
+            with_numeric_input=self.numeric_inputs,
+            with_numeric_output=self.numeric_outputs
         )
 
     def calculate_metrics(self, outputs: Any, answers: torch.Tensor,
@@ -688,7 +696,7 @@ class LeastFrequentMCCCodeTaskOpenEnded(AbstractTask):
 
 
 @dataclass
-class LastMCCCodeTaskOpenEnded(AbstractTask):
+class LastMCCCodeTaskOpenEnded(CategoricalTaskAbstract):
 
     def __post_init__(self):
         self.task_name = "last_mcc_code_open-ended"
@@ -820,7 +828,9 @@ class LastMCCCodeTaskOpenEnded(AbstractTask):
             target_attention_mask=target_encoded_batch['attention_mask'],
             answer_tokens=batch_answer_encoded,  # template + targets
             answer_mask=batch_answer_mask,
-            encoder_input_mask=encoder_input_mask
+            encoder_input_mask=encoder_input_mask,
+            with_numeric_input=self.numeric_inputs,
+            with_numeric_output=self.numeric_outputs
         )
 
     def calculate_metrics(self, outputs: Any, answers: torch.Tensor,
@@ -1085,7 +1095,9 @@ class OccurenceMCCCodeTaskBinary(CategoricalTaskAbstract):
             target_attention_mask=target_encoded_batch['attention_mask'],
             answer_tokens=batch_answer_encoded,  # template + targets
             answer_mask=batch_answer_mask,
-            encoder_input_mask=encoder_input_mask
+            encoder_input_mask=encoder_input_mask,
+            with_numeric_input=self.numeric_inputs,
+            with_numeric_output=self.numeric_outputs
         )
 
     def calculate_metrics(self, outputs: Any, answers: torch.Tensor,

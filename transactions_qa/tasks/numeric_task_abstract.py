@@ -13,6 +13,9 @@ class NumericTaskAbstract(AbstractTask, ABC):
     """
     Parent class for all tasks with numeric/discrete target feature.
     """
+    # Needed to switch model in to numeric mode processing
+    numeric_inputs: Optional[bool] = True
+    numeric_outputs: Optional[bool] = True
 
     # Required to specify available feature value range
     feature_min: Optional[float] = 0.0
