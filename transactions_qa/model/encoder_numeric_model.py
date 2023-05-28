@@ -443,6 +443,10 @@ class EncoderNumericModel(EncoderSimpleModel):
         if output_hidden_states:
             outputs["hidden_states"] = lm_outputs.encoder_hidden_states
 
+        question_start_tokens_batch = batch['question_start_tokens'].repeat(batch_size, 1)
+        outputs['question_encoded'] = torch.cat([question_start_tokens_batch,
+                                                 batch['question_end_tokens']], dim=1)
+
         if is_train:
             outputs['labels'] = batch_answers
             if with_numeric_output:
