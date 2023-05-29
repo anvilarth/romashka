@@ -166,9 +166,10 @@ class EncoderNumericModel(EncoderSimpleModel):
         # Embedding index == exponent + abs(-8) --- as all embedding indexes should be positive
         # If > 12 -> +INF (embedding index = [21])
         # If < -8 -> -INF (embedding index = [22])
-        self.exponent_available_range = (-8, 12)
-        self.num_exponent_embedds = len(list(range(self.exponent_available_range[0],
-                                                   self.exponent_available_range[1] + 1))) + 2
+        exponent_available_range = (-8, 12)
+        self.num_exponent_embedds = len(list(range(exponent_available_range[0],
+                                                   exponent_available_range[1] + 1))) + 2
+        self.register_buffer("exponent_available_range", torch.LongTensor(exponent_available_range))
         self.exponent_embeddings = torch.nn.Embedding(num_embeddings=self.num_exponent_embedds,
                                                       embedding_dim=self.exponent_dim)
 
@@ -288,13 +289,13 @@ class EncoderNumericModel(EncoderSimpleModel):
         # 5) Question ends: to embedding of LM
         # 5.1) Detect numbers and digits
         if with_numeric_input:
-            numeric_mask_batch = torch.stack([torch.isin(q, self.numeric_vocab_token_ids)
-                                              for q in batch['question_end_tokens']]).to(device)
+            numeric_mask_batch = torch.stack([isin(q, self.numeric_vocab_token_ids.to(device))
+                                              for q in batch['question_end_tokens']])  #.to(device)
             batch['numeric_mask'] = numeric_mask_batch
 
         if with_numeric_output:
             answer_numeric_mask_batch = torch.stack(
-                [torch.isin(q, self.numeric_vocab_token_ids) for q in batch['answer_tokens']])
+                [isin(q, self.numeric_vocab_token_ids.to(device)) for q in batch['answer_tokens']])
             batch['answer_numeric_mask'] = answer_numeric_mask_batch
 
         # 5.2) Embed text tokens and numerical tokens together and form a batch of embeddings
@@ -316,6 +317,7 @@ class EncoderNumericModel(EncoderSimpleModel):
                 # Create numeric embeddings
                 if len(numeric_tokens_.size()) == 1:  # add dummy dim if there is a single number
                     numeric_tokens_.unsqueeze_(0)
+
                 numeric_tokens_num_embeddings_ = self.get_numeric_embedding(numeric_tokens_)
 
                 # Join together
@@ -337,7 +339,8 @@ class EncoderNumericModel(EncoderSimpleModel):
             question_end_embeddings_batch = self.language_model_tokens_embedding_func(batch['question_end_tokens'])
 
         # 5.4) Create new attention mask
-        question_end_attention_mask = (~mask_padding(batch['question_end_tokens'])).long()
+        # question_end_attention_mask = (~mask_padding(batch['question_end_tokens'])).long()
+        question_end_attention_mask = batch['question_end_attention_mask']
 
         # 5.5) Fill injection ending tokens embeddings with trainable parameters
         if self.has_end_token(batch['question_end_tokens']):
@@ -399,7 +402,7 @@ class EncoderNumericModel(EncoderSimpleModel):
                 numeric_answers_batch.append(numeric_tokens_repr_.unsqueeze(0))
 
             # of size [n_numeric_tokens_in_batch, 2]
-            numeric_answers_batch = torch.cat(numeric_answers_batch, 1).squeeze(0)
+            numeric_answers_batch = torch.cat(numeric_answers_batch, 1).squeeze(0).to(device)
 
         # 8) Forward without labels
         lm_outputs = self.language_model(
@@ -418,7 +421,6 @@ class EncoderNumericModel(EncoderSimpleModel):
             lm_outputs['numeric_answers'] = numeric_answers_batch
             numeric_loss_output = self._compute_numeric_loss(lm_outputs,
                                                              output_predictions=True)
-
         # Re-scale losses
         total_loss = lm_outputs.loss * self._text_loss_scale
         if with_numeric_output:
@@ -499,10 +501,10 @@ class EncoderNumericModel(EncoderSimpleModel):
         Returns:
             a tensor of numerical token ids.
         """
-        vocab_tokens = list(self.tokenizer.vocab.keys())
+        vocab_tokens = list(self.tokenizer.get_vocab().keys())
         numeric_vocab_tokens = list(filter(lambda x: len(re.findall(r'\d+', x))
                                                      and ("extra_id" not in x), vocab_tokens))
-        numeric_vocab_token_ids = torch.LongTensor([self.tokenizer.vocab.get(tok) for tok in numeric_vocab_tokens])
+        numeric_vocab_token_ids = torch.LongTensor([self.tokenizer.convert_tokens_to_ids(tok) for tok in numeric_vocab_tokens])
         self._logger.info(f"Collected {len(numeric_vocab_tokens)} numerical token ids from tokenizers vocab.")
 
         return numeric_vocab_token_ids
@@ -517,7 +519,7 @@ class EncoderNumericModel(EncoderSimpleModel):
             if underflow_index is None else underflow_index
 
         # Shift to positive indexes
-        exp = exp + torch.abs(torch.LongTensor([self.exponent_available_range[0]]))
+        exp = exp + torch.abs(self.exponent_available_range[0])
 
         min_inf_mask = exp < 0
         inf_mask = exp > self.exponent_embeddings.num_embeddings
@@ -556,7 +558,7 @@ class EncoderNumericModel(EncoderSimpleModel):
         numeric_tokens = self.tokenizer.batch_decode(tokens)
         numeric_tokens = [convert_to_numeric(tok) for tok in numeric_tokens]
         # for those tokens that we couldn't convert to float use 0.0
-        numeric_tokens = torch.Tensor([tok if tok is not None else 0.0 for tok in numeric_tokens])
+        numeric_tokens = torch.Tensor([tok if tok is not None else 0.0 for tok in numeric_tokens]).to(tokens.device)
 
         # Extract mantissa and exponent
         mantissas = get_mantissa_number(numeric_tokens)
@@ -628,9 +630,10 @@ class EncoderNumericModel(EncoderSimpleModel):
         exponent_logits = self.exponent_head(numeric_tokens_hidden_states)
         # of size [n_numeric_tokens_in_batch,]
         exponent_preds = torch.nn.functional.softmax(exponent_logits, -1).argmax(-1) \
-                         - torch.abs(torch.LongTensor([self.exponent_available_range[0]]))
+                         - torch.abs(self.exponent_available_range[0])
+
         exponent_loss = self.ce_loss_fn(exponent_logits, numeric_answers_exponent +
-                                        torch.abs(torch.LongTensor([self.exponent_available_range[0]])))
+                                        torch.abs(self.exponent_available_range[0]))
         # 2.2) Mantissa
         mantissa_preds = self.mantissa_head(numeric_tokens_hidden_states)
 
@@ -653,9 +656,8 @@ class EncoderNumericModel(EncoderSimpleModel):
 
             loss_outputs['token_type_answers'] = selector_targets.detach()
             loss_outputs['exponent_answers'] = (numeric_answers_exponent +
-                                                torch.abs(torch.LongTensor(
-                                                    [self.exponent_available_range[0]]
-                                                ))).detach()
+                                                torch.abs(self.exponent_available_range[0]
+                                                )).detach()
             loss_outputs['mantissa_answers'] = numeric_answers_mantissa.detach()
 
         return loss_outputs

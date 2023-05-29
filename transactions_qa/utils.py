@@ -196,7 +196,8 @@ def get_number_from_parts(mantissa: torch.Tensor, exponent: torch.Tensor) -> tor
     Returns:
         (torch.Tensor): a tensor of floating point tensor of numbers.
     """
-    return torch.FloatTensor([10]).pow(exponent) * mantissa.squeeze()
+    base = torch.FloatTensor([10]).to(mantissa.device)
+    return base.pow(exponent) * mantissa.squeeze()
 
 
 def get_last_checkpoint(folder):
