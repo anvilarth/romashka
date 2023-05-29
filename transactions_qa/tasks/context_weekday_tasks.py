@@ -38,33 +38,24 @@ class MostFrequentDayOfWeekTaskMulti(CategoricalTaskAbstract):
             "The client's transaction history is given as a context:"
         ]
 
-
-        self.question_templates = [
-            ("This is the client's transaction history ",
-             ". On which day of the week did the client make the most transactions?"),
-            ("This is the client's transaction history ",
-             ". On which day of the week did the client make the maximum number of transactions?"),
-            ("You are given the client's transaction history ",
-             ". Which day of the week was the most frequent one for the client's transactions?"),
-            ("This is the client's transaction history ",
-             ". What was the most frequent day of the week for this client's transactions?"),
-            ("This is the client's transaction history ",
-             ". Select the day of the week on which client made the largest amount of transactions?"),
-            ("This is the client's transaction history ",
-             ". Which was the most frequent day of the week for making transactions by this client?"),
-            ("You are given the client's transaction history ",
-             ". Answer the question: which was the most frequent day of the week "
-             "for making transactions by this client?"),
-            ("You are given the client's transaction history ",
-             ". Identify on which day of the week did the client make the most transactions?"),
-            ("You are given the client's transaction history ",
-             ". Answer the question: on which day of the week did the client make the most transactions?"),
-            ("This is the client's transaction history ",
-             ". Answer the following question: on which day of the week did the client make the most transactions?"),
-            ("This is the client's transaction history ",
-             ". Answer the following question: which day of the week was the most popular "
-             "for this client for making transactions?"),
+        self.ending_prompts = [
+            ". On which day of the week did the client make the most transactions?",
+            ". On which day of the week did the client make the maximum number of transactions?",
+            ". Which day of the week was the most frequent one for the client's transactions?",
+            ". What was the most frequent day of the week for this client's transactions?",
+            ". Select the day of the week on which client made the largest amount of transactions?",
+            ". Which was the most frequent day of the week for making transactions by this client?",
+            ". Answer the question: which was the most frequent day of the week "
+            "for making transactions by this client?",
+            ". Identify on which day of the week did the client make the most transactions?",
+            ". Answer the question: on which day of the week did the client make the most transactions?",
+            ". Answer the following question: on which day of the week did the client make the most transactions?",
+            ". Answer the following question: which day of the week was the most popular "
+            "for this client for making transactions?"
         ]
+
+        self.question_templates = self.generate_question_templates(self.starting_prompts,
+                                                                   self.ending_prompts)
         # all options, for a sample can be reduced to [true_mcc_code + 4 other codes]
         self.answers_options = [str(i) for i in range(self.num_classes)]
         self.answer_template = ""  # left empty for a first time
@@ -216,37 +207,29 @@ class MostFrequentDayOfWeekTaskBinary(CategoricalTaskAbstract):
             "The client's transaction history is given as a context:"
         ]
 
-        self.question_templates = [
-            ("This is the client's transaction history ",
-             ". Is the most frequent day of the week for all client's transactions is %s? Yes or No?"),
-            ("This is the client's transaction history ",
-             ". Is %s is the most frequent day of the week for all client's transactions? Yes or No?"),
-            ("You are given the client's transaction history ",
-             ". Is it correct that %s is the most frequent day of the week for client to meke transactions? Yes or No?"),
-            ("This is the client's transaction history ",
-             ". Is %s is a day of the week on which client makes the most of transactions? Choose: Yes or No?"),
-            ("This is the client's transaction history ",
-             ". Is it true or false: the most frequent day of the week for all client's transactions is %s. "
-             "Choose: Yes or No?"),
-            ("This is the client's transaction history ",
-             ". Answer the question: is the most frequent day of the week for all client's transactions - %s? "
-             "Yes or No?"),
-            ("You are given the client's transaction history ",
-             ". Define whether the following statement is correct: is %s - the most frequent day of week "
-             "for this client to make transactions on? Choose: Yes or No?"),
-            ("You are given the client's transaction history ",
-             '. Identify if the statement that "the most frequent day of week for making transactions is %s" '
-             'is correct?  Yes or No?'),
-            ("You are given the client's transaction history ",
-             ". Answer the question whether or not the following statement is true: the most frequent day of week "
-             "for making transactions is %s. Choose: Yes or No?"),
-            ("This is the client's transaction history ",
-             ". Find out whether or not the following statement is true: the most frequent day of week for "
-             "making transactions is %s. Answer only: Yes or No?"),
-            ("This is the client's transaction history ",
-             ". Give an answer to the question: is it true that the most frequent day of week in a clients' "
-             "transaction history is %s? Yes or No?"),
+        self.ending_prompts = [
+            ". Is the most frequent day of the week for all client's transactions is %s? Yes or No?",
+            ". Is %s is the most frequent day of the week for all client's transactions? Yes or No?",
+            ". Is it correct that %s is the most frequent day of the week for client to make transactions? Yes or No?",
+            ". Is %s is a day of the week on which client makes the most of transactions? Choose: Yes or No?",
+            ". Is it true or false: the most frequent day of the week for all client's transactions is %s. "
+            "Choose: Yes or No?",
+            ". Answer the question: is the most frequent day of the week for all client's transactions - %s? "
+            "Yes or No?",
+            ". Define whether the following statement is correct: is %s - the most frequent day of week "
+            "for this client to make transactions on? Choose: Yes or No?",
+            '. Identify if the statement that "the most frequent day of week for making transactions is %s" '
+            'is correct?  Yes or No?',
+            ". Find out whether or not the following statement is true: the most frequent day of week for "
+            "making transactions is %s. Answer only: Yes or No?",
+            ". Answer the question whether or not the following statement is true: the most frequent day of week "
+            "for making transactions is %s. Choose: Yes or No?",
+            ". Give an answer to the question: is it true that the most frequent day of week in a clients' "
+            "transaction history is %s? Yes or No?"
         ]
+
+        self.question_templates = self.generate_question_templates(self.starting_prompts,
+                                                                   self.ending_prompts)
 
         # all options for a target feature
         self.answers_options: List[str] = [str(i) for i in range(self.num_classes)]
