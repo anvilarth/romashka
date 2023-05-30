@@ -72,7 +72,6 @@ class EncoderSingleRetrievalModel(EncoderSimpleModel):
     def _prepare_model(self):
         super()._prepare_model()
 
-        self.whitespace_token_id = torch.Tensor(self.tokenizer.encode(" ", add_special_tokens=False)).long()
         self.eos_token_id = torch.Tensor([self.tokenizer.eos_token_id]).long()
 
         self._create_trainable_parameters()
@@ -420,12 +419,12 @@ class EncoderSingleRetrievalModel(EncoderSimpleModel):
 
         # 6) LM input
         # 6.1) Get general LM's encoder input as:
-        # Q_start_tokens + [trx] + TRNS_embeddings + [/trx] + Q_end_tokens + [RET] + </s>
-        input_embedds = torch.cat([question_start_embeddings_batch,
+        # Q_start_tokens + TRNS_embeddings + Q_end_tokens
+        encoder_input = torch.cat([question_start_embeddings_batch,
                                    transactions_embeddings,
                                    question_end_embeddings_batch], dim=1)
         if ('encoder_input_mask' in batch) \
-                and (batch['encoder_input_mask'].size(1) == input_embedds.size(1)):
+                and (batch['encoder_input_mask'].size(1) == encoder_input.size(1)):
             encoder_input_mask = batch['encoder_input_mask']
 
         else:
@@ -443,6 +442,12 @@ class EncoderSingleRetrievalModel(EncoderSimpleModel):
                      question_end_attention_mask], dim=1
                 )
 
+        # 6.2) Get general LM's input as:
+        # Q_start_tokens + [trx] + TRNS_embeddings + [/trx] + Q_end_tokens + [RET] + </s>
+        input_embedds = torch.cat([question_start_embeddings_batch,
+                                   transactions_embeddings,
+                                   question_end_embeddings_batch], dim=1)
+
         # 7) Labels
         # Create answers + masks for LM's decoder inputs
         batch_answers = batch['answer_tokens']
@@ -455,6 +460,7 @@ class EncoderSingleRetrievalModel(EncoderSimpleModel):
             labels=batch_answers,
             attention_mask=encoder_input_mask,
             decoder_attention_mask=batch_answers_mask,
+            output_attentions=output_attentions,
             output_hidden_states=True)
 
         # Create answers + masks for LM's decoder inputs
@@ -485,6 +491,7 @@ class EncoderSingleRetrievalModel(EncoderSimpleModel):
         if output_attentions:
             outputs["encoder_attentions"] = lm_outputs.encoder_attentions
             outputs["decoder_attentions"] = lm_outputs.decoder_attentions
+            outputs["cross_attentions"] = lm_outputs.cross_attentions
         if output_hidden_states:
             outputs["hidden_states"] = lm_outputs.encoder_hidden_states
         outputs['loss'] = total_loss
@@ -494,7 +501,7 @@ class EncoderSingleRetrievalModel(EncoderSimpleModel):
         if is_train:
             outputs['labels'] = batch_answers
         if self._is_debug:
-            outputs['input_embeddings'] = input_embedds  # for debug purposes
+            outputs['input_embeddings'] = encoder_input  # for debug purposes
             question_start_tokens_batch = batch['question_start_tokens'].repeat(batch_size, 1)
             outputs['question_encoded'] = torch.cat([question_start_tokens_batch,
                                                      question_end_tokens_full], dim=1)

@@ -14,6 +14,7 @@ from romashka.transactions_qa.utils import (get_mantissa_number, get_exponent_nu
                                             mask_padding, count_parameters, get_number_from_parts)
 from romashka.transactions_qa.evaluation.eval_processings_utils import (convert_to_numeric,
                                                                         check_if_numeric)
+from romashka.transactions_qa.model.generation_utils import isin
 
 
 class EncoderNumericModel(EncoderSimpleModel):
@@ -227,8 +228,8 @@ class EncoderNumericModel(EncoderSimpleModel):
         self.l1_loss = torch.nn.L1Loss()
 
     def forward(self, batch: Union[Dict[str, torch.Tensor], Any],
-                output_attentions: Optional[bool] = True,
-                output_hidden_states: Optional[bool] = True,
+                output_attentions: Optional[bool] = False,
+                output_hidden_states: Optional[bool] = False,
                 with_numeric_input: Optional[bool] = None,
                 with_numeric_output: Optional[bool] = None,
                 is_train: Optional[bool] = True) -> Any:
@@ -450,21 +451,21 @@ class EncoderNumericModel(EncoderSimpleModel):
                                                  batch['question_end_tokens']], dim=1)
 
         if is_train:
-            outputs['labels'] = batch_answers
+            outputs['labels'] = batch_answers.detach().cpu()
             if with_numeric_output:
-                outputs['token_type_predictions'] = numeric_loss_output.get('token_type_predictions')
-                outputs['exponent_predictions'] = numeric_loss_output.get('exponent_predictions')
-                outputs['mantissa_predictions'] = numeric_loss_output.get('mantissa_predictions')
+                outputs['token_type_predictions'] = numeric_loss_output.get('token_type_predictions').detach().cpu()
+                outputs['exponent_predictions'] = numeric_loss_output.get('exponent_predictions').detach().cpu()
+                outputs['mantissa_predictions'] = numeric_loss_output.get('mantissa_predictions').detach().cpu()
 
                 outputs['numeric_answers'] = get_number_from_parts(lm_outputs['numeric_answers'][:, 0],
-                                                                   lm_outputs['numeric_answers'][:, 1])
-                outputs['token_type_answers'] = numeric_loss_output.get('token_type_answers')
-                outputs['exponent_answers'] = numeric_loss_output.get('exponent_answers')
-                outputs['mantissa_answers'] = numeric_loss_output.get('mantissa_answers')
+                                                                   lm_outputs['numeric_answers'][:, 1]).detach().cpu()
+                outputs['token_type_answers'] = numeric_loss_output.get('token_type_answers').detach().cpu()
+                outputs['exponent_answers'] = numeric_loss_output.get('exponent_answers').detach().cpu()
+                outputs['mantissa_answers'] = numeric_loss_output.get('mantissa_answers').detach().cpu()
 
                 # Decode floating numbers
                 outputs['decoded_numeric_predictions'] = get_number_from_parts(outputs['mantissa_predictions'],
-                                                                               outputs['exponent_predictions'])
+                                                                               outputs['exponent_predictions']).detach().cpu()
         return outputs
 
     def has_start_token(self, input_tokens_ids: Union[List[int], torch.Tensor]) -> bool:
