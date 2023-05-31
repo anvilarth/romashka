@@ -121,6 +121,14 @@ class TransactionQAModel(pl.LightningModule):
 
         self._logger.info(f"Language model type: `{'encoder-decoder' if self._is_encoder_decoder else 'decoder'}`")
 
+    def add_task(self, new_task: AbstractTask):
+        """
+        Add new task to existing in model.
+        Args:
+            new_task: a new task instance;
+        """
+        self.tasks.append(new_task)
+
     def model_step(self, batch,
                    task_idx: Optional[int] = None,
                    generate: Optional[bool] = False,
