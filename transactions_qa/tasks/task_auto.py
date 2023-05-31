@@ -74,7 +74,7 @@ AUTO_TASKS = [
         ("min_numeric_amount_open-ended", MinAmountNumericTaskOpenEnded),
         ("max_numeric_amount_open-ended", MaxAmountNumericTaskOpenEnded),
         ("last_numeric_amount_open-ended", LastAmountNumericTaskOpenEnded),
-        ("last_numeric_amount_binary", LastAmountNumericTaskBinary)
+        ("last_numeric_amount_binary", LastAmountNumericTaskBinary),
         # MCC category
         ("most_frequent_mcc_category_multi", MostFrequentMCCCategoryTaskMulti),
         ("most_frequent_mcc_category_binary", MostFrequentMCCCategoryTaskBinary),

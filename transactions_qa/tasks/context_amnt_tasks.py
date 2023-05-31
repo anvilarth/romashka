@@ -1881,7 +1881,7 @@ class LastAmountNumericTaskBinary(NumericTaskAbstract):
                                                  mask=mask_.to("cpu")).long()  # get feature without padding
             last_feature = feature_masked[-1]  # get a single Tensor value of a feature
             float_feature_ = self.buckets_means[last_feature.item()]  # take a mean bucket value of the last feature
-            target_feature_value_batch.append(round(float_feature_, 3).to(device))
+            target_feature_value_batch.append(float_feature_)
 
         # Convert to corresponding bucket id
         target_feature_value_bucket_batch = torch.tensor(np.digitize(
@@ -1889,7 +1889,7 @@ class LastAmountNumericTaskBinary(NumericTaskAbstract):
         ).to(device)
 
         # Map to strings
-        target_feature_value_batch = list(map(lambda x: str(round(x.item(), 3)), target_feature_value_batch))
+        target_feature_value_batch = list(map(lambda x: str(round(x, 3)), target_feature_value_batch))
 
         # for binary task randomly sample True and False examples from batch
         # and construct target sequences
@@ -1915,11 +1915,11 @@ class LastAmountNumericTaskBinary(NumericTaskAbstract):
                 # negative
                 rand_target = None
                 while rand_target is None:
-                    bucket_idx_opt = random.sample(list(range(1, len(self.buckets) + 1)), k=1)[0]
+                    bucket_idx_opt = random.sample(list(range(1, len(self.buckets))), k=1)[0]
                     if bucket_idx_opt != target_bucket:
                         # as random option get mean value in random bucket (!= target bucket)
                         # Note: buckets are indexed from 1 to N, i.e. [1, N)
-                        rand_target_bucket_id = self.answers_options[bucket_idx_opt]
+                        rand_target_bucket_id = int(self.answers_options[bucket_idx_opt])
                         rand_target = self.buckets_means[rand_target_bucket_id]
                 question_target_batch.append(question_end % str(round(rand_target, 3)))
 
