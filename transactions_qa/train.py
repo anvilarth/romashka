@@ -44,6 +44,7 @@ from romashka.transactions_qa.dataset.dataloader import (TransactionQADataset, T
 from romashka.transactions_qa.transactions_model.model import TransactionsModel
 
 from romashka.transactions_qa.model import (EncoderSimpleModel, EncoderFrozenModel, EncoderRetrievalModel,
+                                            EncoderSingleRetrievalModel, EncoderNumericModel,
                                             DecoderSimpleModel, DecoderFrozenModel, DecoderRetrievalModel)
 
 from romashka.transactions_qa.model.tqa_model import TransactionQAModel
@@ -378,7 +379,8 @@ def main():
             "transactions_embeddings_start_token": r"[trx]",
             "transactions_embeddings_end_token": r"[/trx]",
         }
-        model_ = EncoderRetrievalModel(
+        # EncoderRetrievalModel
+        model_ = EncoderSingleRetrievalModel(
             language_model=lm_model,
             transaction_model=transactions_model,
             tokenizer=tokenizer,
