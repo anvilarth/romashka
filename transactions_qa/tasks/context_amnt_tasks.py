@@ -304,7 +304,7 @@ class MeanAmountNumericTaskBinary(NumericTaskAbstract):
 
         self.ending_prompts = [
             ". Is the mean amount of client's transactions - %s? Choose: Yes or No?",
-            ". Is the mean amount of all client's transactions is %s? Choose one: Yes or No?"
+            ". Is the mean amount of all client's transactions is %s? Choose one: Yes or No?",
             ". Is it true that the mean amount of client's' transactions equals to %s? Yes or No?",
             ". Define whether the following statement is true:  %s is the mean amount of all client's transactions? "
             "Choose only one of the following options: Yes or No?",
