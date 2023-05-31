@@ -7,6 +7,8 @@ from romashka.transactions_qa.tasks.context_mcc_tasks import (MostFrequentMCCCod
                                                               MostFrequentMCCCodeTaskOpenEnded,
                                                               LeastFrequentMCCCodeTaskOpenEnded,
                                                               LastMCCCodeTaskOpenEnded,
+                                                              LastMCCCodeTaskBinary,
+                                                              LastMCCCodeTaskMulti,
                                                               OccurenceMCCCodeTaskBinary,
                                                               ruMostFrequentMCCCodeTaskBinary,
                                                               ruMostFrequentMCCCodeTaskMulti,
@@ -17,7 +19,8 @@ from romashka.transactions_qa.tasks.context_amnt_tasks import (MeanAmountBinnedT
                                                                MeanAmountNumericTaskOpenEnded,
                                                                MinAmountNumericTaskOpenEnded,
                                                                MaxAmountNumericTaskOpenEnded,
-                                                               LastAmountNumericTaskOpenEnded)
+                                                               LastAmountNumericTaskOpenEnded,
+                                                               LastAmountNumericTaskBinary)
 from romashka.transactions_qa.tasks.context_mcc_category_tasks import (MostFrequentMCCCategoryTaskBinary,
                                                                        MostFrequentMCCCategoryTaskMulti,
                                                                        MostFrequentMCCCategoryTaskOpenEnded,
@@ -57,6 +60,8 @@ AUTO_TASKS = [
         ("most_frequent_mcc_code_open-ended", MostFrequentMCCCodeTaskOpenEnded),
         ("least_frequent_mcc_code_open-ended", LeastFrequentMCCCodeTaskOpenEnded),
         ("last_mcc_code_open-ended", LastMCCCodeTaskOpenEnded),
+        ("last_mcc_code_binary", LastMCCCodeTaskBinary),
+        ("last_mcc_code_multi", LastMCCCodeTaskMulti),
         ("ru_most_frequent_mcc_code_binary", ruMostFrequentMCCCodeTaskBinary),
         ("ru_most_frequent_mcc_code_multi", ruMostFrequentMCCCodeTaskMulti),
         ("ru_most_frequent_mcc_code_open-ended", ruMostFrequentMCCCodeTaskOpenEnded),
@@ -69,6 +74,7 @@ AUTO_TASKS = [
         ("min_numeric_amount_open-ended", MinAmountNumericTaskOpenEnded),
         ("max_numeric_amount_open-ended", MaxAmountNumericTaskOpenEnded),
         ("last_numeric_amount_open-ended", LastAmountNumericTaskOpenEnded),
+        ("last_numeric_amount_binary", LastAmountNumericTaskBinary)
         # MCC category
         ("most_frequent_mcc_category_multi", MostFrequentMCCCategoryTaskMulti),
         ("most_frequent_mcc_category_binary", MostFrequentMCCCategoryTaskBinary),
