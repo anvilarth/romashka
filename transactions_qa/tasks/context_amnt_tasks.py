@@ -1854,7 +1854,6 @@ class LastAmountNumericTaskBinary(NumericTaskAbstract):
             with_numeric_output=self.numeric_outputs
         )
 
-
     def generate_target(self, batch: Any, **kwargs) -> Tuple[List[str], List[str]]:
         """
         Creates target values vector for a batch.
