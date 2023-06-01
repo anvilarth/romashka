@@ -429,8 +429,17 @@ class TrainingArguments:
     )
     
     gradient_clip_val: float = field(
-        default=1.0,
-        metadata={"help": "Clipping norm of gradients. If ||g|| < val, g = val * g / ||g||."},
+        default=5.0,
+        metadata={"help": "Clipping norm of gradients. If ||g|| < val, g = val * g / ||g||. "
+                          "The clip value is usually between 0.5 and 10, depending on how harsh you want "
+                          "to clip large gradients."},
+    )
+
+    gradient_clip_algorithm: Optional[str] = field(
+        default='norm',
+        metadata={"help": "The gradient clipping algorithm to use. Pass gradient_clip_algorithm='value' "
+                          "to clip by value, and gradient_clip_algorithm='norm' to clip by norm. "
+                          "By default it will be set to 'norm'."},
     )
 
     gradient_accumulation_steps: int = field(

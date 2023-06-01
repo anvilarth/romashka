@@ -60,7 +60,9 @@ class DecoderSimpleModel(nn.Module):
         if len(self.language_model.config.architectures):
             if "OPT" in self.language_model.config.architectures[0]:
                 self.language_model_arch_type = "OPT"  # has a .model.decoder attribute
-            elif "GPT" in self.language_model.config.architectures[0]:
+            if "GPTNeoX" in self.language_model.config.architectures[0]:   # required for Pythia and GPT-NeoX
+                self.language_model_arch_type = "GPTNeoX"  # has a .model.gpt_neox attribute
+            elif "GPT" in self.language_model.config.architectures[0]:  # other GPT-like models
                 self.language_model_arch_type = "GPT"  # has a .transformer attribute
             else:
                 raise AttributeError(f"Provided language model architecture is not currently supported "
@@ -78,6 +80,8 @@ class DecoderSimpleModel(nn.Module):
         """
         if self.language_model_arch_type == "OPT":  # has a .model.decoder.embed_tokens(...) Embedding layer
             self.language_model_tokens_embedding_func = self.language_model.model.decoder.embed_tokens
+        elif self.language_model_arch_type == "GPTNeoX":  # has a .gpt_neox.embed_in(...) Embedding layer
+            self.language_model_tokens_embedding_func = self.language_model.gpt_neox.embed_in
         elif self.language_model_arch_type == "GPT":  # has a .transformer.wte(...) Embedding layer
             self.language_model_tokens_embedding_func = self.language_model.transformer.wte
         else:
@@ -128,10 +132,12 @@ class DecoderSimpleModel(nn.Module):
                 param.requires_grad = False
 
     def _resize_text_embeddings(self):
-        # For OPT-based models
+        # For OPT and GPT-NeoX -based models
         if self.language_model_arch_type == "OPT":
             init_embeddings = self.language_model.get_input_embeddings()
-        # For GPT-based
+        elif self.language_model_arch_type == "GPTNeoX":
+            init_embeddings = self.language_model.get_input_embeddings()
+        # For GPT-based: GPT-J and GPT2
         else:
             init_embeddings = self.language_model.transformer.get_input_embeddings()
 
@@ -140,9 +146,11 @@ class DecoderSimpleModel(nn.Module):
 
         self.language_model.resize_token_embeddings(len(self.tokenizer))
 
-        # For OPT-based models
+        # For OPT and GPT-NeoX -based models
         if self.language_model_arch_type == "OPT":
             resized_embedds = self.language_model.model.decoder.get_input_embeddings()
+        elif self.language_model_arch_type == "GPTNeoX":
+            resized_embedds = self.language_model.get_input_embeddings()
         # For GPT-based
         else:
             resized_embedds = self.language_model.transformer.get_input_embeddings()

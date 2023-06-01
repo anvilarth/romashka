@@ -45,7 +45,8 @@ from romashka.transactions_qa.transactions_model.model import TransactionsModel
 
 from romashka.transactions_qa.model import (EncoderSimpleModel, EncoderFrozenModel, EncoderRetrievalModel,
                                             EncoderSingleRetrievalModel, EncoderNumericModel,
-                                            DecoderSimpleModel, DecoderFrozenModel, DecoderRetrievalModel)
+                                            DecoderSimpleModel, DecoderFrozenModel, DecoderRetrievalModel,
+                                            DecoderSingleRetrievalModel)
 
 from romashka.transactions_qa.model.tqa_model import TransactionQAModel
 from romashka.transactions_qa.layers.connector import (CONNECTOR_TYPES,
@@ -309,19 +310,6 @@ def main():
         )
     elif model_args.connector_type == "qformer":
         # Connector args are hardcoded, should be changed here
-        # qformer_config = {
-        #       "attention_probs_dropout_prob": 0.1,
-        #       "classifier_dropout": 0.1,
-        #       "cross_attention_frequency": 2,
-        #       "hidden_act": "gelu",
-        #       "hidden_dropout_prob": 0.1,
-        #       "initializer_range": 0.02,
-        #       "intermediate_size": 1024,
-        #       "max_position_embeddings": 1024,
-        #       "num_attention_heads": 8,
-        #       "num_hidden_layers": 4,
-        #       "position_embedding_type": "absolute",
-        # }
         qformer_config = {
             "hidden_size": model_args.connector_hidden_size,
             "num_attention_heads": model_args.num_attention_heads,
@@ -356,14 +344,6 @@ def main():
         raise AttributeError(f"Unknown connector type: {model_args.connector_type}")
 
     # Create general LLM model
-    lm_model_config = {
-        "do_freeze_tm": training_args.do_freeze_transactions_model,
-        "do_freeze_lm": training_args.do_freeze_language_model,
-        "do_freeze_lm_embeddings": training_args.do_freeze_language_model_embeddings,
-        "do_freeze_connector": training_args.do_freeze_connector,
-        "is_debug": True
-    }
-
     if model_args.language_model_type == "encoder-decoder":
         lm_model_config = {
             "do_freeze_tm": training_args.do_freeze_transactions_model,
@@ -403,7 +383,7 @@ def main():
             "transactions_embeddings_start_token": r"[trx]",
             "transactions_embeddings_end_token": r"[/trx]",
         }
-        model_ = DecoderRetrievalModel(
+        model_ = DecoderSingleRetrievalModel(
             language_model=lm_model,
             transaction_model=transactions_model,
             tokenizer=tokenizer,
@@ -514,6 +494,7 @@ def main():
         log_every_n_steps=100,
         reload_dataloaders_every_n_epochs=1,
         gradient_clip_val=training_args.gradient_clip_val,
+        gradient_clip_algorithm=training_args.gradient_clip_algorithm,
         accumulate_grad_batches=training_args.gradient_accumulation_steps,
         logger=wb_logger,  # [tb_logger, wb_logger],
         callbacks=[checkpoint_callback, lr_monitor_callback])

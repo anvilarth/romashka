@@ -324,9 +324,8 @@ class DecoderRetrievalModel(DecoderSimpleModel):
             answer_ = batch['answer_tokens'][i]
             full_question_end_tokens_ = torch.cat([question_end_tokens_,
                                                    self.whitespace_token_id.to(device),
-                                                   answer_,
-                                                   # eos_token_id.to(device)
-                                                   ], dim=0)
+                                                   # check to not to insert <eos> before answer tokens!!!
+                                                   answer_], dim=0)
             question_end_tokens_full.append(full_question_end_tokens_)
 
         # 3.2) Pad to max q+a length

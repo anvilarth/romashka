@@ -118,11 +118,6 @@ class EncoderSingleRetrievalModel(EncoderSimpleModel):
         """
         Creates trainable parameters for:
             - transactions embeddings start/end tokens: [trx] / [/trx];
-        Note: those parameters need to be passed to separate optimizer (with connector & projections layers)!
-        i.e:
-            opt = Adafactor(
-                list(projection.parameters())
-                + [trns_start_embedding, trns_end_embedding], lr=1e-2, relative_step=False)
         """
         # Check if transactions embeddings start/end tokens, exists in tokenizers' vocabulary,
         # add them if not exist and get their indexes
@@ -165,12 +160,6 @@ class EncoderSingleRetrievalModel(EncoderSimpleModel):
         """
         Creates trainable parameters for:
             - retrieval token: [RET];
-        Note: those parameters need to be passed to separate optimizer (with connector & projections layers)!
-        i.e:
-            opt = Adafactor(
-                list(projection.parameters())
-                + [trns_start_embedding, trns_end_embedding]
-                + [ret_embeddings], lr=1e-2, relative_step=False)
         """
         # Check if transactions retrieval tokens, exists in tokenizers' vocabulary,
         # add them if not exist and get their indexes
@@ -552,42 +541,46 @@ class EncoderSingleRetrievalModel(EncoderSimpleModel):
         # 3) calculate Contrastive loss in BLIP-2 style
         # (as single current RET vs. max(current sample multiple queries)) -> positives
         # vs. other samples from batch -> negatives
+        loss_outputs = dict()
+        try:
+            # 3.1) Queries to RET token hidden states similarity
+            # [batch_size, batch_size, num_query_tokens]
+            same_sim_q2t = torch.matmul(
+                injected_embeddings.unsqueeze(1), collected_last_hidden_state.unsqueeze(-1)
+            ).squeeze()
 
-        # 3.1) Queries to RET token hidden states similarity
-        # [batch_size, batch_size, num_query_tokens]
-        same_sim_q2t = torch.matmul(
-            injected_embeddings.unsqueeze(1), collected_last_hidden_state.unsqueeze(-1)
-        ).squeeze()
+            # Sequence to RET token hidden states similarity: aggregate (take max) across all query tokens
+            same_sim_q2t_max, _ = same_sim_q2t.max(-1)
+            # as probabilities of each batch sample belongs to the class (num_classes == batch_size)
+            # -> [batch_size, batch_size]
+            same_sim_q2t_max = same_sim_q2t_max / self.ret_temperature
 
-        # Sequence to RET token hidden states similarity: aggregate (take max) across all query tokens
-        same_sim_q2t_max, _ = same_sim_q2t.max(-1)
-        # as probabilities of each batch sample belongs to the class (num_classes == batch_size)
-        # -> [batch_size, batch_size]
-        same_sim_q2t_max = same_sim_q2t_max / self.ret_temperature
+            # 3.2) RET tokens hidden states to query similarity: [batch_size, batch_size, num_query_tokens]
+            diff_sim_t2q = torch.matmul(
+                collected_last_hidden_state.unsqueeze(1).unsqueeze(1), injected_embeddings.permute(0, 2, 1)
+            ).squeeze()
 
-        # 3.2) RET tokens hidden states to query similarity: [batch_size, batch_size, num_query_tokens]
-        diff_sim_t2q = torch.matmul(
-            collected_last_hidden_state.unsqueeze(1).unsqueeze(1), injected_embeddings.permute(0, 2, 1)
-        ).squeeze()
+            # RET tokens hidden states - query similarity: aggregate (take max) across all query tokens
+            diff_sim_t2q_max, _ = diff_sim_t2q.max(-1)
+            # as probabilities of each batch sample belongs to the class (num_classes == batch_size)
+            # -> [batch_size, batch_size]
+            diff_sim_t2q_max = diff_sim_t2q_max / self.ret_temperature
 
-        # RET tokens hidden states - query similarity: aggregate (take max) across all query tokens
-        diff_sim_t2q_max, _ = diff_sim_t2q.max(-1)
-        # as probabilities of each batch sample belongs to the class (num_classes == batch_size)
-        # -> [batch_size, batch_size]
-        diff_sim_t2q_max = diff_sim_t2q_max / self.ret_temperature
+            # Targets
+            batch_size = input_embedds.size(0)
+            targets = torch.linspace(0, batch_size - 1, batch_size, dtype=int).to(input_embedds.device)
 
-        # Targets
-        batch_size = input_embedds.size(0)
-        targets = torch.linspace(0, batch_size - 1, batch_size, dtype=int).to(input_embedds.device)
-
-        # Total contrastive loss
-        # as mean of:
-        #  1) similarities RET tokens last hidden states <-> queries
-        #  2) similarities queries <-> RET tokens last hidden states
-        loss_contrastive = (torch.nn.functional.cross_entropy(same_sim_q2t_max, targets)  # label_smoothing=0.1
-                            + torch.nn.functional.cross_entropy(diff_sim_t2q_max, targets)  # label_smoothing=0.1
-                            ) / 2
-        loss_outputs = dict(loss=loss_contrastive)
+            # Total contrastive loss
+            # as mean of:
+            #  1) similarities RET tokens last hidden states <-> queries
+            #  2) similarities queries <-> RET tokens last hidden states
+            loss_contrastive = (torch.nn.functional.cross_entropy(same_sim_q2t_max, targets)  # label_smoothing=0.1
+                                + torch.nn.functional.cross_entropy(diff_sim_t2q_max, targets)  # label_smoothing=0.1
+                                ) / 2
+            loss_outputs['loss'] = loss_contrastive
+        except Exception as e:
+            self._logger.error(f"!!! Exceptiom occurred during retrieval loss calculation:\n{e}")
+            loss_outputs['loss'] = torch.zeros((1,), dtype=torch.float32)
 
         if output_hidden_states:
             loss_outputs['last_hidden_state'] = collected_last_hidden_state
