@@ -353,6 +353,11 @@ class TasksArguments:
         default_factory=list,
         metadata={"help": "A list of dictionary-like arguments for tasks creation."}
     )
+    special_task_token_type: Optional[Union[str, int]] = field(
+        default='TASK_SPECIFIC',
+        metadata={"help": "A special task token type naming scheme. "
+                          "Can be one of: [TASK_SPECIFIC, ATTRIBUTE_SPECIFIC, ANSWER_SPECIFIC]"},
+    )
 
     def __post_init__(self):
         if self.task_names is None:

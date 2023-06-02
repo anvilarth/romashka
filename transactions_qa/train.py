@@ -228,18 +228,23 @@ def main():
 
     # Create tasks
     tasks = []
+    task_token_type = tasks_args.special_task_token_type
+
     task_names = tasks_args.task_names
     if isinstance(task_names, str):
         task_names = eval(task_names)
-    task_kwargs = tasks_args.task_kwargs
-    if isinstance(task_kwargs, str):
-        task_kwargs = eval(task_kwargs)
-    print(f"Got task_names: {task_names} with task_kwargs: {task_kwargs}")
+    tasks_kwargs = tasks_args.task_kwargs
+    if isinstance(tasks_kwargs, str):
+        tasks_kwargs = eval(tasks_kwargs)
+    print(f"Got task_names: {task_names} with task_kwargs: {tasks_kwargs}")
 
     for task_i, task_name in enumerate(task_names):
-        task_kwargs = task_kwargs[task_i] if task_i < len(task_kwargs) else {}
+        task_kwargs = tasks_kwargs[task_i] if task_i < len(tasks_kwargs) else {}
         if "tokenizer" not in task_kwargs:
             task_kwargs['tokenizer'] = tokenizer
+        if 'task_special_token_type' not in task_kwargs:
+            task_kwargs['task_special_token_type'] = task_token_type
+
         task = AutoTask.get(task_name=task_name, **task_kwargs)
         tasks.append(task)
     logger.info(f"Created {len(tasks)} tasks.")

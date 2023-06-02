@@ -580,7 +580,9 @@ class EncoderSingleRetrievalModel(EncoderSimpleModel):
             loss_outputs['loss'] = loss_contrastive
         except Exception as e:
             self._logger.error(f"!!! Exceptiom occurred during retrieval loss calculation:\n{e}")
-            loss_outputs['loss'] = torch.zeros((1,), dtype=torch.float32)
+            self._logger.error(f"Errored: same_sim_q2t_max size: {same_sim_q2t_max.size()}")
+            self._logger.error(f"Errored: targets size: {targets.size()}")
+            loss_outputs['loss'] = torch.zeros((1,), dtype=torch.float32).to(collected_last_hidden_state.device)
 
         if output_hidden_states:
             loss_outputs['last_hidden_state'] = collected_last_hidden_state
