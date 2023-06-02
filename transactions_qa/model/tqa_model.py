@@ -13,6 +13,7 @@ from pytorch_lightning.loggers import WandbLogger
 
 from romashka.transactions_qa.model.generation_utils import AnsweredQACriteria
 from romashka.transactions_qa.tasks.task_abstract import AbstractTask
+from romashka.transactions_qa.tasks.task_token_updater import collect_task_specific_tokens
 from romashka.logging_handler import get_logger
 
 from transformers import GenerationConfig
@@ -40,6 +41,7 @@ class TransactionQAModel(pl.LightningModule):
         )
         self.model = model
         self.tasks = tasks
+        self.task_specific_tokens = collect_task_specific_tokens(self.tasks)
 
         self.metrics = nn.ModuleDict({task.task_name: deepcopy(task.metrics) for task in self.tasks})
 

@@ -21,9 +21,14 @@ class MostFrequentDayOfWeekTaskMulti(CategoricalTaskAbstract):
     def __post_init__(self):
         self.task_name = "most_frequent_day_of_week_multi"
         self.target_feature_name = 'day_of_week'  # 7 unique values
-        self.task_special_token = "[most_freq_day_multichoice]"
+        
+        self.task_special_token = None
+        self.task_specific_special_token = "[most_freq_day_multichoice]"
+        
         self.num_classes = 7
-        self.is_open_ended_task = False  # for a default for this task
+        self.is_text_task = False
+        self.is_binary_task = False
+        self.is_open_ended_task = False
         self.metrics = nn.ModuleDict({
             "rouge": ROUGEScore(),
             'accuracy': Accuracy(task='multiclass',
@@ -195,9 +200,14 @@ class MostFrequentDayOfWeekTaskBinary(CategoricalTaskAbstract):
     def __post_init__(self):
         self.task_name = "most_frequent_day_of_week_binary"
         self.target_feature_name = 'day_of_week'  # 7 unique values
-        self.task_special_token = "[most_freq_day_binary]"
+        
+        self.task_special_token = None
+        self.task_specific_special_token = "[most_freq_day_binary]"
+        
         self.num_classes = 7
-        self.is_open_ended_task = False  # for a default for this task
+        self.is_text_task = False
+        self.is_binary_task = True
+        self.is_open_ended_task = False
         self.metrics = nn.ModuleDict({
             "rouge": ROUGEScore()
         })
@@ -362,9 +372,14 @@ class MostFrequentDayOfWeekTaskOpenEnded(CategoricalTaskAbstract):
     def __post_init__(self):
         self.task_name = "most_frequent_day_of_week_open-ended"
         self.target_feature_name = 'day_of_week'  # 7 unique values
-        self.task_special_token = "[most_freq_day_openended]"
+        
+        self.task_special_token = None
+        self.task_specific_special_token = "[most_freq_day_openended]"
+        
         self.num_classes = 7
-        self.is_open_ended_task = True  # for a default for this task
+        self.is_text_task = False
+        self.is_binary_task = False
+        self.is_open_ended_task = True
         self.metrics = nn.ModuleDict({
             "rouge": ROUGEScore()
         })
@@ -518,9 +533,14 @@ class LeastFrequentDayOfWeekTaskOpenEnded(CategoricalTaskAbstract):
     def __post_init__(self):
         self.task_name = "least_frequent_day_of_week_open-ended"
         self.target_feature_name = 'day_of_week'  # 7 unique values
-        self.task_special_token = "[least_freq_day_of_week_openended]"
+        
+        self.task_special_token = None
+        self.task_specific_special_token = "[least_freq_day_of_week_openended]"
+
         self.num_classes = 7
-        self.is_open_ended_task = True  # for a default for this task
+        self.is_text_task = False
+        self.is_binary_task = False
+        self.is_open_ended_task = True
         self.metrics = nn.ModuleDict({
             "rouge": ROUGEScore()
         })
@@ -673,9 +693,14 @@ class LastDayOfWeekTaskOpenEnded(CategoricalTaskAbstract):
     def __post_init__(self):
         self.task_name = "last_day_of_week_open-ended"
         self.target_feature_name = 'day_of_week'  # 7 unique values
-        self.task_special_token = "[last_day_of_week_openended]"
+
+        self.task_special_token = None
+        self.task_specific_special_token = "[last_day_of_week_openended]"
+
         self.num_classes = 7
-        self.is_open_ended_task = True  # for a default for this task
+        self.is_text_task = False
+        self.is_binary_task = False
+        self.is_open_ended_task = True
         self.metrics = nn.ModuleDict({
             "rouge": ROUGEScore()
         })
@@ -828,11 +853,16 @@ class OccurenceDayOfWeekTaskBinary(CategoricalTaskAbstract):
     def __post_init__(self):
         self.task_name = "occurrence_day_of_week_binary"
         self.target_feature_name = 'day_of_week'  # 7 unique values
-        self.task_special_token = "[occurrence_day_of_week_binary]"
+
+        self.task_special_token = None
+        self.task_specific_special_token = "[occurrence_day_of_week_binary]"
+
         self.update_feature_index()
 
         self.num_classes = 7
-        self.is_open_ended_task = False  # for a default for this task
+        self.is_text_task = False
+        self.is_binary_task = False
+        self.is_open_ended_task = True
         self.metrics = nn.ModuleDict({
             "rouge": ROUGEScore(),
         })

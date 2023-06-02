@@ -32,8 +32,13 @@ class MeanAmountBinnedTaskBinary(NumericTaskAbstract):
     def __post_init__(self):
         self.task_name = "mean_binned_amount_binary"
         self.target_feature_name = 'amnt'  # [0, 1] range of values
-        self.task_special_token = "[mean_binned_AMNT_binary]"
-        self.is_open_ended_task = False  # for a default for this task
+
+        self.task_special_token = None
+        self.task_specific_special_token = "[mean_binned_AMNT_binary]"
+
+        self.is_text_task = False
+        self.is_binary_task = True
+        self.is_open_ended_task = False
         # Select to not to convert integer range to floating point number
         # (with required processing of output predictions & answers)
         self.numeric_outputs: Optional[bool] = False
@@ -83,7 +88,7 @@ class MeanAmountBinnedTaskBinary(NumericTaskAbstract):
             raise AttributeError("This task requires tokenizer to be set!")
         if self.add_tokens_to_tokenizer:
             self.extend_vocabulary(tokenizer=self.tokenizer,
-                                   new_tokens=self.speciaxl_tokens,
+                                   new_tokens=self.special_tokens,
                                    special=False)
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
@@ -286,9 +291,14 @@ class MeanAmountNumericTaskBinary(NumericTaskAbstract):
     def __post_init__(self):
         self.task_name = "mean_numeric_amount_binary"
         self.target_feature_name = 'amnt'  # [0, 1] range of values
-        self.task_special_token = "[mean_numeric_AMNT_binary]"
+
+        self.task_special_token = None
+        self.task_specific_special_token = "[mean_numeric_AMNT_binary]"
+
         self.target_feature_index = num_features_names.index(self.target_feature_name)
-        self.is_open_ended_task = False  # for a default for this task
+        self.is_text_task = False
+        self.is_binary_task = True
+        self.is_open_ended_task = False
         # Select to not to convert integer range to floating point number
         # (with required processing of output predictions & answers)
         self.numeric_outputs: Optional[bool] = False
@@ -553,9 +563,14 @@ class MeanAmountBinnedTaskOpenEnded(NumericTaskAbstract):
     def __post_init__(self):
         self.task_name = "mean_binned_amount_open-ended"
         self.target_feature_name = 'amnt'  # [0, 1] range of values
-        self.task_special_token = "[mean_binned_AMNT_openended]"
+
+        self.task_special_token = None
+        self.task_specific_special_token = "[mean_binned_AMNT_openended]"
+
         self.target_feature_index = num_features_names.index(self.target_feature_name)
-        self.is_open_ended_task = True  # for a default for this task
+        self.is_text_task = False
+        self.is_binary_task = False
+        self.is_open_ended_task = True
         # Select to not to convert integer range to floating point number
         # (with required processing of output predictions & answers)
         self.numeric_outputs: Optional[bool] = False
@@ -782,9 +797,14 @@ class MeanAmountNumericTaskOpenEnded(NumericTaskAbstract):
     def __post_init__(self):
         self.task_name = "mean_numeric_amount_open-ended"
         self.target_feature_name = 'amnt'  # [0, 1] range of values
-        self.task_special_token = "[mean_numeric_AMNT_openended]"
+
+        self.task_special_token = None
+        self.task_specific_special_token = "[mean_numeric_AMNT_openended]"
+
         self.target_feature_index = num_features_names.index(self.target_feature_name)
-        self.is_open_ended_task = True  # for a default for this task
+        self.is_text_task = False
+        self.is_binary_task = False
+        self.is_open_ended_task = True
         self.metrics = {
             "mae": MeanAbsoluteError(),
             "mse": MeanSquaredError()
@@ -1012,9 +1032,14 @@ class MinAmountNumericTaskOpenEnded(NumericTaskAbstract):
     def __post_init__(self):
         self.task_name = "min_numeric_amount_open-ended"
         self.target_feature_name = 'amnt'  # [0, 1] range of values
-        self.task_special_token = "[min_numeric_AMNT_openended]"
+
+        self.task_special_token = None
+        self.task_specific_special_token = "[min_numeric_AMNT_openended]"
+
         self.target_feature_index = num_features_names.index(self.target_feature_name)
-        self.is_open_ended_task = True  # for a default for this task
+        self.is_text_task = False
+        self.is_binary_task = False
+        self.is_open_ended_task = True
         self.metrics = {
             "mae": MeanAbsoluteError(),
             "mse": MeanSquaredError()
@@ -1243,9 +1268,14 @@ class MaxAmountNumericTaskOpenEnded(NumericTaskAbstract):
     def __post_init__(self):
         self.task_name = "max_numeric_amount_open-ended"
         self.target_feature_name = 'amnt'  # [0, 1] range of values
-        self.task_special_token = "[max_numeric_AMNT_openended]"
+
+        self.task_special_token = None
+        self.task_specific_special_token = "[max_numeric_AMNT_openended]"
+
         self.target_feature_index = num_features_names.index(self.target_feature_name)
-        self.is_open_ended_task = True  # for a default for this task
+        self.is_text_task = False
+        self.is_binary_task = False
+        self.is_open_ended_task = True
         self.metrics = {
             "mae": MeanAbsoluteError(),
             "mse": MeanSquaredError()
@@ -1469,9 +1499,14 @@ class LastAmountNumericTaskOpenEnded(NumericTaskAbstract):
     def __post_init__(self):
         self.task_name = "last_numeric_amount_open-ended"
         self.target_feature_name = 'amnt'  # [0, 1] range of values
-        self.task_special_token = "[last_numeric_AMNT_openended]"
+
+        self.task_special_token = None
+        self.task_specific_special_token = "[last_numeric_AMNT_openended]"
+
         self.target_feature_index = num_features_names.index(self.target_feature_name)
-        self.is_open_ended_task = True  # for a default for this task
+        self.is_text_task = False
+        self.is_binary_task = False
+        self.is_open_ended_task = True
         self.metrics = {
             "mae": MeanAbsoluteError(),
             "mse": MeanSquaredError()
@@ -1695,9 +1730,14 @@ class LastAmountNumericTaskBinary(NumericTaskAbstract):
     def __post_init__(self):
         self.task_name = "last_numeric_amount_binary"
         self.target_feature_name = 'amnt'  # [0, 1] range of values
-        self.task_special_token = "[last_numeric_AMNT_binary]"
+
+        self.task_special_token = None
+        self.task_specific_special_token = "[last_numeric_AMNT_binary]"
+
         self.target_feature_index = num_features_names.index(self.target_feature_name)
-        self.is_open_ended_task = False  # for a default for this task
+        self.is_text_task = False
+        self.is_binary_task = True
+        self.is_open_ended_task = False
         self.metrics = {
             "accuracy": BinaryAccuracy()
         }

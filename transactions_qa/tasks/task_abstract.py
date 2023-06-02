@@ -22,6 +22,10 @@ logger = get_logger(
     logging_level="INFO"
 )
 
+from romashka.transactions_qa.tasks.task_token_updater import (TaskTokenType,
+                                                               ANSWER_SPECIFIC_TOKENS,
+                                                               ATTRIBUTE_SPECIFIC_TOKENS,
+                                                               TASK_SPECIFIC_TOKENS)
 from romashka.transactions_qa.dataset.data_generator import (transaction_features,
                                                              num_features_names,
                                                              cat_features_names)
@@ -32,19 +36,12 @@ class AbstractTask(ABC):
     """
     todo: https://github.com/google-research/xtreme/blob/master/third_party/utils_lareqa.py
     Defines the abstract class for all the tasks.
-    name: the name of the task.
-    task_specific_config: specifies the special configuration needs
-        to be passed to encoder when decoding each task. Since different
-        tasks, have different output space, the maximum decoding length
-        varies based on the tasks.
-    metrics: specifies the metrics to evaluate the task based on them.
     ...
     """
     task_name: Optional[str] = None
     target_feature_name: Optional[str] = None
     target_feature_index: Optional[int] = None
     target_feature_type: Optional[str] = None
-    task_specific_config: Optional[Dict[str, Any]] = None
     metrics: Optional[Union[Dict[str, Any], nn.ModuleDict]] = None
     starting_prompts: Optional[List[str]] = None
     ending_prompts: Optional[List[str]] = None
@@ -56,20 +53,33 @@ class AbstractTask(ABC):
 
     seed: Optional[int] = 11
     verbose: Optional[bool] = False
+
     task_special_token: Optional[str] = None
+    # if str -> enum.name
+    # if int -> enum.value
+    # if enum -> direct comparison
+    task_special_token_type: Optional[Union[str, TaskTokenType, int]] = 0
+
     transactions_embeddings_start_token: Optional[str] = r"[trx]"
     transactions_embeddings_end_token: Optional[str] = r"[/trx]"
     special_tokens: Optional[List[str]] = None
     add_tokens_to_tokenizer: Optional[bool] = False
+
     # This option is set to `False` if the answer is binary: yes/no, true/false, or multichoice
     # Otherwise, it is set to `True` to not require any information about available options/targets
     is_open_ended_task: Optional[bool] = True
+    is_binary_task: Optional[bool] = False
+    is_text_task: Optional[bool] = False
+
     multichoice_separator: Optional[str] = " - %s;"
     num_options: Optional[int] = 6  # ground truth + 5 additional options
     is_few_shot: Optional[bool] = False  # whether to provide few examples before question
     n_shot: Optional[int] = 1
 
     def __post_init__(self):
+        if self.task_special_token is None:
+            self.initialize_task_special_token()
+
         # Fill in empty parameters with defaults
         if self.special_tokens is None:
             self.special_tokens = [self.transactions_embeddings_start_token,
@@ -78,10 +88,6 @@ class AbstractTask(ABC):
                 self.special_tokens += [self.task_special_token]
         if self.target_feature_name is not None:
             self.init_feature_index()
-        self.task_specific_config = {
-            "source_msx_seq_len": 512,
-            "target_max_seq_len": 128
-        } if self.task_specific_config is None else self.task_specific_config
         # Init metrics
         self.metrics = nn.ModuleDict({"rouge": ROUGEScore()} if self.metrics is None else self.metrics)
         self.answer_template = [
@@ -165,6 +171,43 @@ class AbstractTask(ABC):
                                  f"transactions feature names:\n{transaction_features}")
         logger.info(f"For feature with name: {self.target_feature_name} of type {self.target_feature_type}, "
                     f"set index = {self.target_feature_index}")
+
+    def initialize_task_special_token(self):
+        """
+        Initializes task special token based on selected scheme: attribute-/answer-/task- specific.
+        """
+        if isinstance(self.task_special_token_type, int):
+            # compare by value
+            self.task_special_token_type = TaskTokenType.select_by_value(self.task_special_token_type)
+        elif isinstance(self.task_special_token_type, str):
+            # compare by name
+            self.task_special_token_type = TaskTokenType.select_by_name(self.task_special_token_type)
+        elif not isinstance(self.task_special_token_type, TaskTokenType):
+            logger.error(f"Attribute `task_special_token_type` has unknown type: {type(self.task_special_token_type)}!")
+            raise AttributeError(f"Attribute `task_special_token_type` has unknown "
+                                 f"type: {type(self.task_special_token_type)}!")
+
+        # Init special token based on selected scheme
+        if self.task_special_token_type == TaskTokenType.TASK_SPECIFIC:
+            self.task_special_token = self.task_special_token_type
+        elif self.task_special_token_type == TaskTokenType.ATTRIBUTE_SPECIFIC:
+            self.task_special_token = ATTRIBUTE_SPECIFIC_TOKENS.get(self.target_feature_name)
+        elif self.task_special_token_type == TaskTokenType.ANSWER_SPECIFIC:
+            # Binary
+            if ("binary" in self.task_name) or self.is_binary_task:
+                self.task_special_token = ANSWER_SPECIFIC_TOKENS.get("binary")
+            # Numeric: in name and by feature name type
+            elif ("numeric" in self.task_name) and (self.target_feature_name in num_features_names):
+                self.task_special_token = ANSWER_SPECIFIC_TOKENS.get("numeric")
+            # Textual
+            elif self.is_text_task:
+                self.task_special_token = ANSWER_SPECIFIC_TOKENS.get("textual")
+            # Categorical
+            else:
+                self.task_special_token = ANSWER_SPECIFIC_TOKENS.get("categorical")
+        logger.info(f"According to specified task special token type scheme: {self.task_special_token_type.name},"
+                    f"For current task `{self.task_name}` selected special task token: {self.task_special_token} ")
+
 
     @staticmethod
     def extend_vocabulary(

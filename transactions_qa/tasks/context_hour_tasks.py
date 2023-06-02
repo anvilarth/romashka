@@ -21,9 +21,14 @@ class MostFrequentHourTaskMulti(CategoricalTaskAbstract):
     def __post_init__(self):
         self.task_name = "most_frequent_hour_multi"
         self.target_feature_name = 'hour'  # 24 unique values
-        self.task_special_token = "[most_freq_hour_multichoice]"
+
+        self.task_special_token = None
+        self.task_specific_special_token = "[most_freq_hour_multichoice]"
+
         self.num_classes = 24
-        self.is_open_ended_task = False  # for a default for this task
+        self.is_text_task = False
+        self.is_binary_task = False
+        self.is_open_ended_task = False
         self.metrics = nn.ModuleDict({
             "rouge": ROUGEScore(),
             'accuracy': Accuracy(task='multiclass',
@@ -194,9 +199,14 @@ class MostFrequentHourTaskBinary(CategoricalTaskAbstract):
     def __post_init__(self):
         self.task_name = "most_frequent_hour_binary"
         self.target_feature_name = 'hour'  # 28 unique values
-        self.task_special_token = "[most_freq_hour_binary]"
+
+        self.task_special_token = None
+        self.task_specific_special_token = "[most_freq_hour_binary]"
+
         self.num_classes = 24
-        self.is_open_ended_task = False  # for a default for this task
+        self.is_text_task = False
+        self.is_binary_task = True
+        self.is_open_ended_task = False
         self.metrics = nn.ModuleDict({
             "rouge": ROUGEScore()
         })
@@ -380,9 +390,14 @@ class MostFrequentHourTaskOpenEnded(CategoricalTaskAbstract):
     def __post_init__(self):
         self.task_name = "most_frequent_hour_open-ended"
         self.target_feature_name = 'hour'  # 24 unique values
-        self.task_special_token = "[most_freq_hour_openended]"
+
+        self.task_special_token = None
+        self.task_specific_special_token = "[most_freq_hour_openended]"
+
         self.num_classes = 24
-        self.is_open_ended_task = True  # for a default for this task
+        self.is_text_task = False
+        self.is_binary_task = False
+        self.is_open_ended_task = True
         self.metrics = nn.ModuleDict({
             "rouge": ROUGEScore()
         })
@@ -536,9 +551,14 @@ class LeastFrequentHourTaskOpenEnded(CategoricalTaskAbstract):
     def __post_init__(self):
         self.task_name = "least_frequent_hour_open-ended"
         self.target_feature_name = 'hour'  # 24 unique values
-        self.task_special_token = "[least_freq_hour_openended]"
+
+        self.task_special_token = None
+        self.task_specific_special_token = "[least_freq_hour_openended]"
+
         self.num_classes = 24
-        self.is_open_ended_task = True  # for a default for this task
+        self.is_text_task = False
+        self.is_binary_task = False
+        self.is_open_ended_task = True
         self.metrics = nn.ModuleDict({
             "rouge": ROUGEScore()
         })
@@ -691,9 +711,14 @@ class LastHourTaskOpenEnded(CategoricalTaskAbstract):
     def __post_init__(self):
         self.task_name = "last_hour_open-ended"
         self.target_feature_name = 'hour'  # 24 unique values
-        self.task_special_token = "[last_hour_openended]"
+
+        self.task_special_token = None
+        self.task_specific_special_token = "[last_hour_openended]"
+
         self.num_classes = 24
-        self.is_open_ended_task = True  # for a default for this task
+        self.is_text_task = False
+        self.is_binary_task = False
+        self.is_open_ended_task = True
         self.metrics = nn.ModuleDict({
             "rouge": ROUGEScore()
         })
@@ -846,11 +871,16 @@ class OccurenceHourTaskBinary(CategoricalTaskAbstract):
     def __post_init__(self):
         self.task_name = "occurrence_hour_binary"
         self.target_feature_name = 'hour'  # 24 unique values
-        self.task_special_token = "[occurrence_hour_binary]"
+
+        self.task_special_token = None
+        self.task_specific_special_token = "[occurrence_hour_binary]"
+
         self.update_feature_index()
 
         self.num_classes = 24
-        self.is_open_ended_task = False  # for a default for this task
+        self.is_text_task = False
+        self.is_binary_task = True
+        self.is_open_ended_task = False
         self.metrics = nn.ModuleDict({
             "rouge": ROUGEScore(),
         })

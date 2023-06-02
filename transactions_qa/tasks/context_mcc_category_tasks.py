@@ -21,9 +21,14 @@ class MostFrequentMCCCategoryTaskMulti(CategoricalTaskAbstract):
     def __post_init__(self):
         self.task_name = "most_frequent_mcc_category_multi"
         self.target_feature_name = 'mcc_category'  # 28 unique values
-        self.task_special_token = "[most_freq_MCC_category_multichoice]"
+
+        self.task_special_token = None
+        self.task_specific_special_token = "[most_freq_MCC_category_multichoice]"
+
         self.num_classes = 28
-        self.is_open_ended_task = False  # for a default for this task
+        self.is_text_task = False
+        self.is_binary_task = False
+        self.is_open_ended_task = False
         self.metrics = nn.ModuleDict({
             "rouge": ROUGEScore(),
             'accuracy': Accuracy(task='multiclass',
@@ -195,9 +200,14 @@ class MostFrequentMCCCategoryTaskBinary(CategoricalTaskAbstract):
     def __post_init__(self):
         self.task_name = "most_frequent_mcc_category_binary"
         self.target_feature_name = 'mcc_category'  # 28 unique values
-        self.task_special_token = "[most_freq_MCC_category_binary]"
+
+        self.task_special_token = None
+        self.task_specific_special_token = "[most_freq_MCC_category_binary]"
+
         self.num_classes = 28
-        self.is_open_ended_task = False  # for a default for this task
+        self.is_text_task = False
+        self.is_binary_task = True
+        self.is_open_ended_task = False
         self.metrics = nn.ModuleDict({
             "rouge": ROUGEScore()
         })
@@ -379,9 +389,14 @@ class MostFrequentMCCCategoryTaskOpenEnded(CategoricalTaskAbstract):
     def __post_init__(self):
         self.task_name = "most_frequent_mcc_category_open-ended"
         self.target_feature_name = 'mcc_category'  # 28 unique values
-        self.task_special_token = "[most_freq_MCC_category_openended]"
+
+        self.task_special_token = None
+        self.task_specific_special_token = "[most_freq_MCC_category_openended]"
+
         self.num_classes = 28
-        self.is_open_ended_task = True  # for a default for this task
+        self.is_text_task = False
+        self.is_binary_task = False
+        self.is_open_ended_task = True
         self.metrics = nn.ModuleDict({
             "rouge": ROUGEScore()
         })
@@ -535,9 +550,14 @@ class LeastFrequentMCCCategoryTaskOpenEnded(CategoricalTaskAbstract):
     def __post_init__(self):
         self.task_name = "least_frequent_mcc_category_open-ended"
         self.target_feature_name = 'mcc_category'  # 108 unique values
-        self.task_special_token = "[least_freq_MCC_category_openended]"
+
+        self.task_special_token = None
+        self.task_specific_special_token = "[least_freq_MCC_category_openended]"
+
         self.num_classes = 28
-        self.is_open_ended_task = True  # for a default for this task
+        self.is_text_task = False
+        self.is_binary_task = False
+        self.is_open_ended_task = True
         self.metrics = nn.ModuleDict({
             "rouge": ROUGEScore()
         })
@@ -691,9 +711,14 @@ class LastMCCCategoryTaskOpenEnded(CategoricalTaskAbstract):
     def __post_init__(self):
         self.task_name = "last_mcc_category_open-ended"
         self.target_feature_name = 'mcc_category'  # 108 unique values
-        self.task_special_token = "[last_MCC_category_openended]"
+
+        self.task_special_token = None
+        self.task_specific_special_token = "[last_MCC_category_openended]"
+
         self.num_classes = 28
-        self.is_open_ended_task = True  # for a default for this task
+        self.is_text_task = False
+        self.is_binary_task = False
+        self.is_open_ended_task = True
         self.metrics = nn.ModuleDict({
             "rouge": ROUGEScore()
         })
@@ -847,11 +872,16 @@ class OccurenceMCCCategoryTaskBinary(CategoricalTaskAbstract):
     def __post_init__(self):
         self.task_name = "occurrence_mcc_category_binary"
         self.target_feature_name = 'mcc_category'  # 28 unique values
-        self.task_special_token = "[occurrence_MCC_category_binary]"
+
+        self.task_special_token = None
+        self.task_specific_special_token = "[occurrence_MCC_category_binary]"
+
         self.update_feature_index()
 
         self.num_classes = 28
-        self.is_open_ended_task = False  # for a default for this task
+        self.is_text_task = False
+        self.is_binary_task = True
+        self.is_open_ended_task = False
         self.metrics = nn.ModuleDict({
             "rouge": ROUGEScore(),
         })
