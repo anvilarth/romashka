@@ -1766,7 +1766,7 @@ class LastAmountNumericTaskBinary(NumericTaskAbstract):
             "Answer with one of the following options: Yes or No?",
             ". Answer the question whether or not the following statement is true: the amount of the latest "
             "transaction is %s. Yes or No?",
-            ". Answer the question: what is the amount of the latest transaction equals to %s? "
+            ". Answer the question: is the amount of the latest transaction equals to %s? "
             "Choose only one of the following options: Yes or No?"
         ]
 

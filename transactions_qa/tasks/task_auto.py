@@ -33,13 +33,11 @@ from romashka.transactions_qa.tasks.context_weekday_tasks import (MostFrequentDa
                                                                   LastDayOfWeekTaskOpenEnded,
                                                                   LeastFrequentDayOfWeekTaskOpenEnded,
                                                                   OccurenceDayOfWeekTaskBinary)
-
-from romashka.transactions_qa.tasks.next_feature_tasks import (NextMCCFeatureTaskBinary,
-                                                               NextAmntFeatureTaskBinary,
-                                                               NextHourDiffFeatureTaskBinary,
-                                                               NextAmnt30DaysTaskBinary,
-                                                               NextTransactions30DaysTaskBinary,
-                                                               NextMCCFeatureTaskMulti)
+from romashka.transactions_qa.tasks.predictive_amnt_tasks import (PredNumericAmountTaskBinary,
+                                                                  PredOverThresholdAmountTaskBinary,
+                                                                  PredUnderThresholdAmountTaskBinary)
+from romashka.transactions_qa.tasks.predictive_mcc_tasks import (PredMCCCodeTaskBinary,
+                                                                 PredMCCCodeTaskOpenEnded)
                                                                
 from romashka.transactions_qa.tasks.default_task import DefaultTask
 from romashka.logging_handler import get_logger
@@ -90,13 +88,11 @@ AUTO_TASKS = [
         ("least_frequent_day_of_week_open-ended", LeastFrequentDayOfWeekTaskOpenEnded),
         ("occurrence_day_of_week_binary", OccurenceDayOfWeekTaskBinary),
         # Predictive
-        ("default", DefaultTask),
-        ("next_mcc_binary", NextMCCFeatureTaskBinary),
-        ("next_amnt_binary", NextAmntFeatureTaskBinary),
-        ("next_hour_diff_binary", NextHourDiffFeatureTaskBinary),
-        ("next_amnt_30_days_binary", NextAmnt30DaysTaskBinary),
-        ("next_transactions_30_days_binary", NextTransactions30DaysTaskBinary),
-        ("next_mcc_multi", NextMCCFeatureTaskMulti)
+        ("pred_numeric_amount_binary", PredNumericAmountTaskBinary),
+        ("pred_over_threshold_amount_binary", PredOverThresholdAmountTaskBinary),
+        ("pred_under_threshold_amount_binary", PredUnderThresholdAmountTaskBinary),
+        ("pred_mcc_code_binary", PredMCCCodeTaskBinary),
+        ("pred_mcc_code_open-ended", PredMCCCodeTaskOpenEnded)
     ]
 AUTO_TASKS = OrderedDict(AUTO_TASKS)
 ALL_TASKS_NAMES = list(AUTO_TASKS.keys())

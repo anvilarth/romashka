@@ -7,13 +7,10 @@ from dataclasses import dataclass
 from typing import (Dict, Tuple, List,
                     Any, Optional, Union)
 
-import transformers
 from torchmetrics import Accuracy
 from torchmetrics.text.rouge import ROUGEScore
 
-from .task_abstract import AbstractTask
 from .categorical_task_abstract import CategoricalTaskAbstract
-from romashka.transactions_qa.tasks.task_token_updater import TASK_SPECIFIC_TOKENS
 
 
 @dataclass
