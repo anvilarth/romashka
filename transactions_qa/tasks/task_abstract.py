@@ -55,6 +55,7 @@ class AbstractTask(ABC):
     verbose: Optional[bool] = False
 
     task_special_token: Optional[str] = None
+    task_specific_special_token: Optional[str] = "[UNKNOWN_TASK]"
     # if str -> enum.name
     # if int -> enum.value
     # if enum -> direct comparison
@@ -189,7 +190,7 @@ class AbstractTask(ABC):
 
         # Init special token based on selected scheme
         if self.task_special_token_type == TaskTokenType.TASK_SPECIFIC:
-            self.task_special_token = self.task_special_token_type
+            self.task_special_token = self.task_specific_special_token
         elif self.task_special_token_type == TaskTokenType.ATTRIBUTE_SPECIFIC:
             self.task_special_token = ATTRIBUTE_SPECIFIC_TOKENS.get(self.target_feature_name)
         elif self.task_special_token_type == TaskTokenType.ANSWER_SPECIFIC:
