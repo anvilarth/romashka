@@ -272,14 +272,16 @@ class AbstractTask(ABC):
         """
         is_pre_tokenized = False
         if hasattr(self.tokenizer, "pre_tokenizer") and (self.tokenizer.pre_tokenizer is not None):
-            is_pre_tokenized = True
+            is_pre_tokenized = False   # set to `False` - as I join sequences with whitespace, otherwise True
             if isinstance(sequence, str):
                 sequence = [pretok_sequence[0]
                             for pretok_sequence in self.tokenizer.pre_tokenizer.pre_tokenize_str(sequence)]
+                sequence = ' '.join(sequence)
             else:
                 pretokenized = [self.tokenizer.pre_tokenizer.pre_tokenize_str(pretok_seq) for pretok_seq in sequence]
                 sequence = [[pretokenized_subsequence[0] for pretokenized_subsequence in pretokenized_sequence]
                             for pretokenized_sequence in pretokenized]
+                sequence = [" ".join(seq) for seq in sequence]
         return sequence, is_pre_tokenized
 
     def update(self, new_attr: Dict[str, Any]):

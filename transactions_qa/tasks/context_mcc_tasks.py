@@ -313,17 +313,18 @@ class MostFrequentMCCCodeTaskBinary(CategoricalTaskAbstract):
         # target_batch -> feature values as str ('15')
 
         # single tensor without </s> (EOS), but only for encoder-decoder !!!
-        question_start_tokens = self.tokenizer.encode(question_start,
-                                                      return_tensors='pt')
+        question_start_tokens = self.custom_tokenize(question_start,
+                                                     padding=False,
+                                                     return_tensors='pt')['input_ids']
         if question_start_tokens[:, -1] == self.tokenizer.eos_token_id:
             question_start_tokens = question_start_tokens[:, :-1]
         question_start_tokens = question_start_tokens.to(device)
 
         # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
-        question_target_encoded_batch = self.tokenizer(question_target_batch,
-                                                       padding=True,
-                                                       truncation=True,
-                                                       return_tensors='pt').to(device)
+        question_target_encoded_batch = self.custom_tokenize(question_target_batch,
+                                                             padding='longest',
+                                                             truncation=True,
+                                                             return_tensors='pt').to(device)
         # Attention masks
         # already for full batch
         question_start_tokens_mask = torch.ones(question_start_tokens.size()).repeat(batch_size, 1).to(device)
@@ -336,12 +337,13 @@ class MostFrequentMCCCodeTaskBinary(CategoricalTaskAbstract):
 
         # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
         # add [:, :-1] for no EOS tokens - ?
-        target_encoded_batch = self.tokenizer.batch_encode_plus(target_batch,
-                                                                padding=True,
-                                                                return_tensors='pt').to(device)
+        target_encoded_batch = self.custom_tokenize(target_batch,
+                                                    padding='longest',
+                                                    return_tensors='pt').to(device)
         # Answer template encoding + strip </s> (EOS) token
-        answer_template_encoded = self.tokenizer.encode(self.answer_template,
-                                                        return_tensors='pt')[:, :-1].to(device)
+        answer_template_encoded = self.custom_tokenize(self.answer_template,
+                                                       padding=False,
+                                                       return_tensors='pt')['input_ids'][:, :-1].to(device)
         batch_answer_template_encoded = answer_template_encoded.repeat(batch_size, 1)
         # Answer template encoding + target tokens + EOS token
         batch_answer_encoded = torch.cat([batch_answer_template_encoded,
@@ -475,17 +477,18 @@ class MostFrequentMCCCodeTaskOpenEnded(CategoricalTaskAbstract):
         # target_batch -> feature values as str ('15')
 
         # single tensor without </s> (EOS), but only for encoder-decoder !!!
-        question_start_tokens = self.tokenizer.encode(question_start,
-                                                      return_tensors='pt')
+        question_start_tokens = self.custom_tokenize(question_start,
+                                                     padding=False,
+                                                     return_tensors='pt')['input_ids']
         if question_start_tokens[:, -1] == self.tokenizer.eos_token_id:
             question_start_tokens = question_start_tokens[:, :-1]
         question_start_tokens = question_start_tokens.to(device)
 
         # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
-        question_target_encoded_batch = self.tokenizer(question_target_batch,
-                                                       padding=True,
-                                                       truncation=True,
-                                                       return_tensors='pt').to(device)
+        question_target_encoded_batch = self.custom_tokenize(question_target_batch,
+                                                             padding='longest',
+                                                             truncation=True,
+                                                             return_tensors='pt').to(device)
         # Attention masks
         # already for full batch
         question_start_tokens_mask = torch.ones(question_start_tokens.size()).repeat(batch_size, 1).to(device)
@@ -499,13 +502,14 @@ class MostFrequentMCCCodeTaskOpenEnded(CategoricalTaskAbstract):
         )
 
         # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
-        # add [:, :-1] for no EOS tokens - ?
-        target_encoded_batch = self.tokenizer.batch_encode_plus(target_batch,
-                                                                padding=True,
-                                                                return_tensors='pt').to(device)
-        # Answer template encoding + strip </s> (EOS) token
-        answer_template_encoded = self.tokenizer.encode(self.answer_template,
-                                                        return_tensors='pt')[:, :-1].to(device)
+        # add [:, :-1] for no EOS tokens - ? tokenizer.batch_encode_plus
+        target_encoded_batch = self.custom_tokenize(target_batch,
+                                                    padding='longest',
+                                                    return_tensors='pt').to(device)
+        # Answer template encoding + strip </s> (EOS) token tokenizer.encode
+        answer_template_encoded = self.custom_tokenize(self.answer_template,
+                                                       padding=False,
+                                                       return_tensors='pt')['input_ids'][:, :-1].to(device)
         batch_answer_template_encoded = answer_template_encoded.repeat(batch_size, 1)
         # Answer template encoding + target tokens + EOS token
         batch_answer_encoded = torch.cat([batch_answer_template_encoded,
@@ -802,17 +806,18 @@ class LastMCCCodeTaskOpenEnded(CategoricalTaskAbstract):
         # target_batch -> feature values as str ('15')
 
         # single tensor without </s> (EOS), but only for encoder-decoder !!!
-        question_start_tokens = self.tokenizer.encode(question_start,
-                                                      return_tensors='pt')
+        question_start_tokens = self.custom_tokenize(question_start,
+                                                     padding=False,
+                                                     return_tensors='pt')['input_ids']
         if question_start_tokens[:, -1] == self.tokenizer.eos_token_id:
             question_start_tokens = question_start_tokens[:, :-1]
         question_start_tokens = question_start_tokens.to(device)
 
         # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
-        question_target_encoded_batch = self.tokenizer(question_target_batch,
-                                                       padding=True,
-                                                       truncation=True,
-                                                       return_tensors='pt').to(device)
+        question_target_encoded_batch = self.custom_tokenize(question_target_batch,
+                                                             padding='longest',
+                                                             truncation=True,
+                                                             return_tensors='pt').to(device)
         # Attention masks
         # already for full batch
         question_start_tokens_mask = torch.ones(question_start_tokens.size()).repeat(batch_size, 1).to(device)
@@ -827,12 +832,13 @@ class LastMCCCodeTaskOpenEnded(CategoricalTaskAbstract):
 
         # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
         # add [:, :-1] for no EOS tokens - ?
-        target_encoded_batch = self.tokenizer.batch_encode_plus(target_batch,
-                                                                padding=True,
-                                                                return_tensors='pt').to(device)
+        target_encoded_batch = self.custom_tokenize(target_batch,
+                                                    padding='longest',
+                                                    return_tensors='pt').to(device)
         # Answer template encoding + strip </s> (EOS) token
-        answer_template_encoded = self.tokenizer.encode(self.answer_template,
-                                                        return_tensors='pt')[:, :-1].to(device)
+        answer_template_encoded = self.custom_tokenize(self.answer_template,
+                                                       padding=False,
+                                                       return_tensors='pt')['input_ids'][:, :-1].to(device)
         batch_answer_template_encoded = answer_template_encoded.repeat(batch_size, 1)
         # Answer template encoding + target tokens + EOS token
         batch_answer_encoded = torch.cat([batch_answer_template_encoded,
@@ -1380,7 +1386,8 @@ class OccurenceMCCCodeTaskBinary(CategoricalTaskAbstract):
         batch_size = batch['mask'].shape[0]
 
         mask_batch = batch['mask']  # bool Tensor [batch_size, seq_len]
-        target_feature_batch = batch[self.target_feature_type][self.target_feature_index]  # Tensor [batch_size, seq_len]
+        target_feature_batch = batch[self.target_feature_type][
+            self.target_feature_index]  # Tensor [batch_size, seq_len]
 
         # Construct target values
         target_feature_value_batch = []
@@ -1514,4 +1521,3 @@ class OccurenceMCCCodeTaskBinary(CategoricalTaskAbstract):
                 value - metric score.
         """
         return {}
-

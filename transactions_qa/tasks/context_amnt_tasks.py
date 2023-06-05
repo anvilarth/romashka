@@ -1396,10 +1396,11 @@ class MaxAmountNumericTaskOpenEnded(NumericTaskAbstract):
         #                                                         return_tensors='pt').to(device)
         target_encoded_batch = self.custom_tokenize(target_batch,
                                                     return_tensors='pt',
-                                                    padding=True,
+                                                    padding='longest',
                                                     truncation=True).to(device)
         # Answer template encoding + strip </s> (EOS) token
         answer_template_encoded = self.custom_tokenize(self.answer_template,
+                                                       padding=False,
                                                        return_tensors='pt',
                                                        return_attention_mask=False)['input_ids'][:, :-1].to(device)
         batch_answer_template_encoded = answer_template_encoded.repeat(batch_size, 1)
