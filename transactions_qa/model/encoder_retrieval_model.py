@@ -63,6 +63,9 @@ class EncoderRetrievalModel(EncoderSimpleModel):
 
     def _prepare_model(self):
         super()._prepare_model()
+        self.register_buffer("whitespace_token_id",
+                             torch.Tensor(self.tokenizer.encode(' ', add_special_tokens=False)).long())
+
         self._create_trainable_parameters()
         self._create_losses()
 
