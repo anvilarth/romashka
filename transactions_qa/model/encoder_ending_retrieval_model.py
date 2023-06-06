@@ -305,15 +305,16 @@ class EncoderEndingRetrievalModel(EncoderSimpleModel):
         """
         Checks whether transactions retrieval token id already contained in given ids.
         """
-        return isin(input_tokens_ids, self.ret_tokens_ids).sum() > 0
+        return isin(input_tokens_ids, self.ret_tokens_ids.to(input_tokens_ids.device)).sum() > 0
 
     def replace_ret_tokens(self, input_tokens_ids: Union[List[int], torch.Tensor],
                            input_embeddings: torch.Tensor):
         """
         Replace retrieval tokens' embedding with trainable parameters.
         """
-        mask = isin(input_tokens_ids, self.ret_tokens_ids)
-        embs = self.ret_embeddings(self.ret_tokens_ids - self.transactions_ret_start_id)
+        mask = isin(input_tokens_ids, self.ret_tokens_ids.to(input_tokens_ids.device))
+        embs = self.ret_embeddings(self.ret_tokens_ids.to(input_tokens_ids.device)
+                                                          - self.transactions_ret_start_id.to(input_tokens_ids.device))
         embs = embs.repeat(input_tokens_ids.size(0), 1)
         input_embeddings[mask] = embs
 
@@ -380,7 +381,7 @@ class EncoderEndingRetrievalModel(EncoderSimpleModel):
                                                    self.whitespace_token_id.to(device),
                                                    # check to not to insert <eos> before answer tokens!!!
                                                    # insert RET_0 .. RET_N tokens here
-                                                   self.ret_tokens_ids,  # .to(device)
+                                                   self.ret_tokens_ids.to(device),  # .to(device)
                                                    # finish with EOS token
                                                    self.eos_token_id.to(device),
                                                    ], dim=0)
