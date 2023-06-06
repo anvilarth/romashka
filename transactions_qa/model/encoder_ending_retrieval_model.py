@@ -6,6 +6,8 @@ import torch
 import torch.nn as nn
 import transformers
 
+from romashka.transactions_qa.utils import mask_padding
+from romashka.transactions_qa.model.generation_utils import isin
 from romashka.transactions_qa.model.encoder_model import EncoderSimpleModel
 from romashka.transactions_qa.tasks.task_abstract import AbstractTask
 from romashka.transactions_qa.losses.infonce_loss import InfoNCE
@@ -68,6 +70,8 @@ class EncoderEndingRetrievalModel(EncoderSimpleModel):
         super()._prepare_model()
         self.register_buffer("whitespace_token_id",
                              torch.Tensor(self.tokenizer.encode(' ', add_special_tokens=False)).long())
+        self.register_buffer("eos_token_id",
+                             torch.Tensor([self.tokenizer.eos_token_id]).long())
 
         self._create_trainable_parameters()
         self._create_losses()
@@ -181,6 +185,27 @@ class EncoderEndingRetrievalModel(EncoderSimpleModel):
         # Init transactions retrieval tokens ids -> token names mapping
         self.transactions_ret_ids2tokens_mapping = {token_id: token for token, token_id
                                                     in self.transactions_ret_tokens2ids_mapping.items()}
+        # Needed to select embedding by it's index from range [0, max_ret_tokens],
+        # which doesn't equal to LLM tokenizer's vocabulary ids of RET tokens
+        # self.ret_tokens_ids = list(self.transactions_ret_ids2tokens_mapping.keys())
+        self.ret_tokens_ids = torch.LongTensor(
+            list(self.transactions_ret_ids2tokens_mapping.keys())
+        ).to(self.language_model.device)
+        self.transactions_ret_start_id = min(self.ret_tokens_ids)
+
+        params_dim = None
+        if hasattr(self.language_model.config, "hidden_size"):
+            params_dim = self.language_model.config.hidden_size
+        elif hasattr(self.language_model.config, "d_model"):  # may occur in encoder-decoder models (like T5)
+            params_dim = self.language_model.config.d_model
+        else:
+            raise AttributeError(f"The default setting, where parameters embeddings dimensionality "
+                                 "equals to LLM hidden dimensionality can not be run because "
+                                 "model do not have required attribute: `hidden_size` or `d_model` in config.")
+
+        # RET embeddings 0...n_ret
+        self.ret_embeddings = torch.nn.Embedding(num_embeddings=self.max_ret_tokens,
+                                                 embedding_dim=params_dim)
 
     def _create_projection_layers(self):
         """
@@ -261,6 +286,37 @@ class EncoderEndingRetrievalModel(EncoderSimpleModel):
         mask = input_tokens_ids == self.transactions_end_token_id
         input_embeddings[mask] = self.transactions_end_embedding
 
+    def has_eos_token(self, input_tokens_ids: Union[List[int], torch.Tensor]) -> bool:
+        """
+        Checks whether EOS token id already contained in given ids.
+        """
+        return (input_tokens_ids == self.tokenizer.eos_token_id).sum() > 0
+
+    def exclude_eos_token(self, input_tokens_ids: Union[List[int], torch.Tensor]) -> torch.Tensor:
+        """
+        Cleans EOS tokens from given ids.
+        """
+        if self.has_eos_token(input_tokens_ids):
+            mask = ~torch.eq(input_tokens_ids, self.tokenizer.eos_token_id)
+            input_tokens_ids = input_tokens_ids[mask]
+        return input_tokens_ids
+
+    def has_ret_tokens(self, input_tokens_ids: Union[List[int], torch.Tensor]) -> bool:
+        """
+        Checks whether transactions retrieval token id already contained in given ids.
+        """
+        return isin(input_tokens_ids, self.ret_tokens_ids).sum() > 0
+
+    def replace_ret_tokens(self, input_tokens_ids: Union[List[int], torch.Tensor],
+                           input_embeddings: torch.Tensor):
+        """
+        Replace retrieval tokens' embedding with trainable parameters.
+        """
+        mask = isin(input_tokens_ids, self.ret_tokens_ids)
+        embs = self.ret_embeddings(self.ret_tokens_ids - self.transactions_ret_start_id)
+        embs = embs.repeat(input_tokens_ids.size(0), 1)
+        input_embeddings[mask] = embs
+
     def forward(self, batch: Union[Dict[str, torch.Tensor], Any],
                 output_attentions: Optional[bool] = True,
                 output_hidden_states: Optional[bool] = True,
@@ -299,7 +355,7 @@ class EncoderEndingRetrievalModel(EncoderSimpleModel):
         else:
             transactions_embeddings = self.connector(transactions_embeddings)
 
-        # 3) Questions: to embedding of LM
+        # 3) Questions: to embedding of LM - torch.Size([1, len(question_start_tokens))
         # torch.Size([1, len(question_start_tokens))
         question_start_embeddings = self.language_model_tokens_embedding_func(
             batch['question_start_tokens'])  # call for (embed_tokens): Embedding(vocab_size, model_hidden_dim)
@@ -308,41 +364,65 @@ class EncoderEndingRetrievalModel(EncoderSimpleModel):
         # if it already ends with [trx]
         if self.has_start_token(batch['question_start_tokens']):
             self.replace_start_token(batch['question_start_tokens'], question_start_embeddings)
-        # otherwise append it to the end of starting sequence
-        else:
-            question_start_embeddings = torch.cat([question_start_embeddings,
-                                                   self.transactions_start_embedding[None, None]], dim=1)
-            # add one more sample to attentions also
-            question_start_attention_mask = torch.cat([
-                torch.ones((1,)).long().repeat(batch_size, 1).to(batch['question_start_tokens_mask'].device),
-                batch['question_start_tokens_mask']
-            ], dim=1)
 
         question_start_embeddings_batch = question_start_embeddings.repeat(batch_size, 1, 1)
 
-        # Question ends: to embedding of LM
-        # question_end_tokens: torch.Size([batch_size, len(max_question_end_tokens)])
-        question_end_embeddings_batch = self.language_model_tokens_embedding_func(
-            batch['question_end_tokens'])
-        question_end_attention_mask = batch['question_end_attention_mask']
+        # 4) Question ends: to embedding of LM
+        # 4.1) Strip paddings from questions endings!!!
+        question_end_tokens_mask = batch['question_end_attention_mask'].bool()  # 1 - token, 0 == pad
+        question_end_tokens_full = []
+        for i in range(question_end_tokens_mask.size(0)):
+            # question without padding
+            question_end_tokens_ = batch['question_end_tokens'][i][question_end_tokens_mask[i]]
+            # clear EOS from the end of sequence
+            question_end_tokens_ = self.exclude_eos_token(question_end_tokens_)
+            full_question_end_tokens_ = torch.cat([question_end_tokens_,
+                                                   self.whitespace_token_id.to(device),
+                                                   # check to not to insert <eos> before answer tokens!!!
+                                                   # insert RET_0 .. RET_N tokens here
+                                                   self.ret_tokens_ids,  # .to(device)
+                                                   # finish with EOS token
+                                                   self.eos_token_id.to(device),
+                                                   ], dim=0)
+            question_end_tokens_full.append(full_question_end_tokens_)
 
-        # Fill injection ending tokens embeddings with trainable parameters
+        # 4.2) Pad to max q+a length
+        max_question_answer_len = max([len(qa) for qa in question_end_tokens_full])
+        for i in range(question_end_tokens_mask.size(0)):
+            n_padds = max_question_answer_len - question_end_tokens_full[i].size(0)
+            # Pad from the side which is required by tokenizer
+            if self.tokenizer.padding_side == 'right':
+                question_end_tokens_full[i] = torch.cat(
+                    [question_end_tokens_full[i],
+                     torch.full((n_padds,), self.tokenizer.pad_token_id).to(device),
+                     ], dim=0)
+            else:
+                question_end_tokens_full[i] = torch.cat(
+                    [torch.full((n_padds,), self.tokenizer.pad_token_id).to(device),
+                     question_end_tokens_full[i],
+                     ], dim=0)
+
+        # 4.3) Cat back into batch
+        question_end_tokens_full = torch.stack(question_end_tokens_full).long()
+
+        # Get LLM embeddings
+        question_end_embeddings_batch = self.language_model_tokens_embedding_func(question_end_tokens_full)
+
+        # 5) Create new attention mask
+        question_end_attention_mask = (~mask_padding(question_end_tokens_full)).long()
+
+        # 6) Fill with trainable parameters
+        # 6.1) Fill injection ending tokens embeddings with trainable parameters
         # if it already starts with [/trx]
-        if self.has_end_token(batch['question_end_tokens']):
-            self.replace_end_token(batch['question_end_tokens'], question_end_embeddings_batch)
-        # otherwise prepend it to the start of question sequence
-        else:
-            # todo: add trns ending token to the end before paddings!!!
-            question_end_embeddings_batch = torch.cat([
-                self.transactions_end_embedding[None, None].repeat(batch_size, 1, 1),
-                question_end_embeddings_batch], dim=1)
-            # add one more sample to attentions also
-            question_end_attention_mask = torch.cat([
-                batch['question_end_attention_mask'],
-                torch.ones((1,)).long().repeat(batch_size, 1).to(batch['question_end_attention_mask'].device)
-            ], dim=1)
+        if self.has_end_token(question_end_tokens_full):
+            self.replace_end_token(question_end_tokens_full, question_end_embeddings_batch)
 
-        # 4) Get general LM's encoder input as:
+        # 6.2) Fill injection ending tokens embeddings with trainable parameters
+        if self.has_ret_tokens(question_end_tokens_full):
+            self.replace_ret_tokens(question_end_tokens_full,
+                                    question_end_embeddings_batch)
+
+        # 7) Get general LM's encoder input as:
         # Q_start_tokens + TRNS_embeddings + Q_end_tokens
         encoder_input = torch.cat([question_start_embeddings_batch,
                                    transactions_embeddings,
@@ -353,9 +433,6 @@ class EncoderEndingRetrievalModel(EncoderSimpleModel):
 
         else:
             # Check if transactions history embedding size was reduced, then we cannot mask it
-            # print(f"transactions_embeddings: {transactions_embeddings.size()}")
-            # print(f"transactions_embeddings_mask: {transactions_embeddings_mask.size()}")
-            # print(f"batch['mask']: {batch['mask'].size()}")
             if transactions_embeddings.size(1) == transactions_embeddings_mask.size(-1):
                 encoder_input_mask = torch.cat(
                     [question_start_attention_mask,
@@ -374,24 +451,15 @@ class EncoderEndingRetrievalModel(EncoderSimpleModel):
         # Last transactions token
         transactions_end_i = transactions_start_i + transactions_embeddings.size(1)
 
-        # Create transactions tokens ids + mask padding in transactions history
-        max_transactions_size = transactions_embeddings.size(1)
-        transactions_text_tokens = [self._ret_tokens_template % i for i in range(max_transactions_size)]
+        # First retrieval token
+        ret_start_indexes = torch.nonzero(question_end_tokens_full == self.ret_tokens_ids[0], as_tuple=True)[-1]
+        # Last retrieval token
+        ret_end_indexes = torch.nonzero(question_end_tokens_full == self.ret_tokens_ids[-1], as_tuple=True)[-1]
 
-        transactions_tokens = torch.Tensor([
-            self.tokenizer.convert_tokens_to_ids(self._ret_tokens_template % i)
-            for i in range(max_transactions_size)]).long().repeat(batch_size, 1).to(device)
-
-        # Check if transactions history embedding size was reduced, then we cannot mask it
-        if transactions_tokens.size(-1) == transactions_embeddings_mask.size(-1):
-            transactions_tokens.masked_fill_(transactions_embeddings_mask == 0,
-                                             self.tokenizer.pad_token_id)
         # 5) Labels
         # Create answers + masks for LM's decoder inputs
         batch_answers = batch['answer_tokens']
-        # was: torch.cat([qa_batch['answer_template_tokens'], qa_batch['target_tokens']], dim=1)
         batch_answers_mask = batch['answer_mask']
-        # torch.cat([qa_batch['answer_mask'], qa_batch['target_attention_mask']], dim=1)
 
         # Pass through LM
         # contains: ['loss', 'logits', 'past_key_values', 'encoder_last_hidden_state']
@@ -407,8 +475,8 @@ class EncoderEndingRetrievalModel(EncoderSimpleModel):
 
         # 7) Calculate retrival loss
         ret_loss_outputs = self._compute_retrieval_loss(lm_outputs,
-                                                        ret_start_i=transactions_start_i,
-                                                        ret_end_i=transactions_end_i,
+                                                        ret_start_i=ret_start_indexes,
+                                                        ret_end_i=ret_end_indexes,
                                                         ret_embeddings=transactions_embeddings,
                                                         output_hidden_states=True)
 
@@ -454,13 +522,26 @@ class EncoderEndingRetrievalModel(EncoderSimpleModel):
 
     def _compute_retrieval_loss(self,
                                 outputs: Dict[str, torch.Tensor],
-                                ret_start_i: int, ret_end_i: int,
+                                ret_start_i: Union[List[int], torch.Tensor],
+                                ret_end_i: Union[List[int], torch.Tensor],
                                 ret_embeddings: torch.Tensor,
                                 output_hidden_states: Optional[bool] = False) -> Dict[str, torch.Tensor]:
         """
         Calculate contrastive retrieval loss based on InfoNCE loss implementation.
         Args:
+            outputs: a LLM out
+        Calculate contrastive retrieval loss based on InfoNCE loss implementation.
+        Args:
             outputs: a LLM outputs, containing: 'logits', 'hidden_states', etc.
+            ret_start_i: a starting indexes of retrieval tokens sequence;
+            ret_end_i: an ending indexes of retrieval tokens sequence (non-inclusive);
+            ret_embeddings: a reference embeddings (i.e. target embeddings);
+            output_hidden_states: whether to output hidden_states for retrieval tokens;
+            output_logits: whether to output logits for retrieval tokens;
+
+        Returns:
+            a dict, containing 'loss' and,  optionally, 'last_hidden_state' and 'ret_tokens_logits'.
+        puts, containing: 'logits', 'hidden_states', etc.
             ret_start_i: a starting index of transactions embeddings injection;
             ret_end_i: an ending index of transactions embeddings injection (non-inclusive);
             ret_embeddings: a reference embeddings (i.e. target embeddings);
@@ -472,31 +553,19 @@ class EncoderEndingRetrievalModel(EncoderSimpleModel):
         """
         # 1) Extract hidden states and pass them through projection layers
         ret_hidden_states = []
-        start_hidden_states = []
-        end_hidden_states = []
 
-        # As a projection_layers can be used: projection_layers or lm_connector
-        for idx, projection_layer in zip(self._n_retrieval_layers, self.projection_layers):  # [lm_connector]
-            # print(f"outputs.decoder_hidden_states[-1]: {outputs.decoder_hidden_states[-1].size()}")
+        # -> will take only last and pass it to single (for a while) projection layer
+        last_hidden_state = outputs['encoder_hidden_states'][-1]
+
+        ret_hidden_states = []
+        for i in range(last_hidden_state.size(0)):
+            # -> Currently use only one projection layer == for single hidden layer
             ret_hidden_states.append(
-                projection_layer(outputs.encoder_hidden_states[idx][..., ret_start_i:ret_end_i, :])
-            )  # (bs, trns_history_seq_len, 768)
-
-            start_hidden_states.append(
-                outputs.encoder_hidden_states[idx][..., ret_start_i - 1, :]
-            )  # (bs, 768)
-            end_hidden_states.append(
-                outputs.encoder_hidden_states[idx][..., ret_start_i, :]
-            )  # (bs, 768)
-
-        # start_tokens == 10
-        # transactions_tokens == [50 ... 150]
-        # Q end tokens == seq_len - 10 - transactions_tokens -> == question_end_tokens_full.size(-1)
+                self.projection_layers[0](last_hidden_state[i, ret_start_i[i]:(ret_end_i[i] + 1), :]).unsqueeze(0)
+            ) # (bs, trns_history_seq_len, 768)
 
         # 2) Add hidden states together
-        collected_last_hidden_state = torch.stack(ret_hidden_states, dim=-1).sum(dim=-1)
-        collected_start_hidden_states = torch.stack(start_hidden_states, dim=-1).sum(dim=-1)
-        collected_end_hidden_states = torch.stack(end_hidden_states, dim=-1).sum(dim=-1)
+        collected_last_hidden_state = torch.stack(ret_hidden_states, dim=0).squeeze()
 
         # 4) Calculate Contrastive loss
         ret_loss_accumulated = []
@@ -505,7 +574,8 @@ class EncoderEndingRetrievalModel(EncoderSimpleModel):
                                                   collected_last_hidden_state[:, trx_i, :])
             ret_loss_accumulated.append(ret_token_loss)
 
-        ret_loss_accumulated = torch.stack(ret_loss_accumulated).sum()
+        # Use reduce with `mean` instead of `sum` (in previous Retrival model)
+        ret_loss_accumulated = torch.stack(ret_loss_accumulated).mean()
 
         loss_outputs = dict(loss=ret_loss_accumulated)
         if output_hidden_states:
