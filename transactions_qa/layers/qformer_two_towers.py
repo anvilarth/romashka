@@ -19,8 +19,6 @@ class Blip2QFormerTextLayer(nn.Module):
         self.seq_len_dim = 1
         self.attention = Blip2QFormerAttention(config)
 
-        # todo: here add tying weights with embedds + queries Q-Former tower
-
         self.layer_idx = layer_idx
 
         self.intermediate_query = Blip2QFormerIntermediate(config)

@@ -65,6 +65,8 @@ class PretrainQFormerModel(pl.LightningModule):
         self.q_qformer = qformer  # a part for vis + queries part
         self.t_qformer = Blip2QFormerTextEncoder(qformer_kwargs)  # text part
 
+        # todo: here add tying weights with embedds + queries Q-Former tower
+
         self.warmup_steps: int = warmup_steps
         self.training_steps: int = training_steps
         self.base_learning_rate = learning_rate
