@@ -1,3 +1,4 @@
+import numpy as np
 from typing import (List, Optional,
                     Tuple, Any,
                     Dict, Union)
@@ -17,6 +18,7 @@ class EncoderEndingRetrievalModel(EncoderSimpleModel):
     """
     Encoder-decoder model with multiple retrieval token appended to the very end of the sequence (before answers).
     """
+
     def __init__(self,
                  language_model: nn.Module,
                  transaction_model: nn.Module,
@@ -105,6 +107,7 @@ class EncoderEndingRetrievalModel(EncoderSimpleModel):
         """
         # Create transactions embeddings start/end tokens: [trx] / [/trx] and trainable parameters for them
         self._create_surrounding_parameters()
+
         # Create retrieval tokens: RET_0 ... RET_N in tokenizers vocabulary and mappings token <-> id
         self._create_retrieval_parameters()
 
@@ -170,6 +173,7 @@ class EncoderEndingRetrievalModel(EncoderSimpleModel):
                 + [trns_start_embedding, trns_end_embedding]
                 + [ret_embeddings], lr=1e-2, relative_step=False)
         """
+        self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
 
         self.ret_tokens = [self._ret_tokens_template % str(i) for i in range(self.max_ret_tokens)]
 
@@ -554,18 +558,21 @@ class EncoderEndingRetrievalModel(EncoderSimpleModel):
         # 1) Extract hidden states and pass them through projection layers
         ret_hidden_states = []
 
-        # -> will take only last and pass it to single (for a while) projection layer
-        last_hidden_state = outputs['encoder_hidden_states'][-1]
-
-        ret_hidden_states = []
-        for i in range(last_hidden_state.size(0)):
-            # -> Currently use only one projection layer == for single hidden layer
+        # As a projection_layers can be used: projection_layers or lm_connector
+        for idx, projection_layer in zip(self._n_retrieval_layers, self.projection_layers):  # [lm_connector]
+            hidd_state = outputs.encoder_hidden_states[idx]  # size: [bs, seq_len, hidd_size]
+            batch_ret_hidd_states = []
+            for ret_i in range(hidd_state.size(0)):
+                batch_ret_hidd_states.append(hidd_state[ret_i,
+                                             ret_start_i[ret_i]:(ret_end_i[ret_i] + 1),
+                                             :].unsqueeze(0))
+            batch_ret_hidd_states = torch.cat(batch_ret_hidd_states, dim=0)
             ret_hidden_states.append(
-                self.projection_layers[0](last_hidden_state[i, ret_start_i[i]:(ret_end_i[i] + 1), :]).unsqueeze(0)
-            ) # (bs, trns_history_seq_len, 768)
+                projection_layer(batch_ret_hidd_states)
+            )  # (bs, trns_history_seq_len, 768)
 
         # 2) Add hidden states together
-        collected_last_hidden_state = torch.stack(ret_hidden_states, dim=0).squeeze()
+        collected_last_hidden_state = torch.stack(ret_hidden_states, dim=-1).sum(dim=-1)
 
         # 4) Calculate Contrastive loss
         ret_loss_accumulated = []
@@ -574,10 +581,89 @@ class EncoderEndingRetrievalModel(EncoderSimpleModel):
                                                   collected_last_hidden_state[:, trx_i, :])
             ret_loss_accumulated.append(ret_token_loss)
 
-        # Use reduce with `mean` instead of `sum` (in previous Retrival model)
-        ret_loss_accumulated = torch.stack(ret_loss_accumulated).mean()
+        # Use reduce with `mean` or `sum` (in previous Retrival model)
+        ret_loss_accumulated = torch.stack(ret_loss_accumulated).sum()
 
         loss_outputs = dict(loss=ret_loss_accumulated)
         if output_hidden_states:
             loss_outputs['last_hidden_state'] = collected_last_hidden_state
         return loss_outputs
+
+    def _compute_retrieval_loss_fromage(self,
+                                        outputs: Dict[str, torch.Tensor],
+                                        ret_start_i: Union[List[int], torch.Tensor],
+                                        ret_end_i: Union[List[int], torch.Tensor],
+                                        ret_embeddings: torch.Tensor,
+                                        output_hidden_states: Optional[bool] = False) -> Dict[str, torch.Tensor]:
+        """
+        Calculate contrastive retrieval loss based on InfoNCE loss implementation.
+        Args:
+            outputs: a LLM out
+        Calculate contrastive retrieval loss based on InfoNCE loss implementation.
+        Args:
+            outputs: a LLM outputs, containing: 'logits', 'hidden_states', etc.
+            ret_start_i: a starting indexes of retrieval tokens sequence;
+            ret_end_i: an ending indexes of retrieval tokens sequence (non-inclusive);
+            ret_embeddings: a reference embeddings (i.e. target embeddings);
+            output_hidden_states: whether to output hidden_states for retrieval tokens;
+            output_logits: whether to output logits for retrieval tokens;
+
+        Returns:
+            a dict, containing 'loss' and,  optionally, 'last_hidden_state' and 'ret_tokens_logits'.
+        puts, containing: 'logits', 'hidden_states', etc.
+            ret_start_i: a starting index of transactions embeddings injection;
+            ret_end_i: an ending index of transactions embeddings injection (non-inclusive);
+            ret_embeddings: a reference embeddings (i.e. target embeddings);
+            output_hidden_states: whether to output hidden_states for retrieval tokens;
+            output_logits: whether to output logits for retrieval tokens;
+
+        Returns:
+            a dict, containing 'loss' and,  optionally, 'last_hidden_state' and 'ret_tokens_logits'.
+        """
+        # 1) Extract hidden states and pass them through projection layers
+        ret_hidden_states = []
+
+        # As a projection_layers can be used: projection_layers or lm_connector
+        for idx, projection_layer in zip(self._n_retrieval_layers, self.projection_layers):  # [lm_connector]
+            hidd_state = outputs.encoder_hidden_states[idx]  # size: [bs, seq_len, hidd_size]
+            batch_ret_hidd_states = []
+            for ret_i in range(hidd_state.size(0)):
+                batch_ret_hidd_states.append(hidd_state[ret_i,
+                                             ret_start_i[ret_i]:(ret_end_i[ret_i] + 1),
+                                             :].unsqueeze(0))
+            batch_ret_hidd_states = torch.cat(batch_ret_hidd_states, dim=0)
+            ret_hidden_states.append(
+                projection_layer(batch_ret_hidd_states)
+            )  # (bs, trns_history_seq_len, 768)
+
+        # 2) Add hidden states together
+        collected_last_hidden_state = torch.stack(ret_hidden_states, dim=-1).sum(dim=-1)
+
+        # 3) Normalize embeddings
+        ret_embeddings_norm = (ret_embeddings / ret_embeddings.norm(dim=-1, keepdim=True))
+        collected_last_hidden_state_norm = (
+                    collected_last_hidden_state / collected_last_hidden_state.norm(dim=-1, keepdim=True))
+
+        # 4) cosine similarity as logits
+        logit_scale = self.logit_scale.exp()
+        ret_embeddings_norm = logit_scale * ret_embeddings_norm
+
+        logits_per_sample = ret_embeddings_norm @ collected_last_hidden_state.permute(0, 2, 1)
+        logits_per_query = logits_per_sample.permute(0, 2, 1)
+
+        targets = torch.linspace(0, ret_embeddings.size(1), ret_embeddings.size(1), dtype=int)
+        targets = targets.unsqueeze(0).repeat(ret_embeddings.size(0), 1)  # as size: [bs, n_queries]
+
+        # Contrastive loss: 32 queries vs. 32 queries
+        # as mean of:
+        #  1) similarities RET tokens last hidden states <-> queries
+        #  2) similarities queries <-> RET tokens last hidden states
+        loss_contrastive = (torch.nn.functional.cross_entropy(logits_per_sample, targets)  # label_smoothing=0.1
+                            + torch.nn.functional.cross_entropy(logits_per_query, targets)  # label_smoothing=0.1
+                            ) / 2
+
+        loss_outputs = dict(loss=loss_contrastive)
+        if output_hidden_states:
+            loss_outputs['last_hidden_state'] = collected_last_hidden_state
+        return loss_outputs
+
