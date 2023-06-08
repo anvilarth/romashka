@@ -11,14 +11,15 @@ import torch.nn.functional as F
 import transformers
 import pytorch_lightning as pl
 from pytorch_lightning.utilities import rank_zero_info
+from transformers.models.blip_2.configuration_blip_2 import Blip2QFormerConfig
+
 
 from romashka.logging_handler import get_logger
+from romashka.transactions_qa.layers.qformer_two_towers import Blip2QFormerTextEncoder
 
 
 DEFAULT_CONFIG = {
-    "sequence_len": 384,
     "num_queries": 32,
-    "shared_dim": 256,
     "hidden_size": 256,
     "num_attention_heads": 4,
     "num_hidden_layers": 4,
@@ -37,9 +38,9 @@ DEFAULT_CONFIG = {
 
 class PretrainQFormerModel(pl.LightningModule):
     def __init__(self,
-                 language_model_name: str,
+                 language_model: nn.Module,
                  sequence_encoder_model: nn.Module,
-                 qformer: Optional[nn.Module] = None,
+                 qformer: nn.Module,
                  learning_rate: Optional[float] = 5e-5,
                  scheduler_type: Optional[Union[transformers.SchedulerType, str]] = "linear",
                  adam_beta1: Optional[float] = 0.9,
@@ -56,13 +57,13 @@ class PretrainQFormerModel(pl.LightningModule):
             name=self.__class__.__name__,
             logging_level="INFO"
         )
-        self.language_model_name = language_model_name
-        self.sequence_encoder_model = sequence_encoder_model
-        self.qformer = qformer
-
         self.qformer_kwargs = qformer_kwargs if qformer_kwargs is not None else DEFAULT_CONFIG
-        self.qformer_kwargs['text_model_name'] = self.language_model_name
-        self.qformer_kwargs['sequence_encoder_model'] = self.sequence_encoder_model
+        self.qformer_config = Blip2QFormerConfig(**self.qformer_kwargs)
+
+        self.language_model = language_model
+        self.sequence_encoder_model = sequence_encoder_model
+        self.q_qformer = qformer  # a part for vis + queries part
+        self.t_qformer = Blip2QFormerTextEncoder(qformer_kwargs)  # text part
 
         self.warmup_steps: int = warmup_steps
         self.training_steps: int = training_steps
