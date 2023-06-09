@@ -9,6 +9,7 @@ from romashka.transactions_qa.model.encoder_retrieval_model import EncoderRetrie
 from romashka.transactions_qa.model.encoder_single_retrieval_model import EncoderSingleRetrievalModel
 from romashka.transactions_qa.model.encoder_numeric_model import EncoderNumericModel
 from romashka.transactions_qa.model.encoder_ending_retrieval_model import EncoderEndingRetrievalModel
+from romashka.transactions_qa.model.encoder_retrieval_spec_tokens_model import EncoderRetrievalSpecTokensModel
 
 __all__ = [
     "DecoderSimpleModel",
@@ -20,5 +21,6 @@ __all__ = [
     "EncoderRetrievalModel",
     "EncoderSingleRetrievalModel",
     "EncoderNumericModel",
-    "EncoderEndingRetrievalModel"
+    "EncoderEndingRetrievalModel",
+    "EncoderRetrievalSpecTokensModel"
 ]

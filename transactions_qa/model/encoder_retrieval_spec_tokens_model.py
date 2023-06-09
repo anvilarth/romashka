@@ -195,10 +195,10 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
         """
         self.task_special_tokens = collect_task_specific_tokens(self.tasks)
         self.register_buffer("task_special_tokens_ids",
-                             self.tokenizer.encode(self.task_special_tokens,
+                             self.tokenizer(self.task_special_tokens,
                                                    add_special_tokens=False,
                                                    padding=False,
-                                                   return_tensors='pt').flatten())
+                                                   return_tensors='pt')['input_ids'].flatten())
         self._logger.info(f"Collected {len(self.task_special_tokens)} task special tokens: {self.task_special_tokens} "
                           f"with corresponding ids: {self.task_special_tokens_ids}")
         params_dim = None
