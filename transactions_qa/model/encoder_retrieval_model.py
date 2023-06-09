@@ -210,12 +210,12 @@ class EncoderRetrievalModel(EncoderSimpleModel):
                 else:  # for GPT-like
                     in_dim = self.language_model.config.hidden_size
                 # Maps from LM hidden_size -> shared dim
-                text_fc = [nn.Linear(in_dim, shared_dim),
+                text_fc = [nn.Linear(in_dim, shared_dim),  # , dtype=torch.float16
                            nn.Dropout(self._embeddings_dropout_p)]
                 self.projection_layers.append(nn.Sequential(*text_fc))
             # Take representation from any middle layer
             elif layer_idx < self.language_model.config.num_hidden_layers:
-                text_fc = [nn.Linear(self.language_model.config.hidden_size, shared_dim),
+                text_fc = [nn.Linear(self.language_model.config.hidden_size, shared_dim),  # , dtype=torch.float16
                            nn.Dropout(self._embeddings_dropout_p)]
                 self.projection_layers.append(nn.Sequential(*text_fc))
             else:
@@ -244,7 +244,7 @@ class EncoderRetrievalModel(EncoderSimpleModel):
         Replace transactions injection start tokens' embedding with trainable parameter.
         """
         mask = input_tokens_ids == self.transactions_start_token_id
-        input_embeddings[mask] = self.transactions_start_embedding
+        input_embeddings[mask] = self.transactions_start_embedding.to(input_embeddings.dtype)
 
     def has_end_token(self, input_tokens_ids: Union[List[int], torch.Tensor]) -> bool:
         """
@@ -258,7 +258,7 @@ class EncoderRetrievalModel(EncoderSimpleModel):
         Replace transactions injection end tokens' embedding with trainable parameter.
         """
         mask = input_tokens_ids == self.transactions_end_token_id
-        input_embeddings[mask] = self.transactions_end_embedding
+        input_embeddings[mask] = self.transactions_end_embedding.to(input_embeddings.dtype)
 
     def forward(self, batch: Union[Dict[str, torch.Tensor], Any],
                 output_attentions: Optional[bool] = True,
@@ -476,7 +476,6 @@ class EncoderRetrievalModel(EncoderSimpleModel):
 
         # As a projection_layers can be used: projection_layers or lm_connector
         for idx, projection_layer in zip(self._n_retrieval_layers, self.projection_layers):  # [lm_connector]
-            # print(f"outputs.decoder_hidden_states[-1]: {outputs.decoder_hidden_states[-1].size()}")
             ret_hidden_states.append(
                 projection_layer(outputs.encoder_hidden_states[idx][..., ret_start_i:ret_end_i, :])
             )  # (bs, trns_history_seq_len, 768)
@@ -498,15 +497,20 @@ class EncoderRetrievalModel(EncoderSimpleModel):
         collected_end_hidden_states = torch.stack(end_hidden_states, dim=-1).sum(dim=-1)
 
         # 4) Calculate Contrastive loss
-        ret_loss_accumulated = []
-        for trx_i in range(collected_last_hidden_state.size(1)):
-            ret_token_loss = self.ret_NCE_loss_fn(ret_embeddings[:, trx_i, :],
-                                                  collected_last_hidden_state[:, trx_i, :])
-            ret_loss_accumulated.append(ret_token_loss)
+        loss_outputs = dict()
+        try:
+            ret_loss_accumulated = []
+            for trx_i in range(collected_last_hidden_state.size(1)):
+                ret_token_loss = self.ret_NCE_loss_fn(ret_embeddings[:, trx_i, :],
+                                                      collected_last_hidden_state[:, trx_i, :])
+                ret_loss_accumulated.append(ret_token_loss)
 
-        ret_loss_accumulated = torch.stack(ret_loss_accumulated).sum()
+            ret_loss_accumulated = torch.stack(ret_loss_accumulated).sum()
+            loss_outputs['loss'] = ret_loss_accumulated
+        except Exception as e:
+            self._logger.error(f"!!! Exceptiom occurred during retrieval loss calculation:\n{e}")
+            loss_outputs['loss'] = torch.zeros((1,), dtype=torch.float32).to(collected_last_hidden_state.device)
 
-        loss_outputs = dict(loss=ret_loss_accumulated)
         if output_hidden_states:
             loss_outputs['last_hidden_state'] = collected_last_hidden_state
         return loss_outputs
