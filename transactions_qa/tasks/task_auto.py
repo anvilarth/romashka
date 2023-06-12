@@ -35,7 +35,9 @@ from romashka.transactions_qa.tasks.context_weekday_tasks import (MostFrequentDa
                                                                   OccurenceDayOfWeekTaskBinary)
 from romashka.transactions_qa.tasks.predictive_amnt_tasks import (PredNumericAmountTaskBinary,
                                                                   PredOverThresholdAmountTaskBinary,
-                                                                  PredUnderThresholdAmountTaskBinary)
+                                                                  PredUnderThresholdAmountTaskBinary,
+                                                                  PredBinnedAmountTaskOpenEnded,
+                                                                  PredNumericAmountTaskOpenEnded)
 from romashka.transactions_qa.tasks.predictive_mcc_tasks import (PredMCCCodeTaskBinary,
                                                                  PredMCCCodeTaskOpenEnded)
                                                                
@@ -91,6 +93,9 @@ AUTO_TASKS = [
         ("pred_numeric_amount_binary", PredNumericAmountTaskBinary),
         ("pred_over_threshold_amount_binary", PredOverThresholdAmountTaskBinary),
         ("pred_under_threshold_amount_binary", PredUnderThresholdAmountTaskBinary),
+        ("pred_numeric_amount_open-ended", PredNumericAmountTaskOpenEnded),
+        ("pred_binned_amount_open-ended", PredBinnedAmountTaskOpenEnded),
+
         ("pred_mcc_code_binary", PredMCCCodeTaskBinary),
         ("pred_mcc_code_open-ended", PredMCCCodeTaskOpenEnded)
     ]
