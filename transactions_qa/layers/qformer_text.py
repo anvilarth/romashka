@@ -21,8 +21,8 @@ class Blip2QFormerTextLayer(nn.Module):
 
         self.layer_idx = layer_idx
 
-        self.intermediate_query = Blip2QFormerIntermediate(config)
-        self.output_query = Blip2QFormerOutput(config)
+        self.intermediate = Blip2QFormerIntermediate(config)
+        self.output = Blip2QFormerOutput(config)
 
     def forward(
         self,
@@ -83,11 +83,6 @@ class Blip2QFormerTextLayer(nn.Module):
     def feed_forward_chunk(self, attention_output):
         intermediate_output = self.intermediate(attention_output)
         layer_output = self.output(intermediate_output, attention_output)
-        return layer_output
-
-    def feed_forward_chunk_query(self, attention_output):
-        intermediate_output = self.intermediate_query(attention_output)
-        layer_output = self.output_query(intermediate_output, attention_output)
         return layer_output
 
 

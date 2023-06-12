@@ -13,10 +13,8 @@ import pytorch_lightning as pl
 from pytorch_lightning.utilities import rank_zero_info
 from transformers.models.blip_2.configuration_blip_2 import Blip2QFormerConfig
 
-
 from romashka.logging_handler import get_logger
-from romashka.transactions_qa.layers.qformer_two_towers import Blip2QFormerTextEncoder
-
+from romashka.transactions_qa.layers.qformer_text import Blip2QFormerTextEncoder
 
 DEFAULT_CONFIG = {
     "num_queries": 32,
@@ -40,7 +38,9 @@ class PretrainQFormerModel(pl.LightningModule):
     def __init__(self,
                  language_model: nn.Module,
                  sequence_encoder_model: nn.Module,
+                 tokenizer: transformers.PreTrainedTokenizerBase,
                  qformer: nn.Module,
+                 shared_dim: Optional[int] = None,
                  learning_rate: Optional[float] = 5e-5,
                  scheduler_type: Optional[Union[transformers.SchedulerType, str]] = "linear",
                  adam_beta1: Optional[float] = 0.9,
@@ -62,10 +62,12 @@ class PretrainQFormerModel(pl.LightningModule):
 
         self.language_model = language_model
         self.sequence_encoder_model = sequence_encoder_model
+        self.tokenizer = tokenizer
         self.q_qformer = qformer  # a part for vis + queries part
-        self.t_qformer = Blip2QFormerTextEncoder(qformer_kwargs)  # text part
+        self.t_qformer = Blip2QFormerTextEncoder(qformer_kwargs)  # a text part
 
-        # todo: here add tying weights with embedds + queries Q-Former tower
+        # A shared dim for contrastive loss computation
+        self.shared_dim = shared_dim if shared_dim is not None else self._get_hidden_dim()
 
         self.warmup_steps: int = warmup_steps
         self.training_steps: int = training_steps
@@ -76,7 +78,7 @@ class PretrainQFormerModel(pl.LightningModule):
         self.adam_epsilon = adam_epsilon
 
         self._verbose_for_debug: bool = verbose_for_debug
-        self.save_hyperparameters(ignore=['_logger', 'sequence_encoder_model', 'qformer'])
+        self.save_hyperparameters(ignore=['_logger', 'sequence_encoder_model', 'qformer', 'language_model'])
 
         self._prepare_model()
 
@@ -102,7 +104,6 @@ class PretrainQFormerModel(pl.LightningModule):
                                                optimizer=optimizer,
                                                num_warmup_steps=self.warmup_steps,
                                                num_training_steps=self.training_steps)
-
         return {
             "optimizer": optimizer,
             "lr_scheduler": scheduler,
@@ -111,21 +112,62 @@ class PretrainQFormerModel(pl.LightningModule):
     def _prepare_model(self):
         """
         Prepare model for training.
-        - Freeze Event Sequence encoder & LLM;
-        - Set LM model type: encoder-decoder / decoder-only;
+        - Create queries;
+        - Tie weights of two parts;
         """
-        # Freeze Event Sequence encoder & LLM
-        self._freeze_parameters()
+        self._create_layers()
+        self._tie_parameters()
 
-    def _freeze_parameters(self):
-        # Freezing models weights
-        self.sequence_encoder_model.eval()
-        self._logger.info(f"Freezing sequence encoder model's parameters...")
-        for param in self.sequence_encoder_model.parameters():
-            param.requires_grad = False
+    def _get_hidden_dim(self) -> int:
+        """
+        Retrieve model hidden size (from inner cofig).
+        Returns: (int) hidden size.
+        """
+        hidden_dim = None
+        if hasattr(self.language_model.config, "hidden_size"):
+            hidden_dim = self.language_model.config.hidden_size
+        elif hasattr(self.language_model.config, "d_model"):  # may occur in encoder-decoder models (like T5)
+            hidden_dim = self.language_model.config.d_model
+        else:
+            raise AttributeError(f"The default setting, where parameters embeddings dimensionality "
+                                 "equals to LLM hidden dimensionality can not be run because "
+                                 "model do not have required attribute: `hidden_size` or `d_model` in config.")
+        return hidden_dim
+
+    def _create_layers(self):
+        self.query_tokens_embeddings = torch.nn.Parameter(
+                torch.zeros(1, self.qformer_config.num_queries, self.qformer_config.hidden_size))
+
+        self.text_projection_layer = torch.nn.Linear(self._get_hidden_dim(),
+                                                     self.shared_dim)
+        self.queries_projection_layer = torch.nn.Linear(self.qformer_config.hidden_size,
+                                                        self.shared_dim)
+
+    def _tie_parameters(self):
+        """
+        Share self-attention layer's weights between two towers.
+        """
+        # Select weights for sharing -> self-att layers
+        shared_params_names = []
+        for t_param_name, t_param in self.t_qformer.layer.named_parameters():
+            if (("attention" in t_param_name) or ("intermediate_query" in t_param_name)
+                or ("output_query" in t_param_name)) and not ("LayerNorm" in t_param_name):
+                shared_params_names.append(".".join(t_param_name.split(".")[:-1]))
+        shared_params_names = list(set(shared_params_names))
+
+        for param_name in shared_params_names:
+            try:
+                param1 = self.t_qformer.layer.get_submodule(param_name)
+                param2 = self.q_qformer.encoder.layer.get_submodule(param_name)
+                param2 = param1
+            except Exception as e:
+                self._logger.error(f"Error occurred during parameter: `{param_name}` weights tying:\n{e}")
+        self._logger.info(f"{len(shared_params_names)} parameters tied:\n{shared_params_names}")
 
     def model_step(self, batch: Union[Dict[str, torch.Tensor], Any],
-                   output_attentions: Optional[bool] = True) -> Any:
+                   output_hidden_states: Optional[bool] = False,
+                   output_attentions: Optional[bool] = True,
+                   return_dict: Optional[bool] = True) -> Any:
         """
         Passes input batch through inner parts of module:
         1) input sequences through Sequence embedder model (i.e. sequence_encoder_model)
@@ -148,14 +190,60 @@ class PretrainQFormerModel(pl.LightningModule):
         #     -> to get embeddings [bs, hist_seq_len, 384];
         sequences_embeddings, sequences_embeddings_mask = self.sequence_encoder_model.get_embs(batch)
 
-        # 2) those sequences embeddings + text captions through Q-Former model
-        batch_captions = [caption[0] for caption in batch['captions']]
-        outputs = self.qformer(
-            text=batch_captions,
-            sequence_embeds=sequences_embeddings,
-            sequence_mask=sequences_embeddings_mask,
-            is_train=True
+        # 2) Pass the query tokens through queries part of full Q-Former model,
+        #  using input embeddings for cross-attention
+        query_tokens = self.query_tokens_embeddings.expand(sequences_embeddings.shape[0], -1, -1)
+        query_outputs = self.qformer(
+            query_embeds=query_tokens,
+            encoder_hidden_states=sequences_embeddings,
+            encoder_attention_mask=sequences_embeddings_mask,
+            output_hidden_states=True,
+            return_dict=True,
         )
+        query_output = query_outputs[0]
+        # 3) Project query tokens to shared dim for loss computation
+        query_output = self.queries_projection_layer(query_output)
+        query_output = F.normalize(query_output, dim=-1)
+
+        # 4) Texts
+        # 4.1) Collect text captions and pass them through LM
+        batch_captions = [caption[0] for caption in batch['captions']]
+        # 4.2) Tokenize captions
+        captions_encoded = self.tokenizer.batch_encode_plus(batch_captions,
+                                                       padding='longest',
+                                                       return_tensors='pt')
+        # 4.3) Pass through LM
+        if self.qformer_config.use_decoder_only_language_model:
+            text_outputs = self.language_model(
+                input_ids=captions_encoded['input_ids'],
+                attention_mask=captions_encoded['attention_mask'],
+                output_hidden_states=True,
+                return_dict=True,
+            )
+        else:
+            inputs_embeds = self.language_model.get_input_embeddings()(captions_encoded['input_ids'])
+            text_outputs = self.language_model.encoder(
+                inputs_embeds=inputs_embeds,
+                attention_mask=captions_encoded['attention_mask'],
+                output_hidden_states=True,
+                return_dict=True,
+            )
+
+        # obtain the the last_hidden_state from the T5 encoder output
+        last_hidden_state = text_outputs.last_hidden_state  # shape is [batch_size, seq_len, hidden_size]
+
+        # 4.4) Pass through part of full Q-Former model
+        # (in this case - directly to input, without queries)
+        text_outputs = self.t_qformer(last_hidden_state)
+        # obtain the full caption embedding from the T5 as the last_hidden_state from the T5 encoder output
+        last_hidden_state = text_outputs.last_hidden_state  # shape is [batch_size, seq_len, hidden_size]
+
+        # 4.5) pool == sum/average the last_hidden_state
+        pooled_last_hidden_state = torch.mean(last_hidden_state, dim=1)
+
+        # 5) Project text tokens to shared dim for loss computation
+        pooled_last_hidden_state = self.text_projection_layer(pooled_last_hidden_state)
+        pooled_last_hidden_state = F.normalize(pooled_last_hidden_state, dim=-1)
 
         return outputs
 
@@ -213,3 +301,22 @@ class PretrainQFormerModel(pl.LightningModule):
             sync_dist=True,
         )
         return loss
+
+    def _compute_retrieval_loss(self,
+                                outputs: Dict[str, torch.Tensor],
+                                ret_start_i: int, ret_end_i: int,
+                                ret_embeddings: torch.Tensor,
+                                output_hidden_states: Optional[bool] = False) -> Dict[str, torch.Tensor]:
+        """
+        Calculate contrastive retrieval loss based on InfoNCE loss implementation.
+        Args:
+            outputs: a LLM outputs, containing: 'logits', 'hidden_states', etc.
+            ret_start_i: a starting index of transactions embeddings injection;
+            ret_end_i: an ending index of transactions embeddings injection (non-inclusive);
+            ret_embeddings: a reference embeddings (i.e. target embeddings);
+            output_hidden_states: whether to output hidden_states for retrieval tokens;
+            output_logits: whether to output logits for retrieval tokens;
+
+        Returns:
+            a dict, containing 'loss' and,  optionally, 'last_hidden_state' and 'ret_tokens_logits'.
+        """
