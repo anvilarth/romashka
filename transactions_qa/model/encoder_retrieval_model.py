@@ -98,6 +98,7 @@ class EncoderRetrievalModel(EncoderSimpleModel):
         """
         # Create transactions embeddings start/end tokens: [trx] / [/trx] and trainable parameters for them
         self._create_surrounding_parameters()
+
         # Create retrieval tokens: RET_0 ... RET_N in tokenizers vocabulary and mappings token <-> id
         self._create_retrieval_parameters()
 
@@ -106,6 +107,9 @@ class EncoderRetrievalModel(EncoderSimpleModel):
 
         # Create projection layers from LM output hidden states to shared dim for loss calculation
         self._create_projection_layers()
+
+        # Creates position embeddings layers
+        self._create_position_parameters()
 
     def _create_surrounding_parameters(self):
         """
@@ -181,10 +185,18 @@ class EncoderRetrievalModel(EncoderSimpleModel):
         self.transactions_ret_ids2tokens_mapping = {token_id: token for token, token_id
                                                     in self.transactions_ret_tokens2ids_mapping.items()}
 
+    def _create_position_parameters(self):
+        """
+        Creates position embeddings layers as the indicator of temporal information
+        to the representations from different events in sequence.
+        """
+        self.temp_position_embedding = nn.Embedding(self.max_ret_tokens, 384)
+        self._logger.info(f"Created position embeddings layers for maximum {self.max_ret_tokens} positions.")
+
     def _create_projection_layers(self):
         """
         Creates a linear mappings from language model hidden dimensionality
-        to shared embeddings dimensionality for rET tokens loss calculation.
+        to shared embeddings dimensionality for RET tokens loss calculation.
         """
         # List of indexes of hidden states to take for information extraction
         if self._n_retrieval_layers is None:
@@ -279,7 +291,6 @@ class EncoderRetrievalModel(EncoderSimpleModel):
             LM model's outputs with added labels (if `is_train` was set).
         """
         # 1) Get transactions embeddings for initial batch
-        # transactions model requires: ['mask', 'cat_features', 'num_features', 'meta_features']
         # return: Tuple[
         # torch.Tensor, - embeddings
         # torch.Tensor - mask
@@ -289,6 +300,15 @@ class EncoderRetrievalModel(EncoderSimpleModel):
         device = transaction_mask.device
 
         transactions_embeddings, transactions_embeddings_mask = self.transaction_model.get_embs(batch)
+
+        # 1.2) If created position embeddings, apply them first
+        if hasattr(self, "temp_position_embedding"):
+            batch_size, seq_len = transactions_embeddings.size()[:2]
+            position_ids = torch.arange(seq_len, dtype=torch.long, device=device)
+            position_ids = position_ids.unsqueeze(0).expand(batch_size, -1)
+
+            transactions_position_embeddings = self.temp_position_embedding(position_ids)
+            transactions_embeddings = transactions_embeddings + transactions_position_embeddings
 
         # 2) Next pass them to connector == linear mapping -> to LM inner dim
         # Checks whether a connector requires mask argument

@@ -48,6 +48,7 @@ class EncoderSimpleModel(nn.Module):
         self.do_freeze_lm: bool = do_freeze_lm
         self.do_freeze_lm_embeddings = do_freeze_lm_embeddings
         self.do_freeze_connector: bool = do_freeze_connector
+
         self.generation_config = generation_config
 
         self._is_debug: bool = is_debug
