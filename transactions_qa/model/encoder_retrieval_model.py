@@ -30,6 +30,7 @@ class EncoderRetrievalModel(EncoderSimpleModel):
                  embeddings_dropout_p: Optional[float] = 0.1,
                  retrieval_loss_scale: Optional[float] = 1.0,
                  text_loss_scale: Optional[float] = 1.0,
+                 add_temporal_embeddings: Optional[bool] = False,
                  transactions_embeddings_start_token: Optional[str] = r"[trx]",
                  transactions_embeddings_end_token: Optional[str] = r"[/trx]",
                  generation_config: Optional[Dict[str, Any]] = None,
@@ -48,6 +49,8 @@ class EncoderRetrievalModel(EncoderSimpleModel):
 
         self._retrieval_loss_scale = retrieval_loss_scale
         self._text_loss_scale = text_loss_scale
+
+        self._add_temporal_embeddings = add_temporal_embeddings
 
         super().__init__(language_model=language_model,
                          transaction_model=transaction_model,
@@ -108,8 +111,9 @@ class EncoderRetrievalModel(EncoderSimpleModel):
         # Create projection layers from LM output hidden states to shared dim for loss calculation
         self._create_projection_layers()
 
-        # Creates position embeddings layers
-        self._create_position_parameters()
+        # Creates position embeddings layers (optionally)
+        if self._add_temporal_embeddings:
+            self._create_position_parameters()
 
     def _create_surrounding_parameters(self):
         """

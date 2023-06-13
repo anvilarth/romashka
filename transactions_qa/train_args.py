@@ -128,6 +128,12 @@ class ModelArguments:
         metadata={"help": "A size of a hidden layers of Q-Former connector."},
     )
 
+    add_temporal_embeddings: Optional[bool] = field(
+        default=False,
+        metadata={"help": "Whether to create trainable temporal positional embeddings "
+                          "for event sequences encoder output or not."},
+    )
+
     cache_dir: Optional[str] = field(
         default=None,
         metadata={"help": "Where do you want to store the pretrained models downloaded from huggingface.co"},
