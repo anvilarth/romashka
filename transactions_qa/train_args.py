@@ -7,6 +7,7 @@ from transformers.trainer_utils import (
     ShardedDDPOption
 )
 # from transformers import TrainingArguments
+from transformers.models.auto.modeling_auto import MODEL_FOR_CAUSAL_LM_MAPPING_NAMES
 from ..logging_handler import get_logger
 from romashka.transactions_qa.layers.connector import CONNECTOR_TYPES
 
@@ -51,7 +52,7 @@ class ModelArguments:
     )
 
     language_model_type: Optional[str] = field(
-        default="decoder",
+        default=None,
         metadata={
             "help": (
                 "The text model type for corresponding Hugging Face class creation: decoder or encoder-decoder."
@@ -128,6 +129,16 @@ class ModelArguments:
         metadata={"help": "A size of a hidden layers of Q-Former connector."},
     )
 
+    min_ret_tokens: Optional[int] = field(
+        default=0,
+        metadata={"help": "A minimum number of retrieval tokens."},
+    )
+
+    max_ret_tokens: Optional[int] = field(
+        default=150,
+        metadata={"help": "A maximum number of retrieval tokens."},
+    )
+
     add_temporal_embeddings: Optional[bool] = field(
         default=False,
         metadata={"help": "Whether to create trainable temporal positional embeddings "
@@ -159,7 +170,10 @@ class ModelArguments:
     def __post_init__(self):
         if self.connector_type not in CONNECTOR_TYPES:
             raise ValueError(f"`connector_type` should be one from:\n{CONNECTOR_TYPES}.")
-
+        if self.language_model_type is None:
+            self.language_model_type = 'encoder-decoder' if "t5" in self.language_model_name_or_path.lower() \
+                else "decoder"
+            logger.info(f"The text model type set to: {self.language_model_type}")
 
 
 @dataclass
@@ -280,7 +294,7 @@ class DataTrainingArguments:
         default=0,
         metadata={
             "help": (
-            "Restrict samples to have length more than `min_seq_len`. Other samples are dropped"
+                "Restrict samples to have length more than `min_seq_len`. Other samples are dropped"
             )
         },
     )
@@ -289,7 +303,7 @@ class DataTrainingArguments:
         default=250,
         metadata={
             "help": (
-            "Restrict samples to have length less than `max_seq_len`. Other samples are dropped"
+                "Restrict samples to have length less than `max_seq_len`. Other samples are dropped"
             )
         },
     )
@@ -298,7 +312,7 @@ class DataTrainingArguments:
         default=10_000,
         metadata={
             "help": (
-            "Size of buffer which is used for shuffling."
+                "Size of buffer which is used for shuffling."
             )
         },
     )
@@ -438,7 +452,7 @@ class TrainingArguments:
         default=1.0,
         metadata={"help": "A scaling factor for retrieval from embeddings loss (usually kind of Contractive loss)."},
     )
-    
+
     gradient_clip_val: float = field(
         default=5.0,
         metadata={"help": "Clipping norm of gradients. If ||g|| < val, g = val * g / ||g||. "
@@ -463,6 +477,13 @@ class TrainingArguments:
     adam_beta2: Optional[float] = field(default=0.999, metadata={"help": "Beta2 for AdamW optimizer"})
     adam_epsilon: Optional[float] = field(default=1e-8, metadata={"help": "Epsilon for AdamW optimizer."})
     max_grad_norm: Optional[float] = field(default=1.0, metadata={"help": "Max gradient norm."})
+
+    do_8bit: Optional[bool] = field(default=False, metadata={"help": "Load model and train with 8-bit precision."})
+    precision: Optional[Union[str, int]] = field(
+        default=32,
+        metadata={"help": "Double precision (64), full precision (32), half precision (16) or "
+                          "bfloat16 precision (bf16). Can be used on CPU, GPU or TPUs."}
+    )
 
     fast_dev_run: Optional[int] = field(
         default=False,
@@ -489,7 +510,7 @@ class TrainingArguments:
     lr_scheduler_type: Union[SchedulerType, str] = field(
         default="linear",
         metadata={"help": "The scheduler type to use. Can be one from: `linear`, `cosine`, "
-                  "`cosine_with_restarts`, `polynomial`, `constant`, `constant_with_warmup`"},
+                          "`cosine_with_restarts`, `polynomial`, `constant`, `constant_with_warmup`"},
     )
     warmup_ratio: float = field(
         default=0.0, metadata={"help": "Linear warmup over warmup_ratio fraction of total steps."}
