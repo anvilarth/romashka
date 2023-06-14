@@ -27,6 +27,7 @@ ATTRIBUTE_SPECIFIC_TOKENS = {
     'operation_type_group': "[OPERATION_TYPE_GROUP]",
     'ecommerce_flag': "[ECOMM_FLAG]",
     'payment_system': "[PAYMENT_SYS]",
+    'label': "[DEFAULT]"
 }
 
 ANSWER_SPECIFIC_TOKENS = {"categorical": "[CAT]",

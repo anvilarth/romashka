@@ -178,3 +178,27 @@ def convert_to_numeric(val: str) -> Optional[Union[int, float]]:
             return float(val)
         except Exception as e:
             return None
+
+
+def map_prediction_to_answer(prediction: str,
+                             answer_options: List[str],
+                             default_value: Optional[str] = "-100") -> str:
+    """
+    Performs direct mapping of string prediction (i.e. decoded) to labels.
+    Args:
+        prediction: a string prediction (i.e. decoded);
+        answer_options: a list fo string available labels;
+        default_value: a default value to fill non-valid predictions;
+
+    Returns:
+        a single string label.
+    """
+    if isinstance(prediction, str):
+        for answer in answer_options:
+            if answer in prediction:
+                return answer
+    else:
+        for answer in answer_options:
+            if prediction == answer:
+                return answer
+    return default_value

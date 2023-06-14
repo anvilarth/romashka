@@ -40,6 +40,7 @@ from romashka.transactions_qa.tasks.predictive_amnt_tasks import (PredNumericAmo
                                                                   PredNumericAmountTaskOpenEnded)
 from romashka.transactions_qa.tasks.predictive_mcc_tasks import (PredMCCCodeTaskBinary,
                                                                  PredMCCCodeTaskOpenEnded)
+from romashka.transactions_qa.tasks.predictive_default_task import PredDefaultTaskBinary
                                                                
 from romashka.transactions_qa.tasks.default_task import DefaultTask
 from romashka.logging_handler import get_logger
@@ -97,7 +98,8 @@ AUTO_TASKS = [
         ("pred_binned_amount_open-ended", PredBinnedAmountTaskOpenEnded),
 
         ("pred_mcc_code_binary", PredMCCCodeTaskBinary),
-        ("pred_mcc_code_open-ended", PredMCCCodeTaskOpenEnded)
+        ("pred_mcc_code_open-ended", PredMCCCodeTaskOpenEnded),
+        ("pred_default_binary", PredDefaultTaskBinary)
     ]
 AUTO_TASKS = OrderedDict(AUTO_TASKS)
 ALL_TASKS_NAMES = list(AUTO_TASKS.keys())

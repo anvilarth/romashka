@@ -150,6 +150,10 @@ class AbstractTask(ABC):
             self.target_feature_index = cat_features_names.index(self.target_feature_name) \
                 if self.target_feature_index is None else self.target_feature_index
             self.target_feature_type = 'cat_features'
+
+        elif self.target_feature_name == "label":
+            self.target_feature_type = "label"
+            self.target_feature_index = 0  # as the only feature of default prediction
         else:
             raise AttributeError(f"Provided feature name not in available"
                                  f"transactions feature names:\n{transaction_features}")
@@ -167,6 +171,9 @@ class AbstractTask(ABC):
         elif self.target_feature_name in cat_features_names:
             self.target_feature_index = cat_features_names.index(self.target_feature_name)
             self.target_feature_type = 'cat_features'
+        elif self.target_feature_name == "label":
+            self.target_feature_type = "label"
+            self.target_feature_index = 0  # as the only feature of default prediction
         else:
             raise AttributeError(f"Provided feature name not in available"
                                  f"transactions feature names:\n{transaction_features}")
