@@ -480,9 +480,10 @@ class TrainingArguments:
 
     do_8bit: Optional[bool] = field(default=False, metadata={"help": "Load model and train with 8-bit precision."})
     precision: Optional[Union[str, int]] = field(
-        default=32,
+        default='32-true',
         metadata={"help": "Double precision (64), full precision (32), half precision (16) or "
-                          "bfloat16 precision (bf16). Can be used on CPU, GPU or TPUs."}
+                          "bfloat16 precision (bf16). Can be used on CPU, GPU or TPUs. "
+                          "Or as literals: [‘16-mixed’, ‘bf16-mixed’, ‘32-true’, ‘64-true’]"}
     )
 
     fast_dev_run: Optional[int] = field(

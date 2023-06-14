@@ -12,6 +12,8 @@ import warnings
 warnings.filterwarnings("ignore")
 
 import torch
+from torch.utils.data import DataLoader
+
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
@@ -370,7 +372,7 @@ def main():
             "transactions_embeddings_end_token": r"[/trx]",
         }
         # EncoderRetrievalModel
-        model_ = EncoderSingleRetrievalModel(
+        model_ = EncoderRetrievalModel(
             language_model=lm_model,
             transaction_model=transactions_model,
             tokenizer=tokenizer,
@@ -449,9 +451,14 @@ def main():
             'seed': training_args.seed,
             'generator_batch_size': 1,
             'buffer_size': data_args.shuffle_buffer_size,
-            'batch_size': training_args.per_device_train_batch_size,
-            'num_workers': data_args.preprocessing_num_workers
         }
+        train_dataset = TransactionQADataset(**train_dataset_config).build_dataset()
+
+        train_dataloader = DataLoader(train_dataset,
+                                      batch_size=training_args.per_device_train_batch_size,
+                                      num_workers=data_args.preprocessing_num_workers,
+                                      collate_fn=TransactionQADataset.collate_fn,
+                                      )
     else:
         train_dataset_config = None
 
@@ -464,9 +471,14 @@ def main():
             'seed': training_args.seed,
             'buffer_size': 0,
             'generator_batch_size': 1,
-            'batch_size': training_args.per_device_eval_batch_size,
-            'num_workers': data_args.preprocessing_num_workers
         }
+        val_dataset = TransactionQADataset(**val_dataset_config).build_dataset()
+
+        val_dataloader = DataLoader(val_dataset,
+                                    batch_size=training_args.per_device_eval_batch_size,
+                                    num_workers=data_args.preprocessing_num_workers,
+                                    collate_fn=TransactionQADataset.collate_fn,
+                                    )
     else:
         val_dataset_config = None
 
@@ -475,7 +487,7 @@ def main():
         logger.error("There is nothing to do. Please pass `do_train` and/or `do_eval`.")
         return 1
 
-    datamodule = TransactionQADataModule(train_dataset_config, val_dataset_config)
+    # datamodule = TransactionQADataModule(train_dataset_config, val_dataset_config)
 
     # Training & Callbacks
     wb_logger = WandbLogger(
@@ -520,12 +532,14 @@ def main():
         auto_select_gpus=True,
         log_every_n_steps=100,
         reload_dataloaders_every_n_epochs=1,
+        precision=training_args.precision,
         gradient_clip_val=training_args.gradient_clip_val,
         gradient_clip_algorithm=training_args.gradient_clip_algorithm,
         accumulate_grad_batches=training_args.gradient_accumulation_steps,
         logger=wb_logger,  # [tb_logger, wb_logger],
         callbacks=[checkpoint_callback, lr_monitor_callback])
-    trainer.fit(model=model, datamodule=datamodule)
+    trainer.fit(model=model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
+#     datamodule=datamodule
 
 
 if __name__ == '__main__':

@@ -89,10 +89,10 @@ class EncoderSimpleModel(nn.Module):
         self._configure_tokenizer()
 
         # In case any of tasks extends initial tokenizer vocab with additional tokens
-        self._resize_text_embeddings()
+        # self._resize_text_embeddings()
 
         # Set embedding func
-        self._set_language_model_embedding_func()
+        # self._set_language_model_embedding_func()
 
         # Freezing some weights
         if self.do_freeze_tm:
@@ -107,12 +107,12 @@ class EncoderSimpleModel(nn.Module):
             for param in self.language_model.parameters():
                 param.requires_grad = False
 
-        if self.do_freeze_lm_embeddings:
-            self._logger.info(f"Freezing language model's embeddings...")
-            self.language_model_tokens_embedding_func.requires_grad = False
-        else:
-            self._logger.info(f"Unfreezing (if frozen) language model's embeddings...")
-            self.language_model_tokens_embedding_func.requires_grad = True
+        # if self.do_freeze_lm_embeddings:
+        #     self._logger.info(f"Freezing language model's embeddings...")
+        #     self.language_model_tokens_embedding_func.requires_grad = False
+        # else:
+        #     self._logger.info(f"Unfreezing (if frozen) language model's embeddings...")
+        #     self.language_model_tokens_embedding_func.requires_grad = True
 
         if self.do_freeze_connector:
             self.connector.eval()
@@ -216,12 +216,12 @@ class EncoderSimpleModel(nn.Module):
 
         # Questions: to embedding of LM
         # torch.Size([1, len(question_start_tokens))
-        question_start_embeddings = self.language_model_tokens_embedding_func(
+        question_start_embeddings = self.language_model.encoder.embed_tokens(
             batch['question_start_tokens'])  # call for (embed_tokens): Embedding(vocab_size, model_hidden_dim)
         question_start_embeddings_batch = question_start_embeddings.repeat(batch_size, 1, 1)
 
         # question_end_tokens: torch.Size([batch_size, len(max_question_end_tokens)])
-        question_end_embeddings_batch = self.language_model_tokens_embedding_func(
+        question_end_embeddings_batch = self.language_model.encoder.embed_tokens(
             batch['question_end_tokens'])  # call for (embed_tokens): Embedding(vocab_size, model_hidden_dim)
 
         # Get general LM's encoder input as:
@@ -361,7 +361,7 @@ class EncoderSimpleModel(nn.Module):
         else:
             raise AttributeError(f"Unable to use prefix prompt in provided form: {type(prefix_prompt)}!")
 
-        prefix_prompt_embeddings = self.language_model_tokens_embedding_func(prefix_prompt_tokens)
+        prefix_prompt_embeddings = self.language_model.encoder.embed_tokens(prefix_prompt_tokens)
         prefix_prompt_embeddings_batch = prefix_prompt_embeddings.repeat(batch_size, 1, 1)
 
         # Question
@@ -370,12 +370,12 @@ class EncoderSimpleModel(nn.Module):
             question_tokens = self.tokenizer.encode(questions,
                                                     add_special_tokens=False,
                                                     return_tensors='pt').long().to(device)
-            question_embeddings = self.language_model_tokens_embedding_func(question_tokens)
+            question_embeddings = self.language_model.encoder.embed_tokens(question_tokens)
             question_embeddings_batch = question_embeddings.repeat(batch_size, 1, 1)
 
         # In case questions in tokenized form of tensors
         elif isinstance(questions, torch.Tensor):
-            question_embeddings = self.language_model_tokens_embedding_func(questions)
+            question_embeddings = self.language_model.encoder.embed_tokens(questions)
             if question_embeddings.size(0) != batch_size:
                 # If it was a single question
                 question_embeddings_batch = question_embeddings.repeat(batch_size, 1, 1)
@@ -388,7 +388,7 @@ class EncoderSimpleModel(nn.Module):
                                                     padding=True,
                                                     add_special_tokens=False,
                                                     return_tensors='pt').long().to(device)
-            question_embeddings = self.language_model_tokens_embedding_func(question_tokens)
+            question_embeddings = self.language_model.encoder.embed_tokens(question_tokens)
             question_embeddings_batch = question_embeddings
         else:
             raise AttributeError(f"Unable to use questions in provided form: {type(questions)}!")
@@ -401,7 +401,7 @@ class EncoderSimpleModel(nn.Module):
         if not answer_template_tokens.size(1):
             answer_template_tokens = self.whitespace_token_id.to(device)
 
-        answer_template_embeddings = self.language_model_tokens_embedding_func(answer_template_tokens)
+        answer_template_embeddings = self.language_model.encoder.embed_tokens(answer_template_tokens)
         answer_template_embeddings_batch = answer_template_embeddings.repeat(batch_size, 1, 1)
 
         # Concat all together
@@ -488,7 +488,7 @@ class EncoderSimpleModel(nn.Module):
                     out = next_token
 
                 self._logger.info(f"Output decoded: {[self.tokenizer.decode(token) for token in out]}")
-                next_embedding = self.language_model_tokens_embedding_func(next_token)
+                next_embedding = self.language_model.encoder.embed_tokens(next_token)
                 embeddings = torch.cat([embeddings, next_embedding], dim=1)
 
                 # If stopping criteria triggered for all samples in batch

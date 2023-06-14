@@ -74,7 +74,7 @@ class EncoderRetrievalModel(EncoderSimpleModel):
         self._create_losses()
 
         # Additionally re-assign embeddings
-        self._set_language_model_embedding_func()
+        # self._set_language_model_embedding_func()
 
         # Check if language model is frozen, optionally freeze
         self._logger.info(f"Check language model's parameters to be frozen...")
@@ -106,7 +106,7 @@ class EncoderRetrievalModel(EncoderSimpleModel):
         self._create_retrieval_parameters()
 
         # Additionally call to re-init embedding function reference to resized (maybe) embeddings
-        self._resize_text_embeddings()
+        # self._resize_text_embeddings()
 
         # Create projection layers from LM output hidden states to shared dim for loss calculation
         self._create_projection_layers()
@@ -324,7 +324,7 @@ class EncoderRetrievalModel(EncoderSimpleModel):
 
         # 3) Questions: to embedding of LM
         # torch.Size([1, len(question_start_tokens))
-        question_start_embeddings = self.language_model_tokens_embedding_func(
+        question_start_embeddings = self.language_model.encoder.embed_tokens(
             batch['question_start_tokens'])  # call for (embed_tokens): Embedding(vocab_size, model_hidden_dim)
         question_start_attention_mask = batch['question_start_tokens_mask']
 
@@ -345,7 +345,7 @@ class EncoderRetrievalModel(EncoderSimpleModel):
 
         # Question ends: to embedding of LM
         # question_end_tokens: torch.Size([batch_size, len(max_question_end_tokens)])
-        question_end_embeddings_batch = self.language_model_tokens_embedding_func(
+        question_end_embeddings_batch = self.language_model.encoder.embed_tokens(
             batch['question_end_tokens'])
         question_end_attention_mask = batch['question_end_attention_mask']
 

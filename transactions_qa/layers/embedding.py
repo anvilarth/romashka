@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 
+from functools import partial
+
 
 class EmbeddingLayer(nn.Module):
     def __init__(self,
@@ -152,6 +154,15 @@ class PiecewiseLinearEmbedding(nn.Module):
         return self.linear(embeddings)
 
 
+def eq_fn(x):
+    return x
+
+def cos_fn(freq, x):
+    return torch.cos(x * freq)
+
+def sin_fn(freq, x):
+    return torch.sin(x * freq)
+
 class PositionalEncoder(nn.Module):
 
     def __init__(
@@ -166,7 +177,7 @@ class PositionalEncoder(nn.Module):
         self.n_freqs = n_freqs
         self.log_space = log_space
         self.d_output = d_input * (1 + 2 * self.n_freqs)
-        self.embed_fns = [lambda x: x]
+        self.embed_fns = [eq_fn]
 
         # Define frequencies in either linear or log scale
         if self.log_space:
@@ -176,6 +187,9 @@ class PositionalEncoder(nn.Module):
 
         # Alternate sin and cos
         for freq in freq_bands:
+            # self.embed_fns.append(partial(sin_fn(freq)))
+            # self.embed_fns.append(partial(cos_fn(freq)))
+
             self.embed_fns.append(lambda x, freq=freq: torch.sin(x * freq))
             self.embed_fns.append(lambda x, freq=freq: torch.cos(x * freq))
 
