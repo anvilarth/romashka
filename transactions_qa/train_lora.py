@@ -217,20 +217,18 @@ def main():
 
     # Download model from huggingface.co and cache.
     # Make encoder-decoder model for LM
+    model_loading_kwargs = {
+        "pretrained_model_name_or_path": model_args.language_model_name_or_path,
+        "config": config
+    }
+    if training_args.do_8bit:
+        model_loading_kwargs['load_in_8bit'] = training_args.do_8bit
+        model_loading_kwargs['device_map'] = "auto"
     if model_args.language_model_type == "encoder-decoder":
-        lm_model = AutoModelForSeq2SeqLM.from_pretrained(
-            model_args.language_model_name_or_path,
-            load_in_8bit=training_args.do_8bit,
-            device_map="auto",
-            config=config
-        )
+        lm_model = AutoModelForSeq2SeqLM.from_pretrained(**model_loading_kwargs)
     else:
         # Otherwise try to cerate decoder-only model for CLM
-        lm_model = AutoModelForCausalLM.from_pretrained(
-            model_args.language_model_name_or_path,
-            load_in_8bit=training_args.do_8bit,
-            device_map="auto",
-            config=config
+        lm_model = AutoModelForCausalLM.from_pretrained(**model_loading_kwargs
         )
 
     # Create tasks
@@ -451,14 +449,9 @@ def main():
             'seed': training_args.seed,
             'generator_batch_size': 1,
             'buffer_size': data_args.shuffle_buffer_size,
+            'batch_size': training_args.per_device_train_batch_size,
+            'num_workers': data_args.preprocessing_num_workers
         }
-        train_dataset = TransactionQADataset(**train_dataset_config).build_dataset()
-
-        train_dataloader = DataLoader(train_dataset,
-                                      batch_size=training_args.per_device_train_batch_size,
-                                      num_workers=data_args.preprocessing_num_workers,
-                                      collate_fn=TransactionQADataset.collate_fn,
-                                      )
     else:
         train_dataset_config = None
 
@@ -471,14 +464,9 @@ def main():
             'seed': training_args.seed,
             'buffer_size': 0,
             'generator_batch_size': 1,
+            'batch_size': training_args.per_device_eval_batch_size,
+            'num_workers': data_args.preprocessing_num_workers
         }
-        val_dataset = TransactionQADataset(**val_dataset_config).build_dataset()
-
-        val_dataloader = DataLoader(val_dataset,
-                                    batch_size=training_args.per_device_eval_batch_size,
-                                    num_workers=data_args.preprocessing_num_workers,
-                                    collate_fn=TransactionQADataset.collate_fn,
-                                    )
     else:
         val_dataset_config = None
 
@@ -487,7 +475,7 @@ def main():
         logger.error("There is nothing to do. Please pass `do_train` and/or `do_eval`.")
         return 1
 
-    # datamodule = TransactionQADataModule(train_dataset_config, val_dataset_config)
+    datamodule = TransactionQADataModule(train_dataset_config, val_dataset_config)
 
     # Training & Callbacks
     wb_logger = WandbLogger(
@@ -538,8 +526,8 @@ def main():
         accumulate_grad_batches=training_args.gradient_accumulation_steps,
         logger=wb_logger,  # [tb_logger, wb_logger],
         callbacks=[checkpoint_callback, lr_monitor_callback])
-    trainer.fit(model=model, train_dataloaders=train_dataloader, val_dataloaders=val_dataloader)
-#     datamodule=datamodule
+    trainer.fit(model=model, datamodule=datamodule)
+#
 
 
 if __name__ == '__main__':

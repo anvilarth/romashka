@@ -74,7 +74,7 @@ class EncoderRetrievalModel(EncoderSimpleModel):
         self._create_losses()
 
         # Additionally re-assign embeddings
-        # self._set_language_model_embedding_func()
+        self._set_language_model_embedding_func()
 
         # Check if language model is frozen, optionally freeze
         self._logger.info(f"Check language model's parameters to be frozen...")
@@ -106,7 +106,7 @@ class EncoderRetrievalModel(EncoderSimpleModel):
         self._create_retrieval_parameters()
 
         # Additionally call to re-init embedding function reference to resized (maybe) embeddings
-        # self._resize_text_embeddings()
+        self._resize_text_embeddings()
 
         # Create projection layers from LM output hidden states to shared dim for loss calculation
         self._create_projection_layers()

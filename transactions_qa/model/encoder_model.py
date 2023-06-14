@@ -89,10 +89,10 @@ class EncoderSimpleModel(nn.Module):
         self._configure_tokenizer()
 
         # In case any of tasks extends initial tokenizer vocab with additional tokens
-        # self._resize_text_embeddings()
+        self._resize_text_embeddings()
 
         # Set embedding func
-        # self._set_language_model_embedding_func()
+        self._set_language_model_embedding_func()
 
         # Freezing some weights
         if self.do_freeze_tm:
@@ -107,12 +107,12 @@ class EncoderSimpleModel(nn.Module):
             for param in self.language_model.parameters():
                 param.requires_grad = False
 
-        # if self.do_freeze_lm_embeddings:
-        #     self._logger.info(f"Freezing language model's embeddings...")
-        #     self.language_model_tokens_embedding_func.requires_grad = False
-        # else:
-        #     self._logger.info(f"Unfreezing (if frozen) language model's embeddings...")
-        #     self.language_model_tokens_embedding_func.requires_grad = True
+        if self.do_freeze_lm_embeddings:
+            self._logger.info(f"Freezing language model's embeddings...")
+            self.language_model_tokens_embedding_func.requires_grad = False
+        else:
+            self._logger.info(f"Unfreezing (if frozen) language model's embeddings...")
+            self.language_model_tokens_embedding_func.requires_grad = True
 
         if self.do_freeze_connector:
             self.connector.eval()
