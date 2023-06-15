@@ -80,6 +80,8 @@ class PredDefaultTaskBinary(CategoricalTaskAbstract):
         super().__post_init__()
 
         self.update_feature_index()
+        print(f"\nTask `{self.task_name}` has\n\tTarget feature type: `{self.target_feature_type}` "
+              f"\n\tTarget feature index: `{self.target_feature_index}`")
 
         if self.tokenizer is None:
             raise AttributeError("This task requires tokenizer to be set!")

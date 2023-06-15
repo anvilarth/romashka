@@ -221,9 +221,9 @@ def main():
         "pretrained_model_name_or_path": model_args.language_model_name_or_path,
         "config": config
     }
-    if training_args.do_8bit:
-        model_loading_kwargs['load_in_8bit'] = training_args.do_8bit
-        model_loading_kwargs['device_map'] = "auto"
+    # if training_args.do_8bit:
+    #     model_loading_kwargs['load_in_8bit'] = training_args.do_8bit
+    #     model_loading_kwargs['device_map'] = "auto"
     if model_args.language_model_type == "encoder-decoder":
         lm_model = AutoModelForSeq2SeqLM.from_pretrained(**model_loading_kwargs)
     else:
@@ -434,7 +434,7 @@ def main():
     )
     if training_args.do_8bit:
         # prepare int-8 model for training
-        lm_model = prepare_model_for_int8_training(lm_model)
+        lm_model = prepare_model_for_int8_training(lm_model, output_embedding_layer_name="lm_headddd")
 
     # add LoRA adaptor
     lm_model = get_peft_model(lm_model, lora_config)
@@ -518,7 +518,8 @@ def main():
         max_epochs=training_args.max_epochs,
         gpus=len(available_gpus),
         auto_select_gpus=True,
-        log_every_n_steps=100,
+        # strategy="ddp",
+        log_every_n_steps=10,
         reload_dataloaders_every_n_epochs=1,
         precision=training_args.precision,
         gradient_clip_val=training_args.gradient_clip_val,
@@ -526,8 +527,10 @@ def main():
         accumulate_grad_batches=training_args.gradient_accumulation_steps,
         logger=wb_logger,  # [tb_logger, wb_logger],
         callbacks=[checkpoint_callback, lr_monitor_callback])
+
     trainer.fit(model=model, datamodule=datamodule)
-#
+#     train_dataloaders=train_dataloader, val_dataloaders=val_dataloader
+#     datamodule=datamodule
 
 
 if __name__ == '__main__':

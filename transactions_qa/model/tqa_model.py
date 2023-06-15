@@ -11,6 +11,8 @@ import pytorch_lightning as pl
 from pytorch_lightning.utilities import rank_zero_info
 from pytorch_lightning.loggers import WandbLogger
 
+import bitsandbytes as bnb
+
 from romashka.transactions_qa.model.generation_utils import AnsweredQACriteria
 from romashka.transactions_qa.tasks.task_abstract import AbstractTask
 from romashka.transactions_qa.tasks.task_token_updater import collect_task_specific_tokens
@@ -26,6 +28,7 @@ class TransactionQAModel(pl.LightningModule):
                  tasks: List[AbstractTask],
                  learning_rate: Optional[float] = 5e-5,
                  scheduler_type: Optional[Union[transformers.SchedulerType, str]] = "linear",
+                 use_8bit_optim: Optional[bool] = False,
                  adam_beta1: Optional[float] = 0.9,
                  adam_beta2: Optional[float] = 0.999,
                  adam_epsilon: Optional[float] = 1e-8,
@@ -49,6 +52,7 @@ class TransactionQAModel(pl.LightningModule):
         self.training_steps: int = training_steps
         self.base_learning_rate = learning_rate
         self.scheduler_type = scheduler_type
+        self.use_8bit_optim = use_8bit_optim
         self.adam_beta1: float = adam_beta1
         self.adam_beta2: float = adam_beta2
         self.adam_epsilon = adam_epsilon
@@ -83,9 +87,17 @@ class TransactionQAModel(pl.LightningModule):
             f"The model will start training with only {len(trainable_parameters)} "
             f"trainable parameters out of {len(parameters)}."
         )
-        optimizer = torch.optim.AdamW(self.parameters(),
-                                      betas=(self.adam_beta1, self.adam_beta2),
-                                      lr=self.base_learning_rate)
+        if self.use_8bit_optim:
+            optimizer = bnb.optim.Adam8bit(self.parameters(),
+                                           lr=self.base_learning_rate,
+                                           betas=(self.adam_beta1, self.adam_beta2))
+            rank_zero_info(
+                f"The model will train with 8-bit AdamW optimizer."
+            )
+        else:
+            optimizer = torch.optim.AdamW(self.parameters(),
+                                          betas=(self.adam_beta1, self.adam_beta2),
+                                          lr=self.base_learning_rate)
         # Select scheduler
         scheduler = transformers.get_scheduler(name=self.scheduler_type,
                                                optimizer=optimizer,

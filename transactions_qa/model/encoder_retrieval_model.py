@@ -73,15 +73,15 @@ class EncoderRetrievalModel(EncoderSimpleModel):
         self._create_trainable_parameters()
         self._create_losses()
 
-        # Additionally re-assign embeddings
-        self._set_language_model_embedding_func()
-
         # Check if language model is frozen, optionally freeze
         self._logger.info(f"Check language model's parameters to be frozen...")
         for param_name, param in self.language_model.named_parameters():
             if param.requires_grad:
                 self._logger.warning(f"Parameter `{param_name}` of LM requires grad, freezing..")
                 param.requires_grad = False
+
+        # Additionally re-assign embeddings
+        self._set_language_model_embedding_func()
 
         # Check total trainable parameters
         parameters = list(self.parameters())
@@ -245,6 +245,7 @@ class EncoderRetrievalModel(EncoderSimpleModel):
 
         # Use CE for RET tokens generation loss
         self.ret_CE_loss_fn = torch.nn.CrossEntropyLoss(reduction='none', ignore_index=-100)
+
         # Use contrastive loss for embeddings comparison
         self.ret_NCE_loss_fn = InfoNCE()
 
