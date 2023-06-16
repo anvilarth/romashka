@@ -150,6 +150,8 @@ def batches_balanced_generator(list_of_paths: List[str],
                     for target_name, cnt in target_to_counts.items():
                         bucket_balance_max = cnt if cnt > bucket_balance_max else bucket_balance_max
 
+                bucket_balance_max = bucket_balance_max * 0.5   # as hot-fix to not to oversample tooo much
+
                 # Collect samples per target class
                 samples_by_targets = dict()
                 for target_name in unique:

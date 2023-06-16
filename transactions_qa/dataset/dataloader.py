@@ -4,29 +4,49 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from typing import Optional
 
-from .data_generator import batches_generator
+
 from torch.nn.utils.rnn import pad_sequence
 from datasets import IterableDataset as HFIterableDataset
 import pytorch_lightning as pl
 
 
+from .data_generator import batches_generator, batches_balanced_generator
+from romashka.logging_handler import get_logger
+
 class TransactionQADataset:
 
-    def __init__(self, dataset, generator_batch_size: Optional[int] = 1,
+    def __init__(self, dataset,
+                 generator_batch_size: Optional[int] = 1,
                  min_seq_len: Optional[int] = 50, max_seq_len: Optional[int] = 150,
-                 seed: Optional[int] = 42, buffer_size: Optional[int] = 10_000,
-                 is_train: Optional[bool] = True, shuffle: Optional[bool] = False, *args, **kwargs):
+                 seed: Optional[int] = 42,
+                 buffer_size: Optional[int] = 10_000,
+                 to_balance: Optional[bool] = False,
+                 is_train: Optional[bool] = True,
+                 shuffle: Optional[bool] = False, *args, **kwargs):
         super().__init__()
         self.dataset = dataset
         self.min_seq_len = min_seq_len
         self.max_seq_len = max_seq_len
         self.is_train = is_train
         self.seed = seed
+        self.to_balance = to_balance
         self.generator_batch_size = generator_batch_size
         self.shuffle = shuffle
         self.buffer_size = buffer_size
+        self.logger = get_logger(
+            name="dataloader"
+        )
 
     def create_generator(self, dataset):
+        if self.to_balance:
+            self.logger.info(f"Running with balanced generator...")
+            return batches_balanced_generator(
+                dataset,
+                batch_size=self.generator_batch_size,
+                min_seq_len=self.min_seq_len, max_seq_len=self.max_seq_len,
+                is_train=self.is_train
+            )
+        self.logger.info(f"Running with sequential generator...")
         return batches_generator(dataset,
                                  batch_size=self.generator_batch_size,
                                  min_seq_len=self.min_seq_len, max_seq_len=self.max_seq_len,
