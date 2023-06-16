@@ -40,6 +40,8 @@ from romashka.transactions_qa.tasks.predictive_amnt_tasks import (PredNumericAmo
                                                                   PredNumericAmountTaskOpenEnded)
 from romashka.transactions_qa.tasks.predictive_mcc_tasks import (PredMCCCodeTaskBinary,
                                                                  PredMCCCodeTaskOpenEnded)
+from romashka.transactions_qa.tasks.predictive_mcc_category_tasks import (PredMCCCategoryTaskBinary,
+                                                                          PredMCCCategoryTaskOpenEnded)
 from romashka.transactions_qa.tasks.predictive_default_task import PredDefaultTaskBinary
                                                                
 from romashka.transactions_qa.tasks.default_task import DefaultTask
@@ -91,14 +93,19 @@ AUTO_TASKS = [
         ("least_frequent_day_of_week_open-ended", LeastFrequentDayOfWeekTaskOpenEnded),
         ("occurrence_day_of_week_binary", OccurenceDayOfWeekTaskBinary),
         # Predictive
+        # Amount
         ("pred_numeric_amount_binary", PredNumericAmountTaskBinary),
         ("pred_over_threshold_amount_binary", PredOverThresholdAmountTaskBinary),
         ("pred_under_threshold_amount_binary", PredUnderThresholdAmountTaskBinary),
         ("pred_numeric_amount_open-ended", PredNumericAmountTaskOpenEnded),
         ("pred_binned_amount_open-ended", PredBinnedAmountTaskOpenEnded),
-
+        # MCC code
         ("pred_mcc_code_binary", PredMCCCodeTaskBinary),
         ("pred_mcc_code_open-ended", PredMCCCodeTaskOpenEnded),
+        # MCC category
+        ("pred_mcc_category_binary", PredMCCCategoryTaskBinary),
+        ("pred_mcc_category_open-ended", PredMCCCategoryTaskOpenEnded),
+        # Default
         ("pred_default_binary", PredDefaultTaskBinary)
     ]
 AUTO_TASKS = OrderedDict(AUTO_TASKS)

@@ -5,7 +5,7 @@ import json
 import pickle
 import random
 import numpy as np
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Union
 
 import torch
 import torch.nn as nn
@@ -289,3 +289,44 @@ def get_buckets_info(feature_name: str,
     except Exception as e:
         print(f"Error occurred during buckets loading:\n{e}")
         return buckets
+
+
+def maybe_autocast(args: Union[List[torch.Tensor], torch.Tensor],
+                   dtype: Optional[torch.dtype] = torch.float16):
+    """
+    Casts input arguments to specified dtype.
+    Args:
+        args: a single arg or a list of arguments to cast;
+        dtype: a dtype for casting;
+
+    Returns:
+         - casted arguments, if it is possible (on GPY & floating type);
+         - initial arguments otherwise.
+    """
+    # if on cpu, don't use autocast
+    # if on gpu, use autocast with dtype if provided, otherwise use torch.float16
+    if isinstance(args, list):
+        enable_autocast = all([torch.is_tensor(arg) and (arg.device != torch.device("cpu")) for arg in args])
+    else:
+        enable_autocast = torch.is_tensor(args) and (args.device != torch.device("cpu"))
+
+    if enable_autocast:
+
+        if isinstance(args, list):
+            casted_args = []
+            for arg in args:
+                if torch.is_tensor(arg) and torch.is_floating_point(arg):
+                    casted_args.append(arg.to(dtype))
+                else:
+                    casted_args.append(arg)
+        else:
+            casted_args = args
+            if torch.is_tensor(args) and torch.is_floating_point(args):
+                casted_args = args.to(dtype)
+
+        return casted_args
+
+    else:
+        return args
+
+

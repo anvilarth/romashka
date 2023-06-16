@@ -6,30 +6,28 @@ from dataclasses import dataclass
 from typing import (Dict, Tuple, List,
                     Any, Optional, Union)
 
-from torchmetrics.text.rouge import ROUGEScore
 from torchmetrics import AUROC
 from torchmetrics.classification import (BinaryAccuracy, BinaryF1Score, F1Score, Accuracy)
 from romashka.transactions_qa.tasks.categorical_task_abstract import CategoricalTaskAbstract
 
 from romashka.transactions_qa.model.generation_utils import isin
-from romashka.transactions_qa.evaluation.eval_processings_utils import map_prediction_to_answer
+from romashka.transactions_qa.evaluation.eval_processings_utils import (map_prediction_to_answer, transform_labels)
 
 
 @dataclass
-class PredMCCCodeTaskBinary(CategoricalTaskAbstract):
+class PredMCCCategoryTaskBinary(CategoricalTaskAbstract):
 
     def __post_init__(self):
-        self.task_name = "pred_mcc_code_binary"
-        self.target_feature_name = 'mcc'  # 108 unique values
+        self.task_name = "pred_mcc_category_binary"
+        self.target_feature_name = 'mcc_category'  # 28 unique values
 
         self.task_special_token = None
-        self.task_specific_special_token = "[pred_MCC_code_binary]"
+        self.task_specific_special_token = "[pred_MCC_category_binary]"
 
-        self.num_classes = 108
+        self.num_classes = 28
         self.is_text_task = False
         self.is_binary_task = True
         self.is_open_ended_task = False
-
         self.metrics = {
             "auc": AUROC(task='binary'),
             "accuracy": BinaryAccuracy(),
@@ -42,23 +40,23 @@ class PredMCCCodeTaskBinary(CategoricalTaskAbstract):
             "The client's transaction history is given as a context:"
         ]
         self.ending_prompts = [
-            ". Will the the MCC code of the next transaction be equal to %s? Yes or No?",
-            ". Will the upcoming transaction MCC code be equal to %s? Choose one: Yes or No?",
-            ". Is it true that the MCC code of next transaction will be equal to %s? Yes or No?",
-            ". Define whether the following statement is true: in next transaction MCC code will be equal to %s. "
+            ". Will the the MCC category of the next transaction be equal to %s? Yes or No?",
+            ". Will the upcoming transaction MCC category be equal to %s? Choose one: Yes or No?",
+            ". Is it true that the MCC category of next transaction will be equal to %s? Yes or No?",
+            ". Define whether the following statement is true: in next transaction MCC category will be equal to %s. "
             "Choose: Yes or No?",
-            ". Is it true or false: the MCC code of the upcoming transaction will be %s? Yes or No?",
-            ". Define whether the following statement is correct: in the next transaction MCC code will be %s. "
+            ". Is it true or false: the MCC category of the upcoming transaction will be %s? Yes or No?",
+            ". Define whether the following statement is correct: in the next transaction MCC category will be %s. "
             "Choose: Yes or No?",
-            ". Identify if the statement that: the MCC code of the next transaction will be equal to %s, "
+            ". Identify if the statement that: the MCC category of the next transaction will be equal to %s, "
             "is correct? Yes or No?",
-            ". Determine whether the following statement is true: %s will be the MCC code of the upcoming transaction"
+            ". Determine whether the following statement is true: %s will be the MCC category of the upcoming transaction"
             ". Choose: Yes or No?",
-            ". Is the statement correct: the MCC code of the next transaction will be %s. "
+            ". Is the statement correct: the MCC category of the next transaction will be %s. "
             "Answer with one of the following options: Yes or No?",
-            ". Answer the question whether or not the following statement is true: the MCC code of the next "
+            ". Answer the question whether or not the following statement is true: the MCC category of the next "
             "transaction will be equal to %s. Yes or No?",
-            ". Answer the question: will the MCC code of the upcoming transaction be equal to %s? "
+            ". Answer the question: will the MCC category of the upcoming transaction be equal to %s? "
             "Choose only one of the following options: Yes or No?"
         ]
 
@@ -70,6 +68,7 @@ class PredMCCCodeTaskBinary(CategoricalTaskAbstract):
         self.binary_answer_options: Dict[str, str] = {"positive": "Yes", "negative": "No"}
         self.answers2tokens = {answer: self.tokenizer.encode(answer_word, add_special_tokens=False)[0]
                                for answer, answer_word in self.binary_answer_options.items()}
+
         self.answer_template = ""  # left empty for a first time
         self.add_tokens_to_tokenizer = True
 
@@ -220,7 +219,7 @@ class PredMCCCodeTaskBinary(CategoricalTaskAbstract):
 
         # ground truth target (int/str), mask (bool)
         for target, pos_neg_mask in zip(target_feature_value_batch,
-                                                       pos_neg_target_mask):
+                                        pos_neg_target_mask):
             if pos_neg_mask:
                 # positive
                 question_target_batch.append(question_end % target)
@@ -297,7 +296,7 @@ class PredMCCCodeTaskBinary(CategoricalTaskAbstract):
         """
         metrics = {}
         try:
-            targets, preds = self.process_outputs(outputs, answers)
+            targets, preds = self.process_outputs(outputs, answers, **kwargs)
 
             if 'auc' in task_metrics:
                 task_metrics['auc'](preds, targets)
@@ -318,21 +317,22 @@ class PredMCCCodeTaskBinary(CategoricalTaskAbstract):
 
 
 @dataclass
-class PredMCCCodeTaskOpenEnded(CategoricalTaskAbstract):
+class PredMCCCategoryTaskOpenEnded(CategoricalTaskAbstract):
 
     def __post_init__(self):
-        self.task_name = "pred_mcc_code_open-ended"
-        self.target_feature_name = 'mcc'  # 108 unique values
+        self.task_name = "pred_mcc_category_open-ended"
+        self.target_feature_name = 'mcc_category'  # 28 unique values
 
         self.task_special_token = None
-        self.task_specific_special_token = "[pred_MCC_code_openended]"
+        self.task_specific_special_token = "[pred_MCC_category_openended]"
 
-        self.num_classes = 108
+        self.num_classes = 28
         self.is_text_task = False
         self.is_binary_task = False
         self.is_open_ended_task = True
         self.metrics = torch.nn.ModuleDict({
-            "rouge": ROUGEScore()
+            "accuracy": Accuracy(task="multiclass", num_classes=self.num_classes),
+            "f1": F1Score(task="multiclass", num_classes=self.num_classes)
         })
 
         self.starting_prompts = [
@@ -341,17 +341,17 @@ class PredMCCCodeTaskOpenEnded(CategoricalTaskAbstract):
             "The client's transaction history is given as a context:"
         ]
         self.ending_prompts = [
-            ". What is the MCC code of the next transaction?",
-            ". What is the MCC code of the next transaction based on the provided transaction history?",
-            ". Choose the upcoming transaction MCC code.",
-            ". Select the MCC code of the next transaction.",
-            ". Find out what is the MCC code of upcoming transaction.",
-            ". Can you please answer the question: what is the MCC code of the next transaction?",
-            ". Determine the MCC code of the next transaction.",
-            ". Select the MCC code of the upcoming transaction based on provided history.",
-            ". Choose the MCC code of the next transaction based on provided history.",
-            ". Can you find out of which MCC code will be in next transaction?",
-            ". Answer the question: what is the MCC code of the upcoming transaction?"
+            ". What is the MCC category of the next transaction?",
+            ". What is the MCC category of the next transaction based on the provided transaction history?",
+            ". Choose the upcoming transaction MCC category.",
+            ". Select the MCC category of the next transaction.",
+            ". Find out what is the MCC category of upcoming transaction.",
+            ". Can you please answer the question: what is the MCC category of the next transaction?",
+            ". Determine the MCC category of the next transaction.",
+            ". Select the MCC category of the upcoming transaction based on provided history.",
+            ". Choose the MCC category of the next transaction based on provided history.",
+            ". Can you find out of which MCC category will be in next transaction?",
+            ". Answer the question: what is the MCC category of the upcoming transaction?"
         ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,
@@ -500,8 +500,43 @@ class PredMCCCodeTaskOpenEnded(CategoricalTaskAbstract):
 
         return question_target_batch, target_batch
 
+    def process_outputs(self, outputs: Any, answers: torch.Tensor, as_strings: Optional[bool] = False) -> Any:
+        """
+        Processing target text and output text to get the predictions
+        """
+        # Get predictions as list of strings
+        default_value = 0
+        predictions_decoded = self.tokenizer.batch_decode(outputs['logits'].argmax(2),
+                                                          skip_special_tokens=True)
+        batch_answers_decoded = self.tokenizer.batch_decode(outputs['labels'],
+                                                            skip_special_tokens=True)
+        # Clean predicted texts and map them to categorical labels
+        predictions_clean = [transform_labels(pred,
+                                              do_make_numeric=True,
+                                              do_clean_text=False,
+                                              default_value=default_value)
+                             for pred in predictions_decoded]
+
+        batch_answers_decoded = [transform_labels(answer,
+                                                  do_make_numeric=True,
+                                                  do_clean_text=False,
+                                                  default_value=default_value)
+                                 for answer in batch_answers_decoded]
+
+        # Map to available labels
+        classes = [int(answer) for answer in self.answers_options]
+        predictions_clean = [pred if pred in classes else default_value
+                             for pred in predictions_clean]
+
+        # To Tensors
+        targets = torch.LongTensor(batch_answers_decoded)
+        predictions = torch.LongTensor(predictions_clean)
+
+        return targets, predictions
+
     def calculate_metrics(self, outputs: Any, answers: torch.Tensor,
-                          task_metrics: Union[torch.nn.ModuleDict, Dict[str, Any]], **kwargs) -> dict:
+                          task_metrics: Union[torch.nn.ModuleDict, Dict[str, Any]],
+                          **kwargs) -> dict:
         """
         Calculate task metrics for a task.
         Args:
@@ -517,4 +552,19 @@ class PredMCCCodeTaskOpenEnded(CategoricalTaskAbstract):
                 key - metric name,
                 value - metric score.
         """
-        return {}
+        metrics = {}
+        try:
+            targets, preds = self.process_outputs(outputs, answers)
+
+            if 'accuracy' in task_metrics:
+                acc = task_metrics['accuracy'](preds, targets)
+                metrics['accuracy'] = task_metrics['accuracy']
+
+            if 'f1' in task_metrics:
+                f1 = task_metrics['f1'](preds, targets)
+                metrics['f1'] = task_metrics['f1']
+
+        except Exception as e:
+            print(f"Error during metrics calculation: {e}")
+
+        return metrics

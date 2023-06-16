@@ -88,12 +88,14 @@ def remove_articles(text: str, lang: Optional[str] = "en"):
         raise Exception('Unknown Language {}'.format(lang))
 
 
-def remove_tailing_characters(text: str) -> str:
-    return re.sub(r'[a-zA-Zа-яА-Я ]*\Z', '', text).strip()
+def remove_tailing_characters(text: str):
+    text = re.sub(r'[^\d]*\Z', '', text).strip()
+    return re.sub(r"[%s]\Z" % re.escape(string.punctuation), "", text).strip()
 
 
-def remove_starting_characters(text: str) -> str:
-    return re.sub(r'\A[a-zA-Zа-яА-Я ]*', '', text).strip()
+def remove_starting_characters(text: str):
+    text = re.sub(r'\A[^\d]*', '', text).strip()
+    return re.sub(r"\A[%s]" % re.escape(string.punctuation), "", text).strip()
 
 
 def white_space_fix(text, lang: Optional[str] = "en") -> str:
@@ -105,8 +107,10 @@ def white_space_fix(text, lang: Optional[str] = "en") -> str:
         raise Exception('Unknown Language {}'.format(lang))
     return ' '.join([t for t in tokens if t.strip() != ''])
 
+
 def lower(text) -> str:
     return text.lower()
+
 
 def normalize_string_answer(s: str,
                             punktuation: Optional[List[str]] = PUNCT,
@@ -122,6 +126,7 @@ def normalize_string_answer(s: str,
         string, after applying normalization rules.
     """
     return white_space_fix(remove_articles(remove_punc(lower(s), punktuation), lang), lang)
+
 
 def normalize_numeric_answer(s,
                              punktuation: Optional[List[str]] = NUMERIC_PUNCT,
@@ -201,4 +206,42 @@ def map_prediction_to_answer(prediction: str,
         for answer in answer_options:
             if prediction == answer:
                 return answer
+    return default_value
+
+
+def transform_labels(label: str,
+                     do_make_numeric: Optional[bool] = False,
+                     do_clean_text: Optional[bool] = False,
+                     default_value: Optional[int] = 0) -> Union[int, str]:
+    """
+    Checks whether it is possible to transform label to integer
+    and return corresponding value (if it is possible).
+    Otherwise, set it as default value (-100).
+    Args:
+        label: a string representation of a label;
+        default_value: a default value to return (-100).
+    Returns:
+        integer label or default value (if label is not a digit or a number).
+    """
+    # To deal with numeric labels
+    if do_make_numeric and isinstance(label, str):
+        label = normalize_numeric_answer(label)
+        if len(label):
+            num_label = convert_to_numeric(label)
+            return num_label if num_label is not None else default_value
+        else:
+            return default_value
+
+    elif isinstance(label, int) or isinstance(label, float):
+        return label
+
+    # To deal with text labels
+    if do_clean_text and isinstance(label, str):
+        label = normalize_string_answer(label)
+        return label
+
+    elif isinstance(label, str):
+        return label
+
+    print(f"Unknown label type: {label}")
     return default_value

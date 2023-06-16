@@ -8,9 +8,9 @@ from typing import (Dict, Tuple, List,
                     Any, Optional, Union)
 
 from torchmetrics import AUROC
-from torchmetrics.classification import BinaryAccuracy
+from torchmetrics.classification import BinaryAccuracy, BinaryF1Score
 from romashka.transactions_qa.tasks.categorical_task_abstract import CategoricalTaskAbstract
-from romashka.transactions_qa.utils import get_buckets_info
+from romashka.transactions_qa.model.generation_utils import isin
 
 from romashka.transactions_qa.evaluation.eval_processings_utils import map_prediction_to_answer
 
@@ -39,7 +39,8 @@ class PredDefaultTaskBinary(CategoricalTaskAbstract):
 
         self.metrics = {
             "auc": AUROC(task='binary'),
-            "accuracy": BinaryAccuracy()
+            "accuracy": BinaryAccuracy(),
+            "f1": BinaryF1Score()
         }
         self.starting_prompts = [
             "This is the client's transaction history:",
@@ -73,6 +74,9 @@ class PredDefaultTaskBinary(CategoricalTaskAbstract):
                                                                    self.ending_prompts)
 
         self.binary_answer_options: Dict[str, str] = {"positive": "Yes", "negative": "No"}
+        self.answers2tokens = {answer: self.tokenizer.encode(answer_word, add_special_tokens=False)[0]
+                               for answer, answer_word in self.binary_answer_options.items()}
+
         self.answer_template: str = " "  # left empty for a first time
         self.add_tokens_to_tokenizer = True
         self.answers_options = [str(i) for i in range(2)]
@@ -208,25 +212,45 @@ class PredDefaultTaskBinary(CategoricalTaskAbstract):
 
         return question_target_batch, target_batch
 
-    def process_outputs(self, outputs: Any, answers: torch.Tensor) -> Any:
+    def process_outputs(self, outputs: Any, answers: torch.Tensor, as_strings: Optional[bool] = False) -> Any:
         """
         Processing target text and output text to get the predictions
         """
         # Get predictions as list of strings
-        predictions_decoded = self.tokenizer.batch_decode(outputs['logits'].argmax(2),
-                                                          skip_special_tokens=True)
-        batch_answers_decoded = self.tokenizer.batch_decode(outputs['labels'],
-                                                            skip_special_tokens=True)
-        # Map to answers
-        predictions_decoded = [map_prediction_to_answer(t.lower(),
-                                                        list(self.binary_answer_options.values()),
-                                                        'no') for t in predictions_decoded]
-        batch_answers_decoded = [map_prediction_to_answer(t.lower(),
-                                                          list(self.binary_answer_options.values()),
-                                                          'no') for t in batch_answers_decoded]
-        target2index_mapping = {'yes': 1, 'no': 0}
-        targets = torch.Tensor([target2index_mapping.get(answer, 0) for answer in batch_answers_decoded])
-        predictions = torch.Tensor([target2index_mapping.get(pred, 0) for pred in predictions_decoded])
+        if as_strings:
+            predictions_decoded = self.tokenizer.batch_decode(outputs['logits'].argmax(2),
+                                                              skip_special_tokens=True)
+            batch_answers_decoded = self.tokenizer.batch_decode(outputs['labels'],
+                                                                skip_special_tokens=True)
+            # Map to answers
+            predictions_decoded = [map_prediction_to_answer(t.lower(),
+                                                            list(self.binary_answer_options.values()),
+                                                            'no') for t in predictions_decoded]
+            batch_answers_decoded = [map_prediction_to_answer(t.lower(),
+                                                              list(self.binary_answer_options.values()),
+                                                              'no') for t in batch_answers_decoded]
+            target2index_mapping = {'yes': 1, 'no': 0}
+            targets = torch.Tensor([target2index_mapping.get(answer, 0) for answer in batch_answers_decoded])
+            predictions = torch.Tensor([target2index_mapping.get(pred, 0) for pred in predictions_decoded])
+
+        else:
+
+            # Get predictions as probabilities of binary answer
+            probabilities_over_vocab = torch.nn.functional.softmax(outputs['logits'], dim=2)
+
+            # answer structure: [..., answer_token, ..., </s>]
+            targets_tokens = answers[isin(answers, torch.LongTensor(list(self.answers2tokens.values())))]
+            targets = (targets_tokens == self.answers2tokens['positive']).long()
+
+            answer_tokens_indexes = torch.nonzero(isin(outputs['logits'].argmax(2),
+                                                       torch.LongTensor(list(self.answers2tokens.values()))),
+                                                  as_tuple=True)
+
+            preds_probs, preds = torch.max(probabilities_over_vocab, -1)
+            positive_probs = probabilities_over_vocab[answer_tokens_indexes][:, self.answers2tokens['positive']]
+            negative_probs = probabilities_over_vocab[answer_tokens_indexes][:, self.answers2tokens['negative']]
+            pos_neg_probs = torch.cat([positive_probs.unsqueeze(-1), negative_probs.unsqueeze(-1)], 1)
+            predictions = torch.sigmoid(pos_neg_probs[:, 0] - pos_neg_probs[:, 1])
 
         return targets, predictions
 
@@ -259,6 +283,10 @@ class PredDefaultTaskBinary(CategoricalTaskAbstract):
             if 'accuracy' in task_metrics:
                 task_metrics['accuracy'](preds, targets)
                 metrics['accuracy'] = task_metrics['accuracy']
+
+            if 'f1' in task_metrics:
+                task_metrics['f1'](preds, targets)
+                metrics['f1'] = task_metrics['f1']
 
         except Exception as e:
             print(f"Error during metrics calculation: {e}")

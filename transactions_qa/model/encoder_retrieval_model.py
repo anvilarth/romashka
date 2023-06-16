@@ -9,6 +9,7 @@ import transformers
 
 from romashka.transactions_qa.model.encoder_model import EncoderSimpleModel
 from romashka.transactions_qa.tasks.task_abstract import AbstractTask
+from romashka.transactions_qa.utils import maybe_autocast
 from romashka.transactions_qa.losses.infonce_loss import InfoNCE
 
 
@@ -377,9 +378,6 @@ class EncoderRetrievalModel(EncoderSimpleModel):
 
         else:
             # Check if transactions history embedding size was reduced, then we cannot mask it
-            # print(f"transactions_embeddings: {transactions_embeddings.size()}")
-            # print(f"transactions_embeddings_mask: {transactions_embeddings_mask.size()}")
-            # print(f"batch['mask']: {batch['mask'].size()}")
             if transactions_embeddings.size(1) == transactions_embeddings_mask.size(-1):
                 encoder_input_mask = torch.cat(
                     [question_start_attention_mask,
@@ -578,7 +576,7 @@ class EncoderRetrievalModel(EncoderSimpleModel):
                                              :].unsqueeze(0))
             batch_ret_hidd_states = torch.cat(batch_ret_hidd_states, dim=0)
             ret_hidden_states.append(
-                projection_layer(batch_ret_hidd_states)
+                projection_layer(maybe_autocast(batch_ret_hidd_states, projection_layer[0].weight.dtype))
             )  # (bs, trns_history_seq_len, 768)
 
         # 2) Add hidden states together
