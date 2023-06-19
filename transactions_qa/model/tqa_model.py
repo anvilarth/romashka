@@ -35,6 +35,7 @@ class TransactionQAModel(pl.LightningModule):
                  warmup_steps: Optional[int] = 100,
                  training_steps: Optional[int] = 10_000,
                  verbose_for_debug: Optional[bool] = False,
+                 return_logits: Optional[bool] = False,
                  **additional_kwargs
                 ):
         super().__init__()
@@ -61,6 +62,7 @@ class TransactionQAModel(pl.LightningModule):
         self._is_encoder_decoder: bool = False
 
         self._verbose_for_debug: bool = verbose_for_debug
+        self._return_logits: bool = return_logits
 
         self.save_hyperparameters(ignore=['tasks', '_logger', 'columns', 'model',
                                           'log_eval_predictions_table', 'log_eval_steps_counter'])
@@ -338,7 +340,8 @@ class TransactionQAModel(pl.LightningModule):
 
         return loss
 
-    def predict_step(self, batch: Any, batch_idx: int,
+    def predict_step(self,
+                     batch: Any, batch_idx: int,
                      dataloader_idx: int = 0,
                      verbose: Optional[bool] = False) -> Any:
         """
@@ -419,9 +422,16 @@ class TransactionQAModel(pl.LightningModule):
                     zip(predictions_decoded, batch_answers_decoded, batch_questions_decoded)):
                 print(f"\t#{i} {question}:\n\tpredicted: {pred},\n\tanswer: {answer}")
 
+        pred_output = dict(
+            predictions=predictions_decoded,
+            answers=batch_answers_decoded,
+            questions=batch_questions_decoded,
+            batch_idx=batch_idx
+        )
+
         # Calc metrics
-        metrics_scores = {}
         if calculate_metrics:
+            metrics_scores = {}
             for metric_name, metric in task.metrics.items():
                 try:
                     metrics_scores[metric_name] = metric(predictions_decoded,
@@ -429,13 +439,12 @@ class TransactionQAModel(pl.LightningModule):
                 except Exception as e:
                     self._logger.error(f"error occurred during task metric `{metric_name}` calculation:\n{e}")
 
-        return dict(
-            predictions=predictions_decoded,
-            answers=batch_answers_decoded,
-            questions=batch_questions_decoded,
-            metrics=metrics_scores,
-            batch_idx=batch_idx
-        )
+            pred_output['metrics'] = metrics_scores
+
+        if self._return_logits:
+            pred_output['logits'] = outputs['logits']
+
+        return pred_output
 
     def _predict_with_generate_step_task(self, batch: Any, task_idx: int,
                                          calculate_metrics: Optional[bool] = False,

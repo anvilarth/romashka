@@ -13,6 +13,7 @@ import pytorch_lightning as pl
 from .data_generator import batches_generator, batches_balanced_generator
 from romashka.logging_handler import get_logger
 
+
 class TransactionQADataset:
 
     def __init__(self, dataset,
