@@ -70,7 +70,15 @@ class ModelArguments:
         default="main",
         metadata={"help": "The specific model version to use (can be a branch name, tag name or commit id)."},
     )
-    use_numerical: bool = field(
+    use_numerical_input: bool = field(
+        default=False,
+        metadata={"help": "Whether predict tokens using numerical module or not"},
+    )
+    use_numerical_output: bool = field(
+        default=False,
+        metadata={"help": "Whether predict tokens using numerical module or not"},
+    )
+    number2text: bool = field(
         default=False,
         metadata={"help": "Whether predict tokens using numerical module or not"},
     )
@@ -291,6 +299,14 @@ class TasksArguments:
     tasks_kwargs: Optional[List[Dict[str, Any]]] = field(
         default_factory=list,
         metadata={"help": "A list of dictionary-like arguments for tasks creation."}
+    )
+    floating_threshold: Optional[bool] = field(
+        default_factory=False,
+        metadata={"help": "Do we use different input values for binary task"}
+    )
+    answer2text: Optional[bool] = field(
+        default_factory=False,
+        metadata={"help": "Whether to transform numerical answer to words"}
     )
 
     def __post_init__(self):

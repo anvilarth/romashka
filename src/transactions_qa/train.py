@@ -199,7 +199,9 @@ def main():
         task_kwargs = tasks_kwargs[task_i] if task_i < len(tasks_kwargs) else {}
         if "tokenizer" not in task_kwargs:
             task_kwargs['tokenizer'] = tokenizer
-        task_kwargs['use_numerical'] = model_args.use_numerical
+        task_kwargs['floating_threshold'] = tasks_args.floating_threshold
+        task_kwargs['use_numerical_output'] = model_args.use_numerical_output
+        task_kwargs['answer2text'] = tasks_args.answer2text
         task = AutoTask.get(task_name=task_name, **task_kwargs)
         tasks.append(task)
     logger.info(f"Created {len(tasks)} tasks.")
@@ -271,7 +273,9 @@ def main():
         "scale_parameter": training_args.scale_parameter,
         "optimizer_name": training_args.optimizer_name,
         "scheduler_name": training_args.scheduler_name,
-        "use_numerical": model_args.use_numerical,
+        "use_numerical_input": model_args.use_numerical_input,
+        "use_numerical_output": model_args.use_numerical_output,
+        "number2text": model_args.number2text,
         "num_head": model_args.num_head,
         "numerical_context": model_args.numerical_context,
     }

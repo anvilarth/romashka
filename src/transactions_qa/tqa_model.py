@@ -1,4 +1,7 @@
+import re
 import random
+import inflect
+
 from tkinter import TRUE
 import numpy as np
 from typing import List, Optional, Tuple, Any, Dict, Union
@@ -18,6 +21,7 @@ from src.utils.logging_handler import get_logger
 from src.transactions_qa.utils import (get_split_indices, prepare_splitted_batch, collate_batch_dict, get_exponent_number, get_mantissa_number)
 from src.transactions_qa.layers.numerical_head import LinearHead, MLPHead
 from src.models.components.perceiver_pytorch.perceiver_model import Attention
+from src.models.components.embedding import NumEmbedding
 
 from transformers import Adafactor, GenerationConfig
 from transformers.optimization import AdafactorSchedule
@@ -44,10 +48,13 @@ class TransactionQAModel(pl.LightningModule):
                  scale_parameter: Optional[bool] = False,
                  warmup_steps: Optional[int] = 100,
                  training_steps: Optional[int] = 10_000,
-                 use_numerical: Optional[bool] = False,
+                 use_numerical_input: Optional[bool] = False,
+                 use_numerical_output: Optional[bool] = False,
                  verbose_for_debug: Optional[bool] = False,
                  num_head: Optional[str] = 'linear',
-                 numerical_context: Optional[bool] = False
+                 numerical_context: Optional[str] = 'context',
+                 mantissa_weight: Optional[float] = 1.0,
+                 number2text: Optional[bool] = False,
                  ):
         super().__init__()
         self._logger = get_logger(
@@ -64,14 +71,24 @@ class TransactionQAModel(pl.LightningModule):
             autoregressive_model=self.language_model) \
             if connector is None else connector
 
-        self.use_numerical = use_numerical
+        self.use_numerical_input = use_numerical_input
+        self.use_numerical_output = use_numerical_output
         self.numerical_context = numerical_context
+        self.mantissa_weight = mantissa_weight
         self.mantissa_loss = nn.L1Loss()
         self.exponent_loss = nn.CrossEntropyLoss()
+        self.number_engine = inflect.engine()
+        self.numbers2text = number2text
 
         dim = self.connector.get_input_size()
 
-        if numerical_context:
+        self.num_embedding = None
+        if use_numerical_input:
+            self.input_num_token = self.tokenizer('<extra_id_0>', add_special_tokens=False, return_tensors='pt').input_ids.item()
+            buckets = torch.linspace(1, 10, steps=20)
+            self.num_embedding = NumEmbedding(dim, buckets)
+
+        if use_numerical_output:
             self.num_context = Attention(dim, dim, 1, dim)
             self.agg_token = nn.Parameter(torch.randn(1, 1, dim))
         else:
@@ -261,6 +278,22 @@ class TransactionQAModel(pl.LightningModule):
         question_start_tokens, question_start_tokens_mask = question_start_encoded.input_ids, question_start_encoded.attention_mask
         ### Tokenizing question end
 
+        num_values = None
+
+        if self.numbers2text:
+            batch['question_end_string'] = [re.sub("\d+\.\d+", lambda x: self.number_engine.number_to_words(x.string[x.start():x.end()], decimal='dot'), string) for string in batch['question_end_string']]
+       
+        elif self.use_numerical_input:
+            detected_nums = [re.findall("\d+\.\d+", question) for question in batch['question_end_string']]
+            batch['question_end_string'] = [re.sub("\d+\.\d+", '<extra_id_0>', string) for string in batch['question_end_string']]
+
+            values = []
+            for value_list in detected_nums:
+                for value in value_list:
+                    values.append(float(value))
+
+            num_values = torch.tensor(values, device=device)
+
         question_target_encoded_batch = self.tokenizer(batch['question_end_string'],
                                                     padding=True,
                                                     return_tensors='pt',
@@ -307,14 +340,28 @@ class TransactionQAModel(pl.LightningModule):
             encoder_input_mask=encoder_input_mask,
             eos_tokens_mask=eos_mask,
             eos_tokens=eos_tokens,
+            num_values=num_values,
         )
         
     def construct_lm_input(self,qa_batch, batch):
         question_start_embeddings_batch = self.language_model.encoder.embed_tokens(
             qa_batch['question_start_tokens'])  # call for (embed_tokens): Embedding(32128, 512)
         # question_end_tokens: torch.Size([batch_size, len(max_question_end_tokens)])
+
         question_end_embeddings_batch = self.language_model.encoder.embed_tokens(
-            qa_batch['question_end_tokens'])  # call for (embed_tokens): Embedding(32128, 512)
+                qa_batch['question_end_tokens'])
+
+        if self.num_embedding is not None:
+            if self.num_embedding.mantissa_embedding.buckets.device != batch['mask'].device:
+                self.num_embedding.mantissa_embedding.buckets = self.num_embedding.mantissa_embedding.buckets.to(batch['mask'].device)
+                self.num_embedding.mantissa_embedding.matrix = self.num_embedding.mantissa_embedding.matrix.to(batch['mask'].device)
+                self.num_embedding.mantissa_embedding.bucket_sizes = self.num_embedding.mantissa_embedding.bucket_sizes.to(batch['mask'].device)
+
+        if self.use_numerical_input:
+            numerical_mask = qa_batch['question_end_tokens'] == self.input_num_token
+            question_end_embeddings_batch[numerical_mask] += self.num_embedding(qa_batch['num_values'])
+             # call for (embed_tokens): Embedding(32128, 512)
+        
 
         transactions_embeddings = self.transaction_model.get_embs(batch)[0]
 
@@ -450,10 +497,13 @@ class TransactionQAModel(pl.LightningModule):
                                          decoder_attention_mask=model_input['decoder_attention_mask'],
                                          output_hidden_states=True,
                                         )
-        if self.use_numerical:
+        if self.use_numerical_output:
             # TODO Fix if we will predict several numbers
             num_token_mask = (model_input['labels'] == self.tokenizer.convert_tokens_to_ids('<NUM>')).any(dim=1)
-            if self.numerical_context == 'simple':
+            if self.numerical_context == 'context':
+                embedding  = lm_outputs.encoder_last_hidden_state[:, -1][num_token_mask]
+            
+            elif self.numerical_context == 'simple':
                 context = lm_outputs.encoder_last_hidden_state[num_token_mask]
                 embedding = lm_outputs['decoder_hidden_states'][-1][num_token_mask]
 
@@ -461,8 +511,6 @@ class TransactionQAModel(pl.LightningModule):
                     raise NotImplementedError
                 embedding = self.num_context(embedding, context, mask=model_input['attention_mask'])[:, 0]
             
-            elif self.numerical_context == 'context':
-                embedding  = lm_outputs.encoder_last_hidden_state[:, -1][num_token_mask]
             else:
                 raise NotImplementedError
 
@@ -515,7 +563,7 @@ class TransactionQAModel(pl.LightningModule):
 
         loss = outputs.loss
 
-        if self.use_numerical:
+        if self.use_numerical_output:
             mantissa = outputs['mantissa']
             exponent = outputs['exponent']
 
@@ -525,7 +573,7 @@ class TransactionQAModel(pl.LightningModule):
             mantissa_loss = self.mantissa_loss(mantissa / 10, true_mantissa / 10)
             exponent_loss = self.exponent_loss(exponent, true_exponent)
 
-            loss += mantissa_loss + exponent_loss
+            loss += self.mantissa_weight * mantissa_loss + exponent_loss
 
         logging_dict = {
             'train_loss': loss,
@@ -768,7 +816,7 @@ class TransactionQAModel(pl.LightningModule):
                         outputs: Optional[torch.Tensor] = None):
         
     
-        if self.use_numerical:
+        if self.use_numerical_output:
             predictions_decoded = list(map(lambda x: str(round(x.item(), 2)), outputs['preds']))
             answers_decoded = list(map(lambda x: str(round(x.item(), 2)), outputs['label']))
 

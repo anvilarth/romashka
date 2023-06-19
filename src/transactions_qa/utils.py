@@ -1,3 +1,4 @@
+from ensurepip import version
 import os
 import re
 
@@ -196,9 +197,103 @@ def get_split_indices(batch, number_tasks):
     splitted = torch.tensor_split(indices, number_of_tasks)
     return splitted
 
+def transform_for_text_metrics(preds, targets):
+    """
+    Transofrming predictions and targets passed in tensor format to list of strings format
+    """
+    new_preds = list(map(lambda x: str(round(x.item(), 2)).replace("", " ")[1: -1], preds))
+    new_targets = list(map(lambda x: str(round(x.item(), 2)).replace("", " ")[1: -1], targets))
+    return  new_preds, new_targets
+
 def get_exponent_number(f):
     mask = (f != 0)
     return torch.floor(torch.log10(abs(f))).int() * mask
 
 def get_mantissa_number(f):
     return f / 10**get_exponent_number(f).float()
+
+
+def text2float(textnum, decimal_split='dot', default_value=-1, verbose=False):
+    """
+    Function transforming number written in words to float
+
+    ---
+    Example
+
+    one hundred and twenty-three -> 123
+    one hundred and twenty-three dot zero one -> 123.01
+
+    """
+    numwords = {}
+
+    units = [ "zero", "one", "two", "three", "four", "five", "six",
+            "seven", "eight", "nine"]
+            
+    bigger_units =["ten", "eleven", "twelve",
+            "thirteen", "fourteen", "fifteen", "sixteen", "seventeen",
+            "eighteen", "nineteen"]
+
+    tens = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", 
+            "seventy", "eighty", "ninety"]
+
+    scales = ["hundred", "thousand", "million", "billion", "trillion", 
+            'quadrillion', 'quintillion', 'sexillion', 'septillion', 
+            'octillion', 'nonillion', 'decillion' ]
+
+    numwords["and"] = (1, 0)
+    for idx, word in enumerate(units+bigger_units): numwords[word] = (1, idx)
+    for idx, word in enumerate(tens): numwords[word] = (1, idx * 10)
+    for idx, word in enumerate(scales): numwords[word] = (10 ** (idx * 3 or 2), 0)
+
+    ordinal_words = {'first':1, 'second':2, 'third':3, 'fifth':5, 
+            'eighth':8, 'ninth':9, 'twelfth':12}
+    ordinal_endings = [('ieth', 'y'), ('th', '')]
+    current = result = 0
+    
+
+    if decimal_split in textnum:
+        numerical_part, fractional_part = re.split(decimal_split, textnum)
+        numerical_tokens = re.split(r"[\s-]+", numerical_part.rstrip())
+        fractional_tokens = re.split(r"[\s-]+", fractional_part.lstrip())
+    else:
+        numerical_tokens = re.split(r"[\s-]+", textnum)
+        
+    for word in numerical_tokens:
+        if word in ordinal_words:
+            scale, increment = (1, ordinal_words[word])
+        else:
+            for ending, replacement in ordinal_endings:
+                if word.endswith(ending):
+                    word = "%s%s" % (word[:-len(ending)], replacement)
+
+            if word not in numwords:
+                if verbose:
+                    print("Illegal word: " + word)
+                return default_value
+                # raise Exception("Illegal word: " + word)
+
+            scale, increment = numwords[word]
+
+        if scale > 1:
+            current = max(1, current)
+
+        current = current * scale + increment
+        if scale > 100:
+            result += current
+            current = 0
+
+    result += current
+
+    if decimal_split in textnum:
+        multi = 0.1
+        for word in fractional_tokens:
+            if word not in units:
+                if verbose:
+                    print("Illegal word in fractional: " + word)
+                return default_value
+                # raise Exception("Illegal word in fractional: " + word)
+            scale, increment = numwords[word]
+            result += multi * increment
+            multi *= 0.1
+
+    return result 
