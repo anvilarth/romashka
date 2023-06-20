@@ -76,7 +76,7 @@ class PredNumericAmountTaskBinary(NumericTaskAbstract):
                                                                    self.ending_prompts)
 
         self.binary_answer_options: Dict[str, str] = {"positive": "Yes", "negative": "No"}
-        self.answer_template: str = " "  # left empty for a first time
+        self.answer_template: str = ""  # left empty for a first time
         self.add_tokens_to_tokenizer = True
 
         # If buckets are not provided externally
@@ -341,7 +341,7 @@ class PredOverThresholdAmountTaskBinary(NumericTaskAbstract):
                                                                    self.ending_prompts)
 
         self.binary_answer_options: Dict[str, str] = {"positive": "Yes", "negative": "No"}
-        self.answer_template: str = " "  # left empty for a first time
+        self.answer_template: str = ""  # left empty for a first time
         self.add_tokens_to_tokenizer = True
 
         # If buckets are not provided externally
@@ -576,7 +576,7 @@ class PredUnderThresholdAmountTaskBinary(NumericTaskAbstract):
                                                                    self.ending_prompts)
 
         self.binary_answer_options: Dict[str, str] = {"positive": "Yes", "negative": "No"}
-        self.answer_template: str = " "  # left empty for a first time
+        self.answer_template: str = ""  # left empty for a first time
         self.add_tokens_to_tokenizer = True
 
         # If buckets are not provided externally
@@ -804,7 +804,7 @@ class PredNumericAmountTaskOpenEnded(NumericTaskAbstract):
         self.question_templates = self.generate_question_templates(self.starting_prompts,
                                                                    self.ending_prompts)
 
-        self.answer_template: str = " "  # left empty for a first time
+        self.answer_template: str = ""  # left empty for a first time
         self.add_tokens_to_tokenizer = True
 
         # If buckets are not provided externally
@@ -1031,7 +1031,7 @@ class PredBinnedAmountTaskOpenEnded(NumericTaskAbstract):
         self.question_templates = self.generate_question_templates(self.starting_prompts,
                                                                    self.ending_prompts)
 
-        self.answer_template: str = " "  # left empty for a first time
+        self.answer_template: str = ""  # left empty for a first time
         self.add_tokens_to_tokenizer = True
 
         # If buckets are not provided externally

@@ -16,16 +16,16 @@ from romashka.transactions_qa.evaluation.eval_processings_utils import map_predi
 
 
 @dataclass
-class PredMCCCodeTaskBinary(CategoricalTaskAbstract):
+class PredHourTaskBinary(CategoricalTaskAbstract):
 
     def __post_init__(self):
-        self.task_name = "pred_mcc_code_binary"
-        self.target_feature_name = 'mcc'  # 108 unique values
+        self.task_name = "pred_hour_binary"
+        self.target_feature_name = 'hour'  # 24 unique values
 
         self.task_special_token = None
-        self.task_specific_special_token = "[pred_MCC_code_binary]"
+        self.task_specific_special_token = "[pred_hour_binary]"
 
-        self.num_classes = 108
+        self.num_classes = 24
         self.is_text_task = False
         self.is_binary_task = True
         self.is_open_ended_task = False
@@ -42,23 +42,23 @@ class PredMCCCodeTaskBinary(CategoricalTaskAbstract):
             "The client's transaction history is given as a context:"
         ]
         self.ending_prompts = [
-            ". Will the the MCC code of the next transaction be equal to %s? Yes or No?",
-            ". Will the upcoming transaction MCC code be equal to %s? Choose one: Yes or No?",
-            ". Is it true that the MCC code of next transaction will be equal to %s? Yes or No?",
-            ". Define whether the following statement is true: in next transaction MCC code will be equal to %s. "
+            ". Will the the hour of the next transaction be equal to %s? Yes or No?",
+            ". Will the upcoming transaction hour of the day be equal to %s? Choose one: Yes or No?",
+            ". Is it true that the hour of next transaction will be equal to %s? Yes or No?",
+            ". Define whether the following statement is true: in next transaction the hour of day will be equal to %s."
+            "bChoose: Yes or No?",
+            ". Is it true or false: the hour of the upcoming transaction will be %s? Yes or No?",
+            ". Define whether the following statement is correct: in the next transaction hour will be %s. "
             "Choose: Yes or No?",
-            ". Is it true or false: the MCC code of the upcoming transaction will be %s? Yes or No?",
-            ". Define whether the following statement is correct: in the next transaction MCC code will be %s. "
-            "Choose: Yes or No?",
-            ". Identify if the statement that: the MCC code of the next transaction will be equal to %s, "
+            ". Identify if the statement that: the hour of the next transaction will be equal to %s, "
             "is correct? Yes or No?",
-            ". Determine whether the following statement is true: %s will be the MCC code of the upcoming transaction"
-            ". Choose: Yes or No?",
-            ". Is the statement correct: the MCC code of the next transaction will be %s. "
+            ". Determine whether the following statement is true: %s will be the hour of the day in the upcoming "
+            "transaction. Choose: Yes or No?",
+            ". Is the statement correct: the hour of the next transaction will be %s. "
             "Answer with one of the following options: Yes or No?",
-            ". Answer the question whether or not the following statement is true: the MCC code of the next "
+            ". Answer the question whether or not the following statement is true: the hour of the next "
             "transaction will be equal to %s. Yes or No?",
-            ". Answer the question: will the MCC code of the upcoming transaction be equal to %s? "
+            ". Answer the question: will the hour of the upcoming transaction be equal to %s? "
             "Choose only one of the following options: Yes or No?"
         ]
 
@@ -318,21 +318,26 @@ class PredMCCCodeTaskBinary(CategoricalTaskAbstract):
 
 
 @dataclass
-class PredMCCCodeTaskOpenEnded(CategoricalTaskAbstract):
+class PredHourTaskOpenEnded(CategoricalTaskAbstract):
 
     def __post_init__(self):
-        self.task_name = "pred_mcc_code_open-ended"
-        self.target_feature_name = 'mcc'  # 108 unique values
+        self.task_name = "pred_hour_open-ended"
+        self.target_feature_name = 'hour'  # 108 unique values
 
         self.task_special_token = None
-        self.task_specific_special_token = "[pred_MCC_code_openended]"
+        self.task_specific_special_token = "[pred_hour_openended]"
 
-        self.num_classes = 108
+        self.num_classes = 24
         self.is_text_task = False
         self.is_binary_task = False
         self.is_open_ended_task = True
         self.metrics = torch.nn.ModuleDict({
-            "rouge": ROUGEScore()
+            "rouge": ROUGEScore(),
+            'accuracy': Accuracy(task='multiclass',
+                                 threshold=self.decision_threshold,
+                                 average='weighted',
+                                 ignore_index=self.ignore_class_index,
+                                 num_classes=self.num_classes)
         })
 
         self.starting_prompts = [
@@ -341,17 +346,17 @@ class PredMCCCodeTaskOpenEnded(CategoricalTaskAbstract):
             "The client's transaction history is given as a context:"
         ]
         self.ending_prompts = [
-            ". What is the MCC code of the next transaction?",
-            ". What is the MCC code of the next transaction based on the provided transaction history?",
-            ". Choose the upcoming transaction MCC code.",
-            ". Select the MCC code of the next transaction.",
-            ". Find out what is the MCC code of upcoming transaction.",
-            ". Can you please answer the question: what is the MCC code of the next transaction?",
-            ". Determine the MCC code of the next transaction.",
-            ". Select the MCC code of the upcoming transaction based on provided history.",
-            ". Choose the MCC code of the next transaction based on provided history.",
-            ". Can you find out which MCC code will be in next transaction?",
-            ". Answer the question: what is the MCC code of the upcoming transaction?"
+            ". On which hour will the client make the next transaction?"
+            ". What is the hour of the next transaction?",
+            ". What is the hour of the next transaction based on the provided transaction history?",
+            ". Choose the hour of upcoming transaction.",
+            ". Select the hour of the day on which client will make the next transaction?",
+            ". Find out what is the hour of upcoming transaction.",
+            ". Determine the hour of the next transaction.",
+            ". Choose the hour of the next transaction based on provided history.",
+            ". Can you find out on which hour will be the next transaction?",
+            ". Answer the question: on which hour will the client make the next transaction?",
+            ". Answer the following question: on which hour of the day will the client make the next transaction?",
         ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,
