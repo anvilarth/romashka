@@ -711,10 +711,10 @@ class NextFeatureOpenEnded(NextFeatureTask):
             task_metrics['mape'](preds, targets)
             metrics[stage + self.task_name + '_mape'] = task_metrics['mape']
 
-        if 'rouge' in task_metrics:
-            text_preds, text_targets = transform_for_text_metrics(preds, targets)
-            task_metrics['rouge'](text_preds, text_targets)
-            metrics[stage + self.task_name + '_rouge'] = task_metrics['rouge']
+        # if 'rouge' in task_metrics:
+        #     text_preds, text_targets = transform_for_text_metrics(preds, targets)
+        #     task_metrics['rouge'](text_preds, text_targets)
+        #     metrics[stage + self.task_name + '_rouge'] = task_metrics['rouge']
 
         return metrics 
 

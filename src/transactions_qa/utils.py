@@ -169,6 +169,7 @@ def init_layers(module: nn.Module):
     else:
         pass
 
+# TODO Fix taking elem from dict with get
 def collate_batch_dict(batches):
     final_batch = {}
     for key in batches[0]:

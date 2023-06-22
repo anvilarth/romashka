@@ -3,6 +3,8 @@ import sys
 import tqdm
 import numpy as np
 
+os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+
 from functools import partial
 from collections import namedtuple
 from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, AutoConfig
@@ -25,15 +27,14 @@ from src.transactions_qa.tqa_model import TransactionQAModel
 from src.transactions_qa.utils import get_projections_maps, get_exponent_number, get_mantissa_number
 from src.tasks import AbstractTask, AutoTask
 from src.transactions_qa.utils import get_split_indices,  prepare_splitted_batch, collate_batch_dict
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.metrics import mean_absolute_error
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.neural_network import MLPRegressor
+from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+from sklearn.neural_network import MLPRegressor, MLPClassifier
 
 
-from catboost import CatBoostClassifier, CatBoostRegressor, metrics
+from catboost import CatBoostClassifier, CatBoostRegressor, metrics, Pool, cv
 
-os.environ['TOKENIZERS_PARALLELISM'] = 'false'
 
 def load_transaction_model(encoder_type='whisper/tiny', head_type='next'):
     projections_maps = get_projections_maps(relative_folder="..")
@@ -125,8 +126,16 @@ def load_language_model(language_model_name_or_path="google/flan-t5-small"):
     )
     return lm_model, tokenizer
 
+parser = argparse.ArgumentParser()
+parser.add_argument('--method', type=str, default='catboost')
+parser.add_argument('--task_name', type=str, default='next_amnt_open_ended')
+parser.add_argument('--task_type', type=str, default='regression')
+parser.add_argument('--cross_validation', action='store_true', default=False)
+
+args = parser.parse_args()
+
 device = 'cuda:0'
-task_names = ['next_amnt_open_ended']
+task_names = [args.task_name]
 LM_NAME = 'google/flan-t5-small'
 
 transactions_model, projections_maps = load_transaction_model()
@@ -180,15 +189,70 @@ train_labels = torch.cat(train_labels).cpu().numpy()
 val_embeds = torch.vstack(val_data).cpu().numpy()
 val_labels = torch.cat(val_labels).cpu().numpy()
 
-model = CatBoostRegressor(
-    iterations=1000,
-    learning_rate=0.05,
-    custom_metric=[metrics.MAE()],
-    random_seed=42,
-    depth=5
-)
+if args.method == 'catboost':
+    model_params = None
+    if args.task_type == 'regression': 
+        model = CatBoostClassifier(
+            iterations=1000,
+            learning_rate=0.05,
+            custom_metric=[metrics.MAE()],
+            random_seed=42,
+            depth=5
+        )
+    elif args.task_type == 'classification':
+        model = CatBoostRegressor(
+            iterations=1000,
+            learning_rate=0.05,
+            custom_metric=[metrics.MAE()],
+            random_seed=42,
+            depth=5
+        )
+    
+    else:
+        raise NotImplementedError
 
-model.fit(train_embeds, train_labels)
-pred_labels = model.predict(val_embeds)
+elif args.method == 'linear':
+    if args.task_type == 'regression':
+        model = LinearRegression(n_jobs=-1)
+    elif args.task_type == 'classification':
+        model = LogisticRegression(n_jobs=-1)
+    else:
+        raise NotImplementedError
 
-print(mean_absolute_error(pred_labels, val_labels))
+elif args.method == 'mlp':
+    if args.task_type == 'regression':
+        model = MLPRegressor(hidden_layer_sizes=(transaction_model.output_size, 
+                                                transaction_model.output_size,
+                                                transaction_model.output_size)
+    elif args.task_type == 'classification':
+        model = MLPClassifier(hidden_layer_sizes=(transaction_model.output_size, 
+                                                transaction_model.output_size,
+                                                transaction_model.output_size))
+    else:
+        raise NotImplementedError
+    
+elif args.method == 'random_forest':
+    if args.task_type == 'regression':
+        model = RandomForestRegressor(n_jobs=-1, verbose=1)
+    elif args.task_type == 'classification':
+        model = RandomForestClassifier(n_jobs=-1, verbose=1)
+    else:
+        raise NotImplementedError
+else: 
+    raise NotImplementedError
+
+if args.cross_validation:
+    if args.method in ['random_forest', 'mlp', 'linear']:
+        scores = cross_val_score(model, train_embeds, train_labels)
+    elif args.method in ['catboost']:
+        cv_dataset = Pool(data=train_embeds,
+                        label=train_labels)
+
+        scores = cv(cv_dataset,
+                    model_params,
+                    fold_count=5)
+
+else:
+    model.fit(train_embeds, train_labels)
+    pred_labels = model.predict(val_embeds)
+    print(mean_absolute_error(pred_labels, val_labels))
