@@ -943,20 +943,32 @@ class PredNumericAmountTaskOpenEnded(NumericTaskAbstract):
         for i, (feature_, mask_) in enumerate(zip(target_feature_batch, mask_batch)):
             last_feature_index = mask_.sum() - 1
             feature_masked = torch.masked_select(feature_.to("cpu"),
-                                                 mask=mask_.to("cpu")).long()  # get feature without padding
-            last_feature = feature_masked[-1]  # get a single Tensor value of a feature
-            float_feature_ = self.buckets_means[last_feature.item()]  # take a mean bucket value of the last feature
+                                                 mask=mask_.to("cpu"))  # get bucket feature without padding
+            if self.is_real:
+                # Construct target values from REAL-VALUED input data
+                float_feature_ = feature_masked[-1]  # get a single Tensor value of a feature
+            else:
+                # Construct target values from DISCRETIZED input data
+                feature_masked = feature_masked.long()
+                last_feature = feature_masked[-1]  # get a single Tensor value of a feature
+                float_feature_ = self.buckets_means[last_feature.item()]  # take a mean bucket value of the last feature
+
             target_feature_value_batch.append(float_feature_)
             # Mask last feature to predict it!
             batch['mask'][i, last_feature_index] = 0
 
         # Convert to corresponding bucket id
-        target_feature_value_bucket_batch = torch.tensor(np.digitize(
-            np.asarray(target_feature_value_batch), bins=self.buckets)
-        ).to(device)
+        if self.is_real:
+            target_feature_value_batch = torch.tensor(target_feature_value_batch).to(device)
+        else:
+            # If needed binned answer
+            target_feature_value_bucket_batch = torch.tensor(np.digitize(
+                np.asarray(target_feature_value_batch), bins=self.buckets)
+            ).to(device)
 
         # Map to strings
-        target_feature_value_batch = list(map(lambda x: str(round(x, 3)), target_feature_value_batch))
+        target_feature_value_batch = list(map(lambda x: str(round(x.item() if isinstance(x, torch.Tensor) else x, 3)),
+                                              target_feature_value_batch))
 
         # Construct target sequences
         question_target_batch = [question_end for _ in range(batch_size)]  # as strings

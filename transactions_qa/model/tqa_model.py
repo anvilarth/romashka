@@ -301,16 +301,6 @@ class TransactionQAModel(pl.LightningModule):
             on_step=False, on_epoch=True,
             prog_bar=True, logger=True
         )
-        # self.log(
-        #     "val_loss", loss,
-        #     on_step=False, on_epoch=True,
-        #     prog_bar=True, logger=True, sync_dist=True,
-        # )
-        #
-        # self.log(
-        #     f'{task.task_name}_val_loss', loss, on_step=False, on_epoch=True,
-        #     prog_bar=True, logger=True, sync_dist=True,
-        # )
 
         # Log predictions on validation set
         if self.num_eval_batches_to_log == -1:  # log all validation data

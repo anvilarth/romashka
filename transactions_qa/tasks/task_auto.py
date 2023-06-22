@@ -27,6 +27,12 @@ from romashka.transactions_qa.tasks.context_mcc_category_tasks import (MostFrequ
                                                                        LeastFrequentMCCCategoryTaskOpenEnded,
                                                                        LastMCCCategoryTaskOpenEnded,
                                                                        OccurenceMCCCategoryTaskBinary)
+from romashka.transactions_qa.tasks.context_hour_tasks import (MostFrequentHourTaskBinary,
+                                                               MostFrequentHourTaskOpenEnded,
+                                                               MostFrequentHourTaskMulti,
+                                                               LastHourTaskOpenEnded,
+                                                               LeastFrequentHourTaskOpenEnded,
+                                                               OccurenceHourTaskBinary)
 from romashka.transactions_qa.tasks.context_weekday_tasks import (MostFrequentDayOfWeekTaskBinary,
                                                                   MostFrequentDayOfWeekTaskOpenEnded,
                                                                   MostFrequentDayOfWeekTaskMulti,
@@ -42,6 +48,10 @@ from romashka.transactions_qa.tasks.predictive_mcc_tasks import (PredMCCCodeTask
                                                                  PredMCCCodeTaskOpenEnded)
 from romashka.transactions_qa.tasks.predictive_mcc_category_tasks import (PredMCCCategoryTaskBinary,
                                                                           PredMCCCategoryTaskOpenEnded)
+from romashka.transactions_qa.tasks.predictive_hour_tasks import (PredHourTaskBinary,
+                                                                  PredHourTaskOpenEnded)
+from romashka.transactions_qa.tasks.predictive_weekday_tasks import (PredDayOfWeekTaskBinary,
+                                                                     PredDayOfWeekTaskOpenEnded)
 from romashka.transactions_qa.tasks.predictive_default_task import PredDefaultTaskBinary
                                                                
 from romashka.transactions_qa.tasks.default_task import DefaultTask
@@ -92,6 +102,13 @@ AUTO_TASKS = [
         ("last_day_of_week_open-ended", LastDayOfWeekTaskOpenEnded),
         ("least_frequent_day_of_week_open-ended", LeastFrequentDayOfWeekTaskOpenEnded),
         ("occurrence_day_of_week_binary", OccurenceDayOfWeekTaskBinary),
+        # Hour
+        ("most_frequent_hour_binary", MostFrequentHourTaskBinary),
+        ("most_frequent_hour_multi", MostFrequentHourTaskMulti),
+        ("most_frequent_hour_open-ended", MostFrequentHourTaskOpenEnded),
+        ("least_frequent_hour_open-ended", LeastFrequentHourTaskOpenEnded),
+        ("last_hour_open-ended", LastHourTaskOpenEnded),
+    ("occurrence_hour_binary", OccurenceHourTaskBinary),
         # Predictive
         # Amount
         ("pred_numeric_amount_binary", PredNumericAmountTaskBinary),
@@ -105,6 +122,12 @@ AUTO_TASKS = [
         # MCC category
         ("pred_mcc_category_binary", PredMCCCategoryTaskBinary),
         ("pred_mcc_category_open-ended", PredMCCCategoryTaskOpenEnded),
+        # Hour
+        ("pred_hour_binary", PredHourTaskBinary),
+        ("pred_hour_open-ended", PredHourTaskOpenEnded),
+        # Day of week
+        ("pred_day_of_week_binary", PredDayOfWeekTaskBinary),
+        ("pred_day_of_week_open-ended", PredDayOfWeekTaskOpenEnded),
         # Default
         ("pred_default_binary", PredDefaultTaskBinary)
     ]
