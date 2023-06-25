@@ -435,15 +435,14 @@ class TransactionQAModel(pl.LightningModule):
                     decoder_attention_mask=batch_answers_mask
         )
 
-    def model_step(self, batch, generate=False, task_idx: Optional[int] = None) -> Tuple[Any, torch.Tensor]:
+    def model_step(self, batch, generate=False, task_idx: Optional[int] = None, **kwargs) -> Tuple[Any, torch.Tensor]:
         # Sample single task
         # if task_idx is None:
         #     task_idx = 0
         # task = self.tasks[task_idx]
 
-
         if task_idx is not None:
-            new_batch = self.tasks[task_idx].process_input_batch(batch)
+            new_batch = self.tasks[task_idx].process_input_batch(batch, **kwargs)
 
             if len(new_batch) == 0:
                 return None, None
@@ -457,7 +456,7 @@ class TransactionQAModel(pl.LightningModule):
             for i, split_indices in enumerate(splitted):
                 task = self.tasks[task_ids[i]]
                 subbatch = prepare_splitted_batch(batch, split_indices)
-                tmp_batch = task.process_input_batch(subbatch)
+                tmp_batch = task.process_input_batch(subbatch, **kwargs)
                 if len(tmp_batch) == 0:
                     continue
 

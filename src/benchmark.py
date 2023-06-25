@@ -2,6 +2,13 @@ import os
 import sys 
 import tqdm
 import numpy as np
+import wandb
+import optuna
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+from skorch import NeuralNetRegressor, NeuralNetClassifier
 
 os.environ['TOKENIZERS_PARALLELISM'] = 'false'
 
@@ -31,9 +38,41 @@ from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.metrics import mean_absolute_error
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 from sklearn.neural_network import MLPRegressor, MLPClassifier
+from sklearn.base import BaseEstimator
 
 
 from catboost import CatBoostClassifier, CatBoostRegressor, metrics, Pool, cv
+
+class MyCatBoostRegressor(CatBoostRegressor, BaseEstimator):
+    def __init__(self, random_state=0, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.random_state = random_state
+
+class MyCatBoostClassifier(CatBoostClassifier, BaseEstimator):
+    def __init__(self, random_state=0, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.random_state = random_state
+
+class SimpleMLP(nn.Module):
+    def __init__(
+            self,
+            inp_size,
+            hidden_size,
+            nonlin=F.relu,
+    ):
+        super().__init__()
+
+        self.inp_size = inp_size
+        self.nonlin = nonlin
+        self.hidden_size = hidden_size
+
+        self.linear1 = nn.Linear(inp_size, hidden_size)
+        self.linear2 = nn.Linear(hidden_size, 1)
+
+    def forward(self, X, **kwargs):
+        X = F.relu(self.linear1(X))
+        X = self.linear2(X)
+        return X
 
 
 def load_transaction_model(encoder_type='whisper/tiny', head_type='next'):
@@ -67,7 +106,7 @@ def load_datamodule():
                 'batch_size': 32,
                 'min_seq_len': 0,
                 'max_seq_len': 250,
-                'shuffle': True,
+                'shuffle': False,
                 'num_workers': 5,
                 'pin_memory': True,
                 'seed': 42
@@ -131,8 +170,11 @@ parser.add_argument('--method', type=str, default='catboost')
 parser.add_argument('--task_name', type=str, default='next_amnt_open_ended')
 parser.add_argument('--task_type', type=str, default='regression')
 parser.add_argument('--cross_validation', action='store_true', default=False)
+parser.add_argument('--embeddings_path', type=str, default='/home/jovyan/romashka/assets/boosting_embeds/')
 
 args = parser.parse_args()
+
+wandb.init(project="benchmark", name=f'{args.method}-{args.task_type}-{args.task_name}')
 
 device = 'cuda:0'
 task_names = [args.task_name]
@@ -158,58 +200,84 @@ val_labels = []
 
 with torch.no_grad():
     for batch in tqdm.tqdm(dm.train_dataloader()):
-        
-        for key in batch:
-            batch[key] = batch[key].to(device)
-
         batch_size = batch['mask'].shape[0]
-        transactions_model.eval()
         new_batch = tasks[0].prepare_task_batch(batch)
-        embs, mask = transactions_model.get_embs(new_batch)
-        trx_index = mask.sum(1) - 1
-        train_data.append(embs[torch.arange(batch_size, device=device), trx_index])
         train_labels.append(new_batch['label'])
+
+        if args.embeddings_path == '':
+            for key in batch:
+                batch[key] = batch[key].to(device)
+
+            transactions_model.eval()
+            embs, mask = transactions_model.get_embs(new_batch)
+            trx_index = mask.sum(1) - 1
+            train_data.append(embs[torch.arange(batch_size, device=device), trx_index])
+
     
     for batch in tqdm.tqdm(dm.val_dataloader()):
-        for key in batch:
-            batch[key] = batch[key].to(device)
-        
         batch_size = batch['mask'].shape[0]
-        transactions_model.eval()
         new_batch = tasks[0].prepare_task_batch(batch)
-        embs, mask = transactions_model.get_embs(new_batch)
-        trx_index = mask.sum(1) - 1
-        val_data.append(embs[torch.arange(batch_size, device=device), trx_index])
         val_labels.append(new_batch['label'])
 
+        if args.embeddings_path == '': 
+            for key in batch:
+                batch[key] = batch[key].to(device)
+            
+            transactions_model.eval()
+            embs, mask = transactions_model.get_embs(new_batch)
+            trx_index = mask.sum(1) - 1
+            val_data.append(embs[torch.arange(batch_size, device=device), trx_index])
 
-train_embeds = torch.vstack(train_data).cpu().numpy()
+if args.embeddings_path == '':
+    train_embeds = torch.vstack(train_data).cpu().numpy()
+    val_embeds = torch.vstack(val_data).cpu().numpy()
+
+else:
+    train_embeds = np.load(args.embeddings_path + 'train_embeds.npy')
+    val_embeds = np.load(args.embeddings_path + 'val_embeds.npy')
+
 train_labels = torch.cat(train_labels).cpu().numpy()
-
-val_embeds = torch.vstack(val_data).cpu().numpy()
 val_labels = torch.cat(val_labels).cpu().numpy()
 
 if args.method == 'catboost':
-    model_params = None
     if args.task_type == 'regression': 
-        model = CatBoostClassifier(
+        model = MyCatBoostClassifier(
             iterations=1000,
             learning_rate=0.05,
-            custom_metric=[metrics.MAE()],
-            random_seed=42,
-            depth=5
         )
     elif args.task_type == 'classification':
-        model = CatBoostRegressor(
+        model = MyCatBoostRegressor(
             iterations=1000,
             learning_rate=0.05,
-            custom_metric=[metrics.MAE()],
-            random_seed=42,
-            depth=5
         )
-    
     else:
         raise NotImplementedError
+
+    model_params = {
+        "learning_rate": optuna.distributions.LogUniformDistribution(1e-3, 0.1),
+        "depth": optuna.distributions.IntUniformDistribution(1, 10),
+        "subsample": optuna.distributions.UniformDistribution(0.05, 1.0),
+        "min_data_in_leaf": optuna.distributions.IntUniformDistribution(1, 100)
+    }
+
+elif args.method == 'nn':
+    if args.task_type == 'classification':
+        pass
+    elif args.task_type == 'regression':
+        net = NeuralNetRegressor( 
+            SimpleMLP,
+            max_epochs=20,
+            module__hidden_size=10,
+            module__inp_size=384,
+            lr=0.01,
+            device='cuda',
+            # uncomment this to train with CUDA
+        )
+    else:
+        raise NotImplementedError
+
+    model_params = {'module__hidden_size': optuna.distributions.IntUniformDistribution(10, 150)}
+
 
 elif args.method == 'linear':
     if args.task_type == 'regression':
@@ -218,12 +286,14 @@ elif args.method == 'linear':
         model = LogisticRegression(n_jobs=-1)
     else:
         raise NotImplementedError
+    
+    model_params = {}
 
 elif args.method == 'mlp':
     if args.task_type == 'regression':
         model = MLPRegressor(hidden_layer_sizes=(transaction_model.output_size, 
                                                 transaction_model.output_size,
-                                                transaction_model.output_size)
+                                                transaction_model.output_size))
     elif args.task_type == 'classification':
         model = MLPClassifier(hidden_layer_sizes=(transaction_model.output_size, 
                                                 transaction_model.output_size,
@@ -235,24 +305,27 @@ elif args.method == 'random_forest':
     if args.task_type == 'regression':
         model = RandomForestRegressor(n_jobs=-1, verbose=1)
     elif args.task_type == 'classification':
-        model = RandomForestClassifier(n_jobs=-1, verbose=1)
+        model = RandomForestClassifier(n_jobs=-1)
     else:
         raise NotImplementedError
+
+    model_params = {
+        'n_estimators': optuna.distributions.IntUniformDistribution(50, 1000),
+        'max_depth':  optuna.distributions.IntUniformDistribution(4, 50),
+        'min_samples_split': optuna.distributions.IntUniformDistribution(1, 150),
+        'min_samples_leaf':  optuna.distributions.IntUniformDistribution(1, 60),
+    }
 else: 
     raise NotImplementedError
 
 if args.cross_validation:
-    if args.method in ['random_forest', 'mlp', 'linear']:
-        scores = cross_val_score(model, train_embeds, train_labels)
-    elif args.method in ['catboost']:
-        cv_dataset = Pool(data=train_embeds,
-                        label=train_labels)
-
-        scores = cv(cv_dataset,
-                    model_params,
-                    fold_count=5)
+        optuna_search = optuna.integration.OptunaSearchCV(model, model_params, cv=5, n_jobs=-1, n_trials=10, verbose=1)
+        optuna_search.fit(train_embeds[:100], train_labels[:100])
+        pred_labels = optuna_search.predict(val_embeds)
 
 else:
     model.fit(train_embeds, train_labels)
     pred_labels = model.predict(val_embeds)
-    print(mean_absolute_error(pred_labels, val_labels))
+
+if args.task_type == 'regression':
+    wandb.log({'val_l1_loss': mean_absolute_error(pred_labels, val_labels)})

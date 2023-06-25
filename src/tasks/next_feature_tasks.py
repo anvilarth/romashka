@@ -102,7 +102,7 @@ class NextFeatureTask(AbstractTask):
         # Construct target values 
         # Target's questions numeric/categorical answers as str
 
-        task_batch = self.generate_text_target(batch)
+        task_batch = self.generate_text_target(batch, **kwargs)
 
         if not task_batch:
             return dict()
@@ -249,14 +249,18 @@ class NextNumFeatureTaskBinary(NextFeatureTask):
         # Target's questions numeric/categorical answers as str
         trx_index = batch['mask'].sum(1, keepdim=True) - 1
 
-        threshold = torch.tensor([self.threshold] * batch_size,  device=batch['mask'].device).unsqueeze(1)
-        
-        if self.floating_threshold:
-            threshold = torch.rand(batch['mask'].shape[0], 1, device=batch['mask'].device) * (self.range[1] - self.range[0]) + self.range[0]
-            threshold = torch.round(threshold, decimals=2)
+        if 'threshold' in kwargs:
+            threshold = kwargs['threshold']
+        else:
+            threshold = torch.tensor([self.threshold] * batch_size,  device=batch['mask'].device).unsqueeze(1)
+            
+            if self.floating_threshold:
+                threshold = torch.rand(batch['mask'].shape[0], 1, device=batch['mask'].device) * (self.range[1] - self.range[0]) + self.range[0]
+                threshold = torch.round(threshold, decimals=2)
 
         batch['label'] = (torch.gather(target_feature_batch, 1, trx_index) >= threshold).float().squeeze(1)
         batch['mask'][:, trx_index.flatten()] = 0
+
         batch['threshold'] = list(map(lambda x : str(round(x.item(), 2)), threshold))
 
         return batch
