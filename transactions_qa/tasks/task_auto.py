@@ -39,6 +39,7 @@ from romashka.transactions_qa.tasks.context_weekday_tasks import (MostFrequentDa
                                                                   LastDayOfWeekTaskOpenEnded,
                                                                   LeastFrequentDayOfWeekTaskOpenEnded,
                                                                   OccurenceDayOfWeekTaskBinary)
+from romashka.transactions_qa.tasks.context_week_of_year_tasks import MostFrequentWeekOfYearTaskOpenEnded
 from romashka.transactions_qa.tasks.predictive_amnt_tasks import (PredNumericAmountTaskBinary,
                                                                   PredOverThresholdAmountTaskBinary,
                                                                   PredUnderThresholdAmountTaskBinary,
@@ -111,6 +112,8 @@ AUTO_TASKS = [
         ("least_frequent_hour_open-ended", LeastFrequentHourTaskOpenEnded),
         ("last_hour_open-ended", LastHourTaskOpenEnded),
         ("occurrence_hour_binary", OccurenceHourTaskBinary),
+        # Week of year
+        ("most_frequent_week_of_year_open-ended", MostFrequentWeekOfYearTaskOpenEnded),
         # Predictive
         # Amount
         ("pred_numeric_amount_binary", PredNumericAmountTaskBinary),
