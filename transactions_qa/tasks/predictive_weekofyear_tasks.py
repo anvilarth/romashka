@@ -16,16 +16,16 @@ from romashka.transactions_qa.evaluation.eval_processings_utils import (map_pred
 
 
 @dataclass
-class PredDayOfWeekTaskBinary(CategoricalTaskAbstract):
+class PredWeekOfYearTaskBinary(CategoricalTaskAbstract):
 
     def __post_init__(self):
-        self.task_name = "pred_day_of_week_binary"
-        self.target_feature_name = 'day_of_week'  # 7 unique values
+        self.task_name = "pred_week_of_year_binary"
+        self.target_feature_name = 'weekofyear'  # 53 unique values
 
         self.task_special_token = None
-        self.task_specific_special_token = "[pred_day_of_week_binary]"
+        self.task_specific_special_token = "[pred_week_of_year_binary]"
 
-        self.num_classes = 7
+        self.num_classes = 54
         self.is_text_task = False
         self.is_binary_task = True
         self.is_open_ended_task = False
@@ -42,23 +42,23 @@ class PredDayOfWeekTaskBinary(CategoricalTaskAbstract):
             "The client's transaction history is given as a context:"
         ]
         self.ending_prompts = [
-            ". Will the day of week of the next transaction be equal to %s? Yes or No?",
-            ". Will in the upcoming transaction day of week be equal to %s? Choose one: Yes or No?",
-            ". Is it true that the day of week of next transaction will be equal to %s? Yes or No?",
-            ". Define whether the following statement is true: in next transaction the day of week will be equal to %s."
-            " Choose: Yes or No?",
-            ". Is it true or false: the day of week of the upcoming transaction will be %s? Yes or No?",
-            ". Define whether the following statement is correct: in the next transaction day of week will be %s. "
+            ". Will the week of the year in the next transaction be equal to %s? Yes or No?",
+            ". Will in the upcoming transaction the week of year be equal to %s? Choose one: Yes or No?",
+            ". Is it true that the week of year in next transaction will be equal to %s? Yes or No?",
+            ". Define whether the following statement is true: in next transaction the week of year will be equal to"
+            " %s. Choose: Yes or No?",
+            ". Is it true or false: the week of year in the upcoming transaction will be %s? Yes or No?",
+            ". Define whether the following statement is correct: in the next transaction week of year will be %s. "
             "Choose: Yes or No?",
-            ". Identify if the statement that: the day of week of the next transaction will be equal to %s, "
+            ". Identify if the statement that: the week of year in the next transaction will be equal to %s, "
             "is correct? Yes or No?",
-            ". Determine whether the following statement is true: %s will be the day of week in the upcoming "
+            ". Determine whether the following statement is true: %s will be the week of year in the upcoming "
             "transaction. Choose: Yes or No?",
-            ". Is the statement correct: the day of week of the next transaction will be %s. "
+            ". Is the statement correct: the week of year in the next transaction will be %s. "
             "Answer with one of the following options: Yes or No?",
-            ". Answer the question whether or not the following statement is true: the day of week of the next "
+            ". Answer the question whether or not the following statement is true: the week of year in the next "
             "transaction will be equal to %s. Yes or No?",
-            ". Answer the question: will the day of week of the upcoming transaction be equal to %s? "
+            ". Answer the question: will the week of year in the upcoming transaction be equal to %s? "
             "Choose only one of the following options: Yes or No?"
         ]
 
@@ -318,16 +318,16 @@ class PredDayOfWeekTaskBinary(CategoricalTaskAbstract):
 
 
 @dataclass
-class PredDayOfWeekTaskOpenEnded(CategoricalTaskAbstract):
+class PredWeekOfYearTaskOpenEnded(CategoricalTaskAbstract):
 
     def __post_init__(self):
-        self.task_name = "pred_day_of_week_open-ended"
-        self.target_feature_name = 'day_of_week'  # 108 unique values
+        self.task_name = "pred_week_of_year_open-ended"
+        self.target_feature_name = 'weekofyear'  # 53 unique values
 
         self.task_special_token = None
-        self.task_specific_special_token = "[pred_day_of_week_openended]"
+        self.task_specific_special_token = "[pred_week_of_year_openended]"
 
-        self.num_classes = 24
+        self.num_classes = 54
         self.is_text_task = False
         self.is_binary_task = False
         self.is_open_ended_task = True
@@ -346,17 +346,16 @@ class PredDayOfWeekTaskOpenEnded(CategoricalTaskAbstract):
             "The client's transaction history is given as a context:"
         ]
         self.ending_prompts = [
-            ". On which day of week will the client make the next transaction?"
-            ". What is the day of week of the next transaction?",
-            # ". What is the day of week of the next transaction based on the provided transaction history?",
-            ". Choose the day of week of upcoming transaction.",
-            ". Select the day of week of the day on which client will make the next transaction?",
-            ". Find out what is the day of week of upcoming transaction.",
-            ". Determine the day of week of the next transaction.",
-            ". Choose the day of week of the next transaction.",
-            ". Can you find out on which day of week will be the next transaction?",
-            ". Answer the question: on which day of week will the client make the next transaction?",
-            ". Answer the following question: on which day of week of the day will the client make the"
+            ". On which week of year will the client make the next transaction?"
+            ". What is the week of year in the next transaction?",
+            ". Choose the week of year in upcoming transaction.",
+            ". Select the week of year in the day on which client will make the next transaction?",
+            ". Find out what is the week of year in upcoming transaction.",
+            ". Determine the week of year in the next transaction.",
+            ". Choose the week of year in the next transaction.",
+            ". Can you find out on which week of year will be the next transaction?",
+            ". Answer the question: on which week of year will the client make the next transaction?",
+            ". Answer the following question: on which week of year will the client make the"
             " next transaction?",
         ]
 

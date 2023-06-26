@@ -52,6 +52,8 @@ from romashka.transactions_qa.tasks.predictive_hour_tasks import (PredHourTaskBi
                                                                   PredHourTaskOpenEnded)
 from romashka.transactions_qa.tasks.predictive_weekday_tasks import (PredDayOfWeekTaskBinary,
                                                                      PredDayOfWeekTaskOpenEnded)
+from romashka.transactions_qa.tasks.predictive_weekofyear_tasks import (PredWeekOfYearTaskBinary,
+                                                                        PredWeekOfYearTaskOpenEnded)
 from romashka.transactions_qa.tasks.predictive_default_task import PredDefaultTaskBinary
                                                                
 from romashka.transactions_qa.tasks.default_task import DefaultTask
@@ -108,7 +110,7 @@ AUTO_TASKS = [
         ("most_frequent_hour_open-ended", MostFrequentHourTaskOpenEnded),
         ("least_frequent_hour_open-ended", LeastFrequentHourTaskOpenEnded),
         ("last_hour_open-ended", LastHourTaskOpenEnded),
-    ("occurrence_hour_binary", OccurenceHourTaskBinary),
+        ("occurrence_hour_binary", OccurenceHourTaskBinary),
         # Predictive
         # Amount
         ("pred_numeric_amount_binary", PredNumericAmountTaskBinary),
@@ -128,6 +130,9 @@ AUTO_TASKS = [
         # Day of week
         ("pred_day_of_week_binary", PredDayOfWeekTaskBinary),
         ("pred_day_of_week_open-ended", PredDayOfWeekTaskOpenEnded),
+        # Week of year
+        ("pred_week_of_year_binary", PredWeekOfYearTaskBinary),
+        ("pred_week_of_year_open-ended", PredWeekOfYearTaskOpenEnded),
         # Default
         ("pred_default_binary", PredDefaultTaskBinary)
     ]

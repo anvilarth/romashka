@@ -194,8 +194,8 @@ def batches_balanced_generator(list_of_paths: List[str],
                 product = product[shuffled_indexes]
                 target = target[shuffled_indexes]
 
-            bucket[:, num_features_indices[-2]] = bucket[:, num_features_indices[-2]] / 365
-            bucket[:, num_features_indices[-1]] = bucket[:, num_features_indices[-1]] / 95
+            # bucket[:, num_features_indices[-2]] = bucket[:, num_features_indices[-2]] / 365
+            # bucket[:, num_features_indices[-1]] = bucket[:, num_features_indices[-1]] / 95
             mask = bucket[:, -6] != 0
 
             for jdx in range(0, len(bucket), batch_size):

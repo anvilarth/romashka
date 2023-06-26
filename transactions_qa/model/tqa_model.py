@@ -303,30 +303,32 @@ class TransactionQAModel(pl.LightningModule):
         )
 
         # Log predictions on validation set
-        if self.num_eval_batches_to_log == -1:  # log all validation data
-            questions = outputs['question_encoded'].detach().cpu() if hasattr(outputs, "question_encoded") or ("question_encoded" in outputs.keys()) else ""
-            transactions_history_lengths = outputs['transactions_history_lengths'].detach().cpu() \
-                if hasattr(outputs, "transactions_history_lengths") else [0]
-            self.log_predictions(logits=outputs['logits'].detach().cpu(),
-                                 answers=batch_answers.detach().cpu(),
-                                 questions=questions,
-                                 transactions_history_lengths=transactions_history_lengths,
-                                 predictions_table=self.log_eval_predictions_table,
-                                 log_counter=self.log_eval_steps_counter,
-                                 task_name=task.task_name)
-            self.log_eval_steps_counter += 1
-        elif self.log_eval_steps_counter < self.num_eval_batches_to_log:
-            questions = outputs['question_encoded'].detach().cpu() if hasattr(outputs, "question_encoded") or ("question_encoded" in outputs.keys()) else ""
-            transactions_history_lengths = outputs['transactions_history_lengths'].detach().cpu() \
-                if hasattr(outputs, "transactions_history_lengths") else [0]
-            self.log_predictions(logits=outputs['logits'].detach().cpu(),
-                                 answers=batch_answers.detach().cpu(),
-                                 questions=questions,
-                                 transactions_history_lengths=transactions_history_lengths,
-                                 predictions_table=self.log_eval_predictions_table,
-                                 log_counter=self.log_eval_steps_counter,
-                                 task_name=task.task_name)
-            self.log_eval_steps_counter += 1
+        # if self.num_eval_batches_to_log == -1:  # log all validation data
+        #     questions = outputs['question_encoded'].detach().cpu() if hasattr(outputs, "question_encoded") \
+        #     or ("question_encoded" in outputs.keys()) else ""
+        #     transactions_history_lengths = outputs['transactions_history_lengths'].detach().cpu() \
+        #         if hasattr(outputs, "transactions_history_lengths") else [0]
+        #     self.log_predictions(logits=outputs['logits'].detach().cpu(),
+        #                          answers=batch_answers.detach().cpu(),
+        #                          questions=questions,
+        #                          transactions_history_lengths=transactions_history_lengths,
+        #                          predictions_table=self.log_eval_predictions_table,
+        #                          log_counter=self.log_eval_steps_counter,
+        #                          task_name=task.task_name)
+        #     self.log_eval_steps_counter += 1
+        # elif self.log_eval_steps_counter < self.num_eval_batches_to_log:
+        #     questions = outputs['question_encoded'].detach().cpu() if hasattr(outputs, "question_encoded") \
+        #     or ("question_encoded" in outputs.keys()) else ""
+        #     transactions_history_lengths = outputs['transactions_history_lengths'].detach().cpu() \
+        #         if hasattr(outputs, "transactions_history_lengths") else [0]
+        #     self.log_predictions(logits=outputs['logits'].detach().cpu(),
+        #                          answers=batch_answers.detach().cpu(),
+        #                          questions=questions,
+        #                          transactions_history_lengths=transactions_history_lengths,
+        #                          predictions_table=self.log_eval_predictions_table,
+        #                          log_counter=self.log_eval_steps_counter,
+        #                          task_name=task.task_name)
+        #     self.log_eval_steps_counter += 1
 
         return loss
 
