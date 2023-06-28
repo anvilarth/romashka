@@ -15,7 +15,8 @@ import bitsandbytes as bnb
 
 from romashka.transactions_qa.model.generation_utils import AnsweredQACriteria
 from romashka.transactions_qa.tasks.task_abstract import AbstractTask
-from romashka.transactions_qa.tasks.task_token_updater import collect_task_specific_tokens
+from romashka.transactions_qa.tasks.task_token_updater import (collect_task_specific_tokens,
+                                                               create_task_specific_tokens_map)
 from romashka.logging_handler import get_logger
 
 from transformers import GenerationConfig
@@ -46,6 +47,7 @@ class TransactionQAModel(pl.LightningModule):
         self.model = model
         self.tasks = tasks
         self.task_specific_tokens = collect_task_specific_tokens(self.tasks)
+        self.task_specific_tokens_map = create_task_specific_tokens_map(self.model.tokenizer)
 
         self.metrics = nn.ModuleDict({task.task_name: deepcopy(task.metrics) for task in self.tasks})
 
@@ -64,16 +66,16 @@ class TransactionQAModel(pl.LightningModule):
         self._verbose_for_debug: bool = verbose_for_debug
         self._return_logits: bool = return_logits
 
-        self.save_hyperparameters(ignore=['tasks', '_logger', 'columns', 'model',
-                                          'log_eval_predictions_table', 'log_eval_steps_counter'])
+        self.hparams['task_specific_tokens_map'] = self.task_specific_tokens_map
+        self.save_hyperparameters(ignore=['tasks', '_logger', 'model'])
 
         # ✨ W&B: Create a Table to store predictions for each test step
-        self.columns = ["epoch", "step #", "task",
-                        "question", "prediction", "truth",
-                        "transactions_history_lengths"]
-        self.log_eval_predictions_table = wandb.Table(columns=self.columns)
-        self.log_eval_steps_counter = 0
-        self.num_eval_batches_to_log = -1
+        # self.columns = ["epoch", "step #", "task",
+        #                 "question", "prediction", "truth",
+        #                 "transactions_history_lengths"]
+        # self.log_eval_predictions_table = wandb.Table(columns=self.columns)
+        # self.log_eval_steps_counter = 0
+        # self.num_eval_batches_to_log = -1
 
     def configure_optimizers(self):
         """
@@ -156,9 +158,6 @@ class TransactionQAModel(pl.LightningModule):
             task_idx = 0
         task = self.tasks[task_idx]
         qa_batch = task.process_input_batch(batch)
-
-        # print(f"model_step() on task: {task.task_name} with with_numeric_input = {qa_batch['with_numeric_input']} "
-        #       f"and with_numeric_output = {qa_batch['with_numeric_output']}.")
 
         if len(qa_batch) == 0:
             return None, None
@@ -539,15 +538,15 @@ class TransactionQAModel(pl.LightningModule):
 
     def on_validation_epoch_start(self) -> None:
         print(f"\n----------- Validation start ----------\n")
-        # Reset log counter
-        self.log_eval_steps_counter = 0
+    #     # Reset log counter
+    #     self.log_eval_steps_counter = 0
 
     def on_validation_epoch_end(self) -> None:
         # ✨ W&B: Log predictions table to wandb
         print(f"\n----------- Validation end ----------\n")
         # print(f"Using logger: {self.logger.experiment}")
         # wandb_logger = [logger for logger in self.trainer.loggers if isinstance(logger, WandbLogger)][0]
-        self.logger.log_metrics({"val_predictions": self.log_eval_predictions_table})
+        # self.logger.log_metrics({"val_predictions": self.log_eval_predictions_table})
 
         # was directly to W&B: wandb.log({"val_predictions": self.log_eval_predictions_table})
         # ✨ W&B: Mark the run as complete (useful for multi-cell notebook)

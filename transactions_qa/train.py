@@ -491,6 +491,19 @@ def main():
         mode=training_args.save_strategy_mode,  # default: 'max'
     )
 
+    # Saving tokenizer
+    if Path(save_checkpoints_dir).resolve().exists():
+        logger.info(f"Checkpoints path: {Path(save_checkpoints_dir).resolve()}")
+        ckpt_files = [fn.name for fn in Path(save_checkpoints_dir).glob("*.json") if not fn.is_dir()]
+        if ("tokenizer_config.json" not in ckpt_files) and ("config.json" not in ckpt_files):
+            save_fn = str(Path(save_checkpoints_dir).resolve())
+            logger.info(f"Saving tokenizer with `save_pretrained()` to {save_fn}")
+            saved_files = tokenizer.save_pretrained(save_fn)
+            logger.info(f"Saved to:\n{[f.name for f in saved_files]}")
+        else:
+            tok_fn = [fn for fn in ckpt_files if ("tokenizer_config.json" in fn) or ("config.json" in fn)][0]
+            logger.info(f"Pretrained tokenizer exists: {tok_fn}")
+
     trainer = pl.Trainer(
         fast_dev_run=training_args.fast_dev_run,
         max_steps=training_args.max_steps,

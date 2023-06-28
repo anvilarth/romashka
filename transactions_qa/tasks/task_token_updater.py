@@ -1,5 +1,6 @@
 import enum
-from typing import List
+import transformers
+from typing import List, Dict
 from romashka.logging_handler import get_logger
 
 logger = get_logger(
@@ -105,3 +106,16 @@ def collect_task_specific_tokens(tasks: List['AbstractTask']) -> List[str]:
     task_special_tokens = list(task_special_tokens)
     logger.info(f"Collected {len(task_special_tokens)} task special tokens:\n{task_special_tokens}")
     return task_special_tokens
+
+
+def create_task_specific_tokens_map(tokenizer: transformers.PreTrainedTokenizerBase) -> Dict[str, int]:
+    """
+    Collects unique special tokens form given tasks for saving them with model checkpoint.
+    Args:
+        tokenizer: a tokenizer instance with already added spacial tokens;
+    Returns:
+        a dict, where keys - are added tokens, values - are token's indexes.
+    """
+    special_tokens_map = tokenizer.get_added_vocab()
+    logger.info(f"Got:\n{special_tokens_map}\nspecial tokens mapping.")
+    return special_tokens_map
