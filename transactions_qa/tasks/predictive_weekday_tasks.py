@@ -15,6 +15,27 @@ from romashka.transactions_qa.model.generation_utils import isin
 from romashka.transactions_qa.evaluation.eval_processings_utils import (map_prediction_to_answer, transform_labels)
 
 
+weekday_mapping = {
+    "1": "Monday",
+    "2": "Tuesday",
+    "3": "Wednesday",
+    "4": "Thursday",
+    "5": "Friday",
+    "6": "Saturday",
+    "7": "Sunday"
+}
+
+weekday_mapping_reverse = {
+    "Monday": 1,
+    "Tuesday": 2,
+    "Wednesday": 3,
+    "Thursday": 4,
+    "Friday": 5,
+    "Saturday": 6,
+    "Sunday": 7
+}
+
+
 @dataclass
 class PredDayOfWeekTaskBinary(CategoricalTaskAbstract):
 
@@ -25,8 +46,8 @@ class PredDayOfWeekTaskBinary(CategoricalTaskAbstract):
         self.task_special_token = None
         self.task_specific_special_token = "[pred_day_of_week_binary]"
 
-        self.num_classes = 7
-        self.is_text_task = False
+        self.num_classes = 8
+        # self.is_text_task = False  # if set to True -> map all classes ids to string representations
         self.is_binary_task = True
         self.is_open_ended_task = False
 
@@ -42,23 +63,23 @@ class PredDayOfWeekTaskBinary(CategoricalTaskAbstract):
             "The client's transaction history is given as a context:"
         ]
         self.ending_prompts = [
-            ". Will the day of week of the next transaction be equal to %s? Yes or No?",
-            ". Will in the upcoming transaction day of week be equal to %s? Choose one: Yes or No?",
-            ". Is it true that the day of week of next transaction will be equal to %s? Yes or No?",
-            ". Define whether the following statement is true: in next transaction the day of week will be equal to %s."
+            ". Will the weekday of the next transaction be equal to %s? Yes or No?",
+            ". Will in the upcoming transaction weekday be equal to %s? Choose one: Yes or No?",
+            ". Is it true that the weekday of next transaction will be equal to %s? Yes or No?",
+            ". Define whether the following statement is true: in next transaction the weekday will be equal to %s."
             " Choose: Yes or No?",
-            ". Is it true or false: the day of week of the upcoming transaction will be %s? Yes or No?",
-            ". Define whether the following statement is correct: in the next transaction day of week will be %s. "
+            ". Is it true or false: the weekday of the upcoming transaction will be %s? Yes or No?",
+            ". Define whether the following statement is correct: in the next transaction weekday will be %s. "
             "Choose: Yes or No?",
-            ". Identify if the statement that: the day of week of the next transaction will be equal to %s, "
+            ". Identify if the statement that: the weekday of the next transaction will be equal to %s, "
             "is correct? Yes or No?",
-            ". Determine whether the following statement is true: %s will be the day of week in the upcoming "
+            ". Determine whether the following statement is true: %s will be the weekday of the upcoming "
             "transaction. Choose: Yes or No?",
-            ". Is the statement correct: the day of week of the next transaction will be %s. "
+            ". Is the statement correct: the weekday of the next transaction will be %s. "
             "Answer with one of the following options: Yes or No?",
-            ". Answer the question whether or not the following statement is true: the day of week of the next "
+            ". Answer the question whether or not the following statement is true: the weekday of the next "
             "transaction will be equal to %s. Yes or No?",
-            ". Answer the question: will the day of week of the upcoming transaction be equal to %s? "
+            ". Answer the question: will the weekday of the upcoming transaction be equal to %s? "
             "Choose only one of the following options: Yes or No?"
         ]
 
@@ -66,7 +87,7 @@ class PredDayOfWeekTaskBinary(CategoricalTaskAbstract):
                                                                    self.ending_prompts)
 
         # all options for a target feature - it is not actually required here, but still
-        self.answers_options = [str(i) for i in range(self.num_classes)]
+        self.answers_options = [str(i) for i in range(1, self.num_classes)]
         self.binary_answer_options: Dict[str, str] = {"positive": "Yes", "negative": "No"}
         self.answers2tokens = {answer: self.tokenizer.encode(answer_word, add_special_tokens=False)[0]
                                for answer, answer_word in self.binary_answer_options.items()}
@@ -220,9 +241,12 @@ class PredDayOfWeekTaskBinary(CategoricalTaskAbstract):
 
         # ground truth target (int/str), mask (bool)
         for target, pos_neg_mask in zip(target_feature_value_batch,
-                                                       pos_neg_target_mask):
+                                        pos_neg_target_mask):
             if pos_neg_mask:
                 # positive
+                # As text
+                if self.is_text_task:
+                    target = weekday_mapping.get(target, "0")
                 question_target_batch.append(question_end % target)
             else:
                 # negative
@@ -231,6 +255,9 @@ class PredDayOfWeekTaskBinary(CategoricalTaskAbstract):
                     opt = random.sample(self.answers_options, k=1)[0]
                     if opt != target:
                         rand_target = opt
+                # As text
+                if self.is_text_task:
+                    rand_target = weekday_mapping.get(rand_target, "0")
                 question_target_batch.append(question_end % rand_target)
 
         return question_target_batch, target_batch
@@ -322,12 +349,12 @@ class PredDayOfWeekTaskOpenEnded(CategoricalTaskAbstract):
 
     def __post_init__(self):
         self.task_name = "pred_day_of_week_open-ended"
-        self.target_feature_name = 'day_of_week'  # 108 unique values
+        self.target_feature_name = 'day_of_week'  # 7 unique values
 
         self.task_special_token = None
         self.task_specific_special_token = "[pred_day_of_week_openended]"
 
-        self.num_classes = 24
+        self.num_classes = 8
         self.is_text_task = False
         self.is_binary_task = False
         self.is_open_ended_task = True
@@ -346,17 +373,17 @@ class PredDayOfWeekTaskOpenEnded(CategoricalTaskAbstract):
             "The client's transaction history is given as a context:"
         ]
         self.ending_prompts = [
-            ". On which day of week will the client make the next transaction?"
-            ". What is the day of week of the next transaction?",
-            # ". What is the day of week of the next transaction based on the provided transaction history?",
-            ". Choose the day of week of upcoming transaction.",
-            ". Select the day of week of the day on which client will make the next transaction?",
-            ". Find out what is the day of week of upcoming transaction.",
-            ". Determine the day of week of the next transaction.",
-            ". Choose the day of week of the next transaction.",
-            ". Can you find out on which day of week will be the next transaction?",
-            ". Answer the question: on which day of week will the client make the next transaction?",
-            ". Answer the following question: on which day of week of the day will the client make the"
+            ". On which weekday will the client make the next transaction?"
+            ". What is the weekday of the next transaction?",
+            # ". What is the weekday of the next transaction based on the provided transaction history?",
+            ". Choose the weekday of upcoming transaction.",
+            ". Select the weekday of the day on which client will make the next transaction?",
+            ". Find out what is the weekday of upcoming transaction.",
+            ". Determine the weekday of the next transaction.",
+            ". Choose the weekday of the next transaction.",
+            ". Can you find out on which weekday will be the next transaction?",
+            ". Answer the question: on which weekday will the client make the next transaction?",
+            ". Answer the following question: on which weekday of the day will the client make the"
             " next transaction?",
         ]
 
@@ -364,7 +391,10 @@ class PredDayOfWeekTaskOpenEnded(CategoricalTaskAbstract):
                                                                    self.ending_prompts)
 
         # all options for a target feature - it is not actually required here, but still
-        self.answers_options = [str(i) for i in range(1, self.num_classes + 1)]
+        if not self.is_text_task:
+            self.answers_options = [str(i) for i in range(1, self.num_classes)]
+        else:
+            self.answers_options = [weekday_mapping.get(str(i)) for i in range(1, self.num_classes)]
         self.binary_answer_options: Dict[str, str] = {"positive": "Yes", "negative": "No"}
         self.answer_template = ""  # left empty for a first time
         self.add_tokens_to_tokenizer = True
@@ -500,6 +530,9 @@ class PredDayOfWeekTaskOpenEnded(CategoricalTaskAbstract):
 
         # Map to strings
         target_batch = list(map(lambda x: str(x.item()), target_feature_value_batch))
+        # As text
+        if self.is_text_task:
+            target_batch = [weekday_mapping.get(x, "0") for x in target_batch]
 
         # Construct target sequences
         question_target_batch = [question_end for _ in range(batch_size)]  # as strings
@@ -518,21 +551,28 @@ class PredDayOfWeekTaskOpenEnded(CategoricalTaskAbstract):
                                                             skip_special_tokens=True)
         # Clean predicted texts and map them to categorical labels
         predictions_clean = [transform_labels(pred,
-                                              do_make_numeric=True,
-                                              do_clean_text=False,
-                                              default_value=default_value)
+                                              do_make_numeric=True if not self.is_text_task else False,
+                                              do_clean_text=True if self.is_text_task else False,
+                                              default_value=default_value if not self.is_text_task
+                                                  else str(default_value))
                              for pred in predictions_decoded]
 
         batch_answers_decoded = [transform_labels(answer,
-                                                  do_make_numeric=True,
-                                                  do_clean_text=False,
-                                                  default_value=default_value)
+                                                  do_make_numeric=True if not self.is_text_task else False,
+                                                  do_clean_text=True if self.is_text_task else False,
+                                                  default_value=default_value if not self.is_text_task
+                                                  else str(default_value))
                                  for answer in batch_answers_decoded]
 
         # Map to available labels
-        classes = [int(answer) for answer in self.answers_options]
+        if not self.is_text_task:
+            classes = [int(answer) for answer in self.answers_options]
+        else:
+            classes = [str(answer) for answer in self.answers_options]
         predictions_clean = [pred if pred in classes else default_value
                              for pred in predictions_clean]
+        if self.is_text_task:
+            predictions_clean = [weekday_mapping_reverse.get(pred, 0) for pred in predictions_clean]
 
         # To Tensors
         targets = torch.LongTensor(batch_answers_decoded)
