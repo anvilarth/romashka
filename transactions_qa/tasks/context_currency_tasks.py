@@ -14,16 +14,16 @@ from romashka.transactions_qa.evaluation.eval_processings_utils import transform
 
 
 @dataclass
-class MostFrequentCityTaskOpenEnded(CategoricalTaskAbstract):
+class MostFrequentCurrencyTaskOpenEnded(CategoricalTaskAbstract):
 
     def __post_init__(self):
-        self.task_name = "most_frequent_city_open-ended"
-        self.target_feature_name = 'city'  # 164 unique values
+        self.task_name = "most_frequent_currency_open-ended"
+        self.target_feature_name = 'currency'  # 11 unique values
 
         self.task_special_token = None
-        self.task_specific_special_token = "[most_freq_city_openended]"
+        self.task_specific_special_token = "[most_freq_currency_openended]"
 
-        self.num_classes = 164
+        self.num_classes = 12
         self.is_text_task = False
         self.is_binary_task = False
         self.is_open_ended_task = True
@@ -38,18 +38,18 @@ class MostFrequentCityTaskOpenEnded(CategoricalTaskAbstract):
         ]
 
         self.ending_prompts = [
-            ". Which city is the most frequent?",
-            ". Answer the question: which city is the most frequent?",
-            ". Choose the most frequent city.",
-            ". Select the most frequent city.",
-            ". Answer the question: which city is the most frequent within "
+            ". Which currency is the most frequent?",
+            ". Answer the question: which currency is the most frequent?",
+            ". Choose the most frequent currency.",
+            ". Select the most frequent currency.",
+            ". Answer the question: which currency is the most frequent within "
             "clients' transactions throughout the history?",
-            ". Find out which city is the most frequent in history?",
-            ". Which city is the most frequent within clients' transactions throughout the history?",
-            ". Identify which city is the most frequent within clients' transactions?",
-            ". Can you find out which city is the most frequent?",
-            ". Can you find out which city is the most frequent?"
-            ". Would you answer the question: which city is the most frequent based "
+            ". Find out which currency is the most frequent in history?",
+            ". Which currency is the most frequent within clients' transactions throughout the history?",
+            ". Identify which currency is the most frequent within clients' transactions?",
+            ". Can you find out which currency is the most frequent?",
+            ". Can you find out the most frequent currency of clients' transactions?"
+            ". Would you answer the question: which currency is the most frequent based "
             "on the client's transaction history?"
         ]
         self.question_templates = self.generate_question_templates(self.starting_prompts,
@@ -226,16 +226,16 @@ class MostFrequentCityTaskOpenEnded(CategoricalTaskAbstract):
 
 
 @dataclass
-class LastCityTaskOpenEnded(CategoricalTaskAbstract):
+class LastCurrencyTaskOpenEnded(CategoricalTaskAbstract):
 
     def __post_init__(self):
-        self.task_name = "last_city_open-ended"
-        self.target_feature_name = 'city'  # 164 unique values
+        self.task_name = "last_currency_open-ended"
+        self.target_feature_name = 'currency'  # 11 unique values
 
         self.task_special_token = None
-        self.task_specific_special_token = "[last_city_openended]"
+        self.task_specific_special_token = "[last_currency_openended]"
 
-        self.num_classes = 164
+        self.num_classes = 12
         self.is_text_task = False
         self.is_binary_task = False
         self.is_open_ended_task = True
@@ -251,17 +251,17 @@ class LastCityTaskOpenEnded(CategoricalTaskAbstract):
         ]
 
         self.ending_prompts = [
-            ". What is the city of the last transaction that occurred in history?",
-            ". What is the city of the very last transaction encountered in the transaction history?",
-            ". Choose the last transaction city.",
-            ". Select the city of the most recently occurred transaction.",
-            ". Find out what is the city of last transaction that occurred in history.",
-            ". Can you please answer the question: what is the city of the most recent transaction?",
-            ". Determine the city of the last transaction in history?",
-            ". Select the city of the last transaction that encountered in history.",
-            ". Choose the city of the most recent transaction in the history",
-            ". Can you find out of which city was the most recent transaction?",
-            ". Answer the question: what is the city of the latest transaction?"
+            ". What is the currency of the last transaction that occurred in history?",
+            ". What is the currency of the very last transaction encountered in the transaction history?",
+            ". Choose the last transaction currency.",
+            ". Select the currency of the most recently occurred transaction.",
+            ". Find out what is the currency of last transaction that occurred in history.",
+            ". Can you please answer the question: what is the currency of the most recent transaction?",
+            ". Determine the currency of the last transaction in history?",
+            ". Select the currency of the last transaction that encountered in history.",
+            ". Choose the currency of the most recent transaction in the history",
+            ". Can you find out of which currency was the most recent transaction?",
+            ". Answer the question: what is the currency of the latest transaction?"
         ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,

@@ -40,8 +40,12 @@ from romashka.transactions_qa.tasks.context_weekday_tasks import (MostFrequentDa
                                                                   LeastFrequentDayOfWeekTaskOpenEnded,
                                                                   OccurenceDayOfWeekTaskBinary)
 from romashka.transactions_qa.tasks.context_week_of_year_tasks import MostFrequentWeekOfYearTaskOpenEnded
-from romashka.transactions_qa.tasks.context_city_tasks import MostFrequentCityTaskOpenEnded
-from romashka.transactions_qa.tasks.context_country_tasks import MostFrequentCountryTaskOpenEnded
+from romashka.transactions_qa.tasks.context_city_tasks import (MostFrequentCityTaskOpenEnded,
+                                                               LastCityTaskOpenEnded)
+from romashka.transactions_qa.tasks.context_country_tasks import (MostFrequentCountryTaskOpenEnded,
+                                                                  LastCountryTaskOpenEnded)
+from romashka.transactions_qa.tasks.context_currency_tasks import (MostFrequentCurrencyTaskOpenEnded,
+                                                                   LastCurrencyTaskOpenEnded)
 
 from romashka.transactions_qa.tasks.predictive_amnt_tasks import (PredNumericAmountTaskBinary,
                                                                   PredOverThresholdAmountTaskBinary,
@@ -60,6 +64,7 @@ from romashka.transactions_qa.tasks.predictive_weekofyear_tasks import (PredWeek
                                                                         PredWeekOfYearTaskOpenEnded)
 from romashka.transactions_qa.tasks.predictive_city_tasks import PredCityTaskOpenEnded
 from romashka.transactions_qa.tasks.predictive_country_tasks import PredCountryTaskOpenEnded
+from romashka.transactions_qa.tasks.predictive_currency_tasks import PredCurrencyTaskOpenEnded
 from romashka.transactions_qa.tasks.predictive_default_task import PredDefaultTaskBinary
                                                                
 from romashka.transactions_qa.tasks.default_task import DefaultTask
@@ -121,8 +126,13 @@ AUTO_TASKS = [
         ("most_frequent_week_of_year_open-ended", MostFrequentWeekOfYearTaskOpenEnded),
         # City
         ("most_frequent_city_open-ended", MostFrequentCityTaskOpenEnded),
+        ("last_city_open-ended", LastCityTaskOpenEnded),
         # Country
         ("most_frequent_country_open-ended", MostFrequentCountryTaskOpenEnded),
+        ("last_country_open-ended", LastCountryTaskOpenEnded),
+        # Currency
+        ("most_frequent_currency_open-ended", MostFrequentCurrencyTaskOpenEnded),
+        ("last_currency_open-ended", LastCurrencyTaskOpenEnded),
         # Predictive
         # Amount
         ("pred_numeric_amount_binary", PredNumericAmountTaskBinary),
@@ -149,6 +159,8 @@ AUTO_TASKS = [
         ("pred_city_open-ended", PredCityTaskOpenEnded),
         # Country
         ("pred_country_open-ended", PredCountryTaskOpenEnded),
+        # Currency
+        ("pred_currency_open-ended", PredCurrencyTaskOpenEnded),
         # Default
         ("pred_default_binary", PredDefaultTaskBinary)
     ]
