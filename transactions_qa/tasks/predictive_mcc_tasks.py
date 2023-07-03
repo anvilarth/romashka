@@ -332,7 +332,8 @@ class PredMCCCodeTaskOpenEnded(CategoricalTaskAbstract):
         self.is_binary_task = False
         self.is_open_ended_task = True
         self.metrics = torch.nn.ModuleDict({
-            "rouge": ROUGEScore()
+            "accuracy": Accuracy(task="multiclass", num_classes=self.num_classes),
+            "f1": F1Score(task="multiclass", num_classes=self.num_classes)
         })
 
         self.starting_prompts = [

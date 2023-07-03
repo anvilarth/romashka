@@ -40,6 +40,9 @@ from romashka.transactions_qa.tasks.context_weekday_tasks import (MostFrequentDa
                                                                   LeastFrequentDayOfWeekTaskOpenEnded,
                                                                   OccurenceDayOfWeekTaskBinary)
 from romashka.transactions_qa.tasks.context_week_of_year_tasks import MostFrequentWeekOfYearTaskOpenEnded
+from romashka.transactions_qa.tasks.context_city_tasks import MostFrequentCityTaskOpenEnded
+from romashka.transactions_qa.tasks.context_country_tasks import MostFrequentCountryTaskOpenEnded
+
 from romashka.transactions_qa.tasks.predictive_amnt_tasks import (PredNumericAmountTaskBinary,
                                                                   PredOverThresholdAmountTaskBinary,
                                                                   PredUnderThresholdAmountTaskBinary,
@@ -55,6 +58,8 @@ from romashka.transactions_qa.tasks.predictive_weekday_tasks import (PredDayOfWe
                                                                      PredDayOfWeekTaskOpenEnded)
 from romashka.transactions_qa.tasks.predictive_weekofyear_tasks import (PredWeekOfYearTaskBinary,
                                                                         PredWeekOfYearTaskOpenEnded)
+from romashka.transactions_qa.tasks.predictive_city_tasks import PredCityTaskOpenEnded
+from romashka.transactions_qa.tasks.predictive_country_tasks import PredCountryTaskOpenEnded
 from romashka.transactions_qa.tasks.predictive_default_task import PredDefaultTaskBinary
                                                                
 from romashka.transactions_qa.tasks.default_task import DefaultTask
@@ -114,6 +119,10 @@ AUTO_TASKS = [
         ("occurrence_hour_binary", OccurenceHourTaskBinary),
         # Week of year
         ("most_frequent_week_of_year_open-ended", MostFrequentWeekOfYearTaskOpenEnded),
+        # City
+        ("most_frequent_city_open-ended", MostFrequentCityTaskOpenEnded),
+        # Country
+        ("most_frequent_country_open-ended", MostFrequentCountryTaskOpenEnded),
         # Predictive
         # Amount
         ("pred_numeric_amount_binary", PredNumericAmountTaskBinary),
@@ -136,6 +145,10 @@ AUTO_TASKS = [
         # Week of year
         ("pred_week_of_year_binary", PredWeekOfYearTaskBinary),
         ("pred_week_of_year_open-ended", PredWeekOfYearTaskOpenEnded),
+        # City
+        ("pred_city_open-ended", PredCityTaskOpenEnded),
+        # Country
+        ("pred_country_open-ended", PredCountryTaskOpenEnded),
         # Default
         ("pred_default_binary", PredDefaultTaskBinary)
     ]
