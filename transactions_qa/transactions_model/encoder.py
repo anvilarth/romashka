@@ -81,6 +81,13 @@ class TransactionEncoder(nn.Module):
                 model = AutoModel.from_pretrained(config_name)
         elif config_name is not None:
             config = AutoConfig.from_pretrained(config_name)
+            if 'max_target_positions' in config.to_dict():
+                config.update_from_string('max_target_positions=2048')
+            if 'max_source_positions' in config.to_dict():
+                config.update_from_string('max_source_positions=2048')
+            if 'n_positions' in config.to_dict():
+                config.update_from_string('n_positions=2048')
+
             if config_name == 'bert-base-uncased' or config_name == 'bert-large-uncased':
                 config.update_from_string('max_position_embeddings=1024')
 
@@ -94,36 +101,12 @@ class TransactionEncoder(nn.Module):
             self.output_size = hidden_size
             hidden_size = None
 
-        elif encoder_type == 'bert':
+        elif encoder_type in ['bert', 't5', 'gpt2', 'decision-transformer', 'data2vec-text']:
             self.encoder = model
-            self.encoder.wpe = LambdaLayer(zero_function)
+            # self.encoder.wpe = LambdaLayer(zero_function)
 
-        elif encoder_type == 't5':
-            self.encoder = model
-            self.encoder.wpe = LambdaLayer(zero_function)
-
-        elif encoder_type == 'gpt2':
-            self.encoder = model
-            self.encoder.wpe = LambdaLayer(zero_function)
-
-        elif encoder_type == 'decision-transformer':
+        elif encoder_type in ['wav2vec2', 'data2vec-audio', 'hubert']:
             self.encoder = model.encoder
-            self.encoder.wpe = LambdaLayer(zero_function)
-
-        elif encoder_type == 'wav2vec2':
-            self.encoder = model.encoder
-            self.encoder.pos_conv_embed = nn.Identity()
-
-        elif encoder_type == 'data2vec-audio':
-            self.encoder = model.encoder
-            self.encoder.pos_conv_embed = nn.Identity()
-
-        elif encoder_type == 'data2vec-text':
-            self.encoder = model
-            self.encoder.wpe = LambdaLayer(zero_function)
-
-        elif encoder_type == 'hubert':
-            self.encoder = model.hubert.encoder
             self.encoder.pos_conv_embed = nn.Identity()
 
         elif encoder_type in ['videomae', 'vit-base', 'data2vec-vision', 'graphcodebert', 'vit-mae']:
@@ -133,7 +116,7 @@ class TransactionEncoder(nn.Module):
             self.encoder = PerceiverModel.from_pretrained("deepmind/vision-perceiver-fourier")
         elif encoder_type in ['whisper', 's2t']:
             self.encoder = model.decoder
-            self.encoder.embed_positions = LambdaLayer(zero_function)
+            # self.encoder.embed_positions = LambdaLayer(zero_function)
         else:
             raise NotImplementedError("Incorrect model name")
 
@@ -155,9 +138,14 @@ class TransactionEncoder(nn.Module):
 
         print("USING", encoder_type)
 
+    def construct_positional_embedding(self, embedding):
+        device = embedding.device
+        return torch.arange(embedding.shape[1], device=device)
+
     def forward(self, embedding, mask):
         batch_size = mask.shape[0]
         if self.encoder_type in ['gpt2', 'decision-transformer', 'bert', 's2t', 'whisper']:
+            # input_ids = self.construct_positional_embedding(embedding)
             x = self.encoder(inputs_embeds=embedding, attention_mask=mask).last_hidden_state
 
         elif self.encoder_type == 't5':
