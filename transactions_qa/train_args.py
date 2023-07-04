@@ -1,9 +1,9 @@
+import torch
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import (Optional, Union, Dict, List, Any)
 from transformers.trainer_utils import (
     EvaluationStrategy,
-    SchedulerType,
     ShardedDDPOption
 )
 # from transformers import TrainingArguments
@@ -450,7 +450,7 @@ class TrainingArguments:
 
     retrieval_loss_scale: Optional[float] = field(
         default=1.0,
-        metadata={"help": "A scaling factor for retrieval from embeddings loss (usually kind of Contractive loss)."},
+        metadata={"help": "A scaling factor for retrieval from embeddings loss (usually kind of Contrastive loss)."},
     )
 
     gradient_clip_val: float = field(
@@ -469,13 +469,13 @@ class TrainingArguments:
 
     gradient_accumulation_steps: int = field(
         default=1,
-        metadata={"help": "Number of updates steps to accumulate before performing a backward/update pass."},
+        metadata={"help": "Number of updates steps to accumulate before performing a backward/update pass."}
     )
-    optimizer_type: Union[SchedulerType, str] = field(
-        default="AdamW",
-        metadata={"help": "The optimizer type to use. Can be one from: `AdamW`, `Adam` or other from torch.optim"
-                          " or custom: `Lion`"},
-    )
+    # optimizer_type: str = field(
+    #     default="AdamW",
+    #     metadata={"help": "The optimizer type to use. Can be one from: `AdamW`, `Adam` or other from torch.optim"
+    #                       " or custom: `Lion`"}
+    # )
     learning_rate: Optional[float] = field(default=5e-5, metadata={"help": "The initial learning rate for AdamW."})
     weight_decay: Optional[float] = field(default=0.0, metadata={"help": "Weight decay for AdamW if we apply some."})
     adam_beta1: Optional[float] = field(default=0.9, metadata={"help": "Beta1 for AdamW optimizer"})
@@ -483,9 +483,10 @@ class TrainingArguments:
     adam_epsilon: Optional[float] = field(default=1e-8, metadata={"help": "Epsilon for AdamW optimizer."})
     max_grad_norm: Optional[float] = field(default=1.0, metadata={"help": "Max gradient norm."})
 
-    do_8bit: Optional[bool] = field(default=False, metadata={"help": "Load model and train with 8-bit precision."})
-    precision: Optional[Union[str, int]] = field(
-        default='32-true',
+    do_8bit: Optional[bool] = field(default=False,
+                                    metadata={"help": "Load model and train with 8-bit precision."})
+    precision: Union[str, int] = field(
+        default=32,
         metadata={"help": "Double precision (64), full precision (32), half precision (16) or "
                           "bfloat16 precision (bf16). Can be used on CPU, GPU or TPUs. "
                           "Or as literals: [‘16-mixed’, ‘bf16-mixed’, ‘32-true’, ‘64-true’]"}
@@ -513,7 +514,7 @@ class TrainingArguments:
                           "after a fraction of the training epoch. Pass an ``int`` to check after a fixed number of training "
                           "batches."},
     )
-    lr_scheduler_type: Union[SchedulerType, str] = field(
+    lr_scheduler_type: str = field(
         default="linear",
         metadata={"help": "The scheduler type to use. Can be one from: `linear`, `cosine`, "
                           "`cosine_with_restarts`, `polynomial`, `constant`, `constant_with_warmup`"},
@@ -561,13 +562,10 @@ class TrainingArguments:
     save_last_checkpoint: Optional[bool] = field(default=True,
                                                  metadata={
                                                      "help": "Whether to save checkpoint from a very last epoch."})
-    save_top_k: Optional[int] = field(default=1,
-                                      metadata={
-                                          "help": "If save_top_k == k, "
-                                                  "the best k models according to the quantity monitored will be saved."
-                                                  " If save_top_k == 0, no models are saved. "
-                                                  " If save_top_k == -1, all models are saved."
-                                      })
+    # save_top_k: Optional[int] = field(default=1,
+    #                                   metadata={
+    #                                       "help": "If save_top_k == k, the best k models according to the quantity monitored will be saved. If save_top_k == 0, no models are saved. If save_top_k == -1, all models are saved."
+    #                                   })
     save_only_weights: Optional[bool] = field(default=True,
                                               metadata={
                                                   "help": "Whether to save only weights, without optimizer state."})
@@ -588,17 +586,21 @@ class TrainingArguments:
 
     # -----------------
 
-    until_convergence: Optional[bool] = field(default=False,
-                                              metadata={
-                                                    "help": "Whether to train model until no improvement is observed."
-                                              })
-
-    early_stopping_patience: Optional[int] = field(
-        default=2, metadata={"help": "A number of checks with no improvement after which training will be stopped. "
-                                      "Under the default configuration, one check happens after every training epoch. "
-                                      "However, the frequency of validation can be modified by setting various "
-                                      "parameters on the Trainer, "
-                                      "for example check_val_every_n_epoch and val_check_interval."}
-    )
+    # until_convergence: Optional[bool] = field(default=False,
+    #                                           metadata={
+    #                                                 "help": "Whether to train model until no improvement is observed."
+    #                                           })
+    #
+    # early_stopping_patience: Optional[int] = field(
+    #     default=2, metadata={"help": "A number of checks with no improvement after which training will be stopped. "
+    #                                   "Under the default configuration, one check happens after every training epoch. "
+    #                                   "However, the frequency of validation can be modified by setting various "
+    #                                   "parameters on the Trainer, "
+    #                                   "for example check_val_every_n_epoch and val_check_interval."}
+    # )
 
     # -----------------
+
+    def __post_init__(self):
+        for arg in self.__dict__.keys():
+            print(f"{arg} = {getattr(self, arg)}")

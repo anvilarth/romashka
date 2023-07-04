@@ -75,6 +75,12 @@ def main():
     else:
         model_args, data_args, training_args, tasks_args = parser.parse_args_into_dataclasses()
 
+    # print(f"\n\nmodel_args:\n{model_args}")
+    # print(f"\n\ndata_args:\n{data_args}")
+    # print(f"\n\ntraining_args:\n{training_args}")
+    # print(f"\n\ntasks_args:\n{tasks_args}")
+    # return 0
+
     pl.seed_everything(training_args.seed)
     # Set up logging
     logger = get_logger(
@@ -186,7 +192,7 @@ def main():
         renamed_state_dict[key_] = param
 
     logger.info(f"Renaming & loading transactions model...")
-    transactions_model.load_state_dict(renamed_state_dict)
+    transactions_model.load_state_dict(renamed_state_dict, strict=False)
 
     # Configure and load from HF hub LM model
     logger.info(f"Loading Language model: `{model_args.language_model_name_or_path}`...")
@@ -406,7 +412,7 @@ def main():
     transactionsQA_model_config = {
         "learning_rate": training_args.learning_rate,
         "scheduler_type": training_args.lr_scheduler_type,
-        "optimizer_type": training_args.optimizer_type,
+        "optimizer_type": "AdamW", # training_args.optimizer_type,
         "adam_beta1": training_args.adam_beta1,
         "adam_beta2": training_args.adam_beta2,
         "adam_epsilon": training_args.adam_epsilon,
@@ -510,13 +516,13 @@ def main():
         save_weights_only=training_args.save_only_weights,  # default: 'True'
         every_n_epochs=training_args.save_epochs,  # default: '1'
         save_last=training_args.save_last_checkpoint,  # default: 'True'
-        save_top_k=training_args.save_top_k,  # default: 1
+        save_top_k=5,  #training_args.save_top_k,  # default: 1
         mode=training_args.save_strategy_mode,  # default: 'min' for monitor='val_loss'
     )
 
     early_stopping_callback = EarlyStopping(
         monitor="val_loss",
-        patience=training_args.early_stopping_patience,
+        patience=2,  #training_args.early_stopping_patience,
         mode="min",
         strict=False,
         verbose=True
@@ -530,19 +536,21 @@ def main():
             save_fn = str(Path(save_checkpoints_dir).resolve())
             logger.info(f"Saving tokenizer with `save_pretrained()` to {save_fn}")
             saved_files = tokenizer.save_pretrained(save_fn)
-            logger.info(f"Saved to:\n{[f.name for f in saved_files]}")
+            logger.info(f"Saved to:\n{[f for f in saved_files]}")
         else:
             tok_fn = [fn for fn in ckpt_files if ("tokenizer_config.json" in fn) or ("config.json" in fn)][0]
             logger.info(f"Pretrained tokenizer exists: {tok_fn}")
 
     callbacks = [checkpoint_callback, lr_monitor_callback]
-    if training_args.until_convergence:
+    until_convergence = True
+    if until_convergence:  # training_args.until_convergence:
         callbacks += [early_stopping_callback]
 
     trainer = pl.Trainer(
         fast_dev_run=training_args.fast_dev_run,
-        max_steps=-1 if training_args.until_convergence else training_args.max_steps,
-        max_epochs=-1 if training_args.until_convergence else training_args.max_epochs,
+        # training_args.until_convergence
+        max_steps=-1 if until_convergence else training_args.max_steps,
+        max_epochs=-1 if until_convergence else training_args.max_epochs,
         gpus=len(available_gpus),
         auto_select_gpus=True,
         # strategy="ddp",

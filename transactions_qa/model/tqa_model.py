@@ -309,6 +309,7 @@ class TransactionQAModel(pl.LightningModule):
         metrics_scores = {}
         try:
             metrics_scores = task.calculate_metrics(outputs, batch_answers, self.metrics[task.task_name])
+            metrics_scores = {metric_name + "_" + task.task_name: score for metric_name, score in metrics_scores.items()}
         except Exception as e:
             self._logger.error(f"error occurred during task metric calculation:\n{e}")
 
