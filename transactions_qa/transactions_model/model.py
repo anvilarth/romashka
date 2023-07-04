@@ -40,7 +40,6 @@ class TransactionsModel(nn.Module):
                  adapters=False,
                  hidden_size=None,
                  alpha=1.0,
-                 num_classes=0,
                  *args,
                  **kwargs):
 
@@ -69,7 +68,7 @@ class TransactionsModel(nn.Module):
         self.connector = TransactionConnector(inp_size, self.output_size, self.connector_type)
 
         self.head_type = head_type
-        self.head = TransactionHead(head_type,  self.output_size, cat_embedding_projections, num_embedding_projections, num_classes)
+        self.head = TransactionHead(head_type,  self.output_size, cat_embedding_projections, num_embedding_projections)
 
         self.cutmix = cutmix
         self.mixup = mixup
