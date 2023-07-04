@@ -1,5 +1,6 @@
 import random
 import numpy as np
+import inspect
 from typing import List, Optional, Tuple, Any, Dict, Union
 
 import wandb
@@ -12,7 +13,8 @@ from pytorch_lightning.utilities import rank_zero_info
 from pytorch_lightning.loggers import WandbLogger
 
 import bitsandbytes as bnb
-
+from  romashka.transactions_qa.lion_optim import Lion
+from romashka.transactions_qa.utils import inspect_init_signature
 from romashka.transactions_qa.model.generation_utils import AnsweredQACriteria
 from romashka.transactions_qa.tasks.task_abstract import AbstractTask
 from romashka.transactions_qa.tasks.task_token_updater import (collect_task_specific_tokens,
@@ -28,6 +30,7 @@ class TransactionQAModel(pl.LightningModule):
                  model: nn.Module,
                  tasks: List[AbstractTask],
                  learning_rate: Optional[float] = 5e-5,
+                 optimizer_type: Optional[Union[torch.optim.Optimizer, str]] = "AdamW",
                  scheduler_type: Optional[Union[transformers.SchedulerType, str]] = "linear",
                  use_8bit_optim: Optional[bool] = False,
                  adam_beta1: Optional[float] = 0.9,
@@ -54,6 +57,7 @@ class TransactionQAModel(pl.LightningModule):
         self.warmup_steps: int = warmup_steps
         self.training_steps: int = training_steps
         self.base_learning_rate = learning_rate
+        self.optimizer_type = optimizer_type
         self.scheduler_type = scheduler_type
         self.use_8bit_optim = use_8bit_optim
         self.adam_beta1: float = adam_beta1
@@ -91,14 +95,45 @@ class TransactionQAModel(pl.LightningModule):
             f"The model will start training with only {len(trainable_parameters)} "
             f"trainable parameters out of {len(parameters)}."
         )
-        if self.use_8bit_optim:
+        # Init optimizer
+        optimizer_type = None
+        if isinstance(self.optimizer_type, torch.optim.Optimizer):
+            optimizer_type = self.optimizer_type
+            rank_zero_info(
+                f"The model will train with {optimizer_type} optimizer."
+            )
+        elif self.optimizer_type in ["Adam", "AdamW"] and self.use_8bit_optim:
+            optimizer_type = 'Adam8bit'
             optimizer = bnb.optim.Adam8bit(self.parameters(),
                                            lr=self.base_learning_rate,
                                            betas=(self.adam_beta1, self.adam_beta2))
             rank_zero_info(
                 f"The model will train with 8-bit AdamW optimizer."
             )
+        elif hasattr(torch.optim, self.optimizer_type):
+            optimizer_type = getattr(torch.optim, self.optimizer_type)
+            optim_params = {
+                "params": self.parameters(),
+                "lr": self.base_learning_rate
+            }
+            # Add beta1, beta2 for Adam-like optimizers
+            if inspect_init_signature('betas', optimizer_type):
+                optim_params['betas'] = (self.adam_beta1, self.adam_beta2)
+
+            # Instantiate optimizer
+            optimizer = optimizer_type(**optim_params)
+            rank_zero_info(
+                f"Instantiating {self.optimizer_type} optimizer"
+            )
+        elif self.optimizer_type == 'Lion':
+            optimizer = Lion(self.parameters(),
+                             betas=(self.adam_beta1, self.adam_beta2),
+                             lr=self.base_learning_rate)
+            rank_zero_info(
+                f"Instantiating {self.optimizer_type} optimizer"
+            )
         else:
+            rank_zero_info(f"Unknown {optimizer_type} optimizer, so create AdamW optimizer.")
             optimizer = torch.optim.AdamW(self.parameters(),
                                           betas=(self.adam_beta1, self.adam_beta2),
                                           lr=self.base_learning_rate)

@@ -471,6 +471,11 @@ class TrainingArguments:
         default=1,
         metadata={"help": "Number of updates steps to accumulate before performing a backward/update pass."},
     )
+    optimizer_type: Union[SchedulerType, str] = field(
+        default="AdamW",
+        metadata={"help": "The optimizer type to use. Can be one from: `AdamW`, `Adam` or other from torch.optim"
+                          " or custom: `Lion`"},
+    )
     learning_rate: Optional[float] = field(default=5e-5, metadata={"help": "The initial learning rate for AdamW."})
     weight_decay: Optional[float] = field(default=0.0, metadata={"help": "Weight decay for AdamW if we apply some."})
     adam_beta1: Optional[float] = field(default=0.9, metadata={"help": "Beta1 for AdamW optimizer"})
@@ -556,6 +561,13 @@ class TrainingArguments:
     save_last_checkpoint: Optional[bool] = field(default=True,
                                                  metadata={
                                                      "help": "Whether to save checkpoint from a very last epoch."})
+    save_top_k: Optional[int] = field(default=1,
+                                      metadata={
+                                          "help": "If save_top_k == k, "
+                                                  "the best k models according to the quantity monitored will be saved."
+                                                  " If save_top_k == 0, no models are saved. "
+                                                  " If save_top_k == -1, all models are saved."
+                                      })
     save_only_weights: Optional[bool] = field(default=True,
                                               metadata={
                                                   "help": "Whether to save only weights, without optimizer state."})
@@ -572,6 +584,21 @@ class TrainingArguments:
 
     seed: Optional[int] = field(
         default=11, metadata={"help": "Number for seed"}
+    )
+
+    # -----------------
+
+    until_convergence: Optional[bool] = field(default=False,
+                                              metadata={
+                                                    "help": "Whether to train model until no improvement is observed."
+                                              })
+
+    early_stopping_patience: Optional[int] = field(
+        default=2, metadata={"help": "A number of checks with no improvement after which training will be stopped. "
+                                      "Under the default configuration, one check happens after every training epoch. "
+                                      "However, the frequency of validation can be modified by setting various "
+                                      "parameters on the Trainer, "
+                                      "for example check_val_every_n_epoch and val_check_interval."}
     )
 
     # -----------------

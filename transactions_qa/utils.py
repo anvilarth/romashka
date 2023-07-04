@@ -4,6 +4,7 @@ import re
 import json
 import pickle
 import random
+import inspect
 import numpy as np
 from typing import Dict, Any, Optional, List, Union
 
@@ -51,6 +52,40 @@ def count_parameters(model, verbose: Optional[bool] = True):
             s += f"{trainable_parameters} trainable parameters."
         print(s)
     return trainable_parameters
+
+
+def inspect_forward_signature(param_name: str, model: nn.Module) -> bool:
+    """
+    Get the list of parameter names of `forward` function of the model
+    and checks whether requested parameter name is in list.
+    Args:
+        param_name: str, a requested parameter name;
+        model: nn.Module, a model to get `forward` function from;
+    Returns:
+        a bool flag, whether requested parameter name is in parameter names list.
+    """
+    # Inspect model forward signature to keep only the arguments it accepts
+    signature = inspect.signature(model.forward)
+    if param_name in list(signature.parameters.keys()):
+        return True
+    return False
+
+
+def inspect_init_signature(param_name: str, object: Any) -> bool:
+    """
+    Get the list of parameter names of `__init__` function of the object
+    and checks whether requested parameter name is in list.
+    Args:
+        param_name: str, a requested parameter name;
+        object: Any, an object to get `__init__` function from;
+    Returns:
+        a bool flag, whether requested parameter name is in parameter names list.
+    """
+    # Inspect model forward signature to keep only the arguments it accepts
+    signature = inspect.signature(object.__init__)
+    if param_name in list(signature.parameters.keys()):
+        return True
+    return False
 
 
 def masked_mean(inp, mask, axis=1):

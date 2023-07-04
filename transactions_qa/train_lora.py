@@ -16,7 +16,7 @@ from torch.utils.data import DataLoader
 
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
-from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
+from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor, EarlyStopping
 
 # Use custom transformers version == 4.27.4 + modifications
 # sys.path.insert(0, "/home/jovyan/abdullaeva/transactionsQA/transformers/src/")
@@ -406,6 +406,7 @@ def main():
     transactionsQA_model_config = {
         "learning_rate": training_args.learning_rate,
         "scheduler_type": training_args.lr_scheduler_type,
+        "optimizer_type": training_args.optimizer_type,
         "adam_beta1": training_args.adam_beta1,
         "adam_beta2": training_args.adam_beta2,
         "adam_epsilon": training_args.adam_epsilon,
@@ -509,7 +510,16 @@ def main():
         save_weights_only=training_args.save_only_weights,  # default: 'True'
         every_n_epochs=training_args.save_epochs,  # default: '1'
         save_last=training_args.save_last_checkpoint,  # default: 'True'
-        mode=training_args.save_strategy_mode,  # default: 'max'
+        save_top_k=training_args.save_top_k,  # default: 1
+        mode=training_args.save_strategy_mode,  # default: 'min' for monitor='val_loss'
+    )
+
+    early_stopping_callback = EarlyStopping(
+        monitor="val_loss",
+        patience=training_args.early_stopping_patience,
+        mode="min",
+        strict=False,
+        verbose=True
     )
 
     # Saving tokenizer
@@ -525,10 +535,14 @@ def main():
             tok_fn = [fn for fn in ckpt_files if ("tokenizer_config.json" in fn) or ("config.json" in fn)][0]
             logger.info(f"Pretrained tokenizer exists: {tok_fn}")
 
+    callbacks = [checkpoint_callback, lr_monitor_callback]
+    if training_args.until_convergence:
+        callbacks += [early_stopping_callback]
+
     trainer = pl.Trainer(
         fast_dev_run=training_args.fast_dev_run,
-        max_steps=training_args.max_steps,
-        max_epochs=training_args.max_epochs,
+        max_steps=-1 if training_args.until_convergence else training_args.max_steps,
+        max_epochs=-1 if training_args.until_convergence else training_args.max_epochs,
         gpus=len(available_gpus),
         auto_select_gpus=True,
         # strategy="ddp",
@@ -539,11 +553,10 @@ def main():
         gradient_clip_algorithm=training_args.gradient_clip_algorithm,
         accumulate_grad_batches=training_args.gradient_accumulation_steps,
         logger=wb_logger,  # [tb_logger, wb_logger],
-        callbacks=[checkpoint_callback, lr_monitor_callback])
+        callbacks=callbacks
+    )
 
     trainer.fit(model=model, datamodule=datamodule)
-#     train_dataloaders=train_dataloader, val_dataloaders=val_dataloader
-#     datamodule=datamodule
 
 
 if __name__ == '__main__':
