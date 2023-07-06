@@ -8,9 +8,10 @@ from typing import (Dict, Tuple, List,
                     Any, Optional, Union)
 
 import transformers
-from torchmetrics import Accuracy
-from torchmetrics.text.rouge import ROUGEScore
+from torchmetrics.classification import (BinaryAccuracy, BinaryF1Score, F1Score, Accuracy)
+
 from .categorical_task_abstract import CategoricalTaskAbstract
+from romashka.transactions_qa.evaluation.eval_processings_utils import transform_labels
 
 
 from romashka.transactions_qa.model.generation_utils import isin
@@ -32,7 +33,7 @@ class MostFrequentWeekOfYearTaskOpenEnded(CategoricalTaskAbstract):
         self.is_binary_task = False
         self.is_open_ended_task = True
         self.metrics = torch.nn.ModuleDict({
-            "rouge": ROUGEScore(),
+            "f1": F1Score(task="multiclass", num_classes=self.num_classes),
             'accuracy': Accuracy(task='multiclass',
                                  threshold=self.decision_threshold,
                                  average='weighted',

@@ -9,8 +9,10 @@ from typing import (Dict, Tuple, List,
 
 from torchmetrics import Accuracy
 from torchmetrics.text.rouge import ROUGEScore
+from torchmetrics.classification import (BinaryAccuracy, BinaryF1Score, F1Score, Accuracy)
 
 from .categorical_task_abstract import CategoricalTaskAbstract
+from romashka.transactions_qa.evaluation.eval_processings_utils import transform_labels
 
 
 @dataclass
@@ -401,8 +403,9 @@ class MostFrequentMCCCodeTaskOpenEnded(CategoricalTaskAbstract):
         self.is_text_task = False
         self.is_binary_task = False
         self.is_open_ended_task = True
-        self.metrics = nn.ModuleDict({
-            "rouge": ROUGEScore()
+        self.metrics = torch.nn.ModuleDict({
+            "accuracy": Accuracy(task="multiclass", num_classes=self.num_classes),
+            "f1": F1Score(task="multiclass", num_classes=self.num_classes)
         })
 
         self.starting_prompts = [
@@ -533,8 +536,43 @@ class MostFrequentMCCCodeTaskOpenEnded(CategoricalTaskAbstract):
             with_numeric_output=self.numeric_outputs
         )
 
+    def process_outputs(self, outputs: Any, answers: torch.Tensor, as_strings: Optional[bool] = False) -> Any:
+        """
+        Processing target text and output text to get the predictions
+        """
+        # Get predictions as list of strings
+        default_value = 0
+        predictions_decoded = self.tokenizer.batch_decode(outputs['logits'].argmax(2),
+                                                          skip_special_tokens=True)
+        batch_answers_decoded = self.tokenizer.batch_decode(outputs['labels'],
+                                                            skip_special_tokens=True)
+        # Clean predicted texts and map them to categorical labels
+        predictions_clean = [transform_labels(pred,
+                                              do_make_numeric=True,
+                                              do_clean_text=False,
+                                              default_value=default_value)
+                             for pred in predictions_decoded]
+
+        batch_answers_decoded = [transform_labels(answer,
+                                                  do_make_numeric=True,
+                                                  do_clean_text=False,
+                                                  default_value=default_value)
+                                 for answer in batch_answers_decoded]
+
+        # Map to available labels
+        classes = [int(answer) for answer in self.answers_options]
+        predictions_clean = [pred if pred in classes else default_value
+                             for pred in predictions_clean]
+
+        # To Tensors
+        targets = torch.LongTensor(batch_answers_decoded)
+        predictions = torch.LongTensor(predictions_clean)
+
+        return targets, predictions
+
     def calculate_metrics(self, outputs: Any, answers: torch.Tensor,
-                          task_metrics: Union[nn.ModuleDict, Dict[str, Any]], **kwargs) -> dict:
+                          task_metrics: Union[torch.nn.ModuleDict, Dict[str, Any]],
+                          **kwargs) -> dict:
         """
         Calculate task metrics for a task.
         Args:
@@ -550,7 +588,22 @@ class MostFrequentMCCCodeTaskOpenEnded(CategoricalTaskAbstract):
                 key - metric name,
                 value - metric score.
         """
-        return {}
+        metrics = {}
+        try:
+            targets, preds = self.process_outputs(outputs, answers)
+
+            if 'accuracy' in task_metrics:
+                acc = task_metrics['accuracy'](preds, targets)
+                metrics['accuracy'] = task_metrics['accuracy']
+
+            if 'f1' in task_metrics:
+                f1 = task_metrics['f1'](preds, targets)
+                metrics['f1'] = task_metrics['f1']
+
+        except Exception as e:
+            print(f"Error during metrics calculation: {e}")
+
+        return metrics
 
 
 @dataclass
@@ -731,8 +784,9 @@ class LastMCCCodeTaskOpenEnded(CategoricalTaskAbstract):
         self.is_text_task = False
         self.is_binary_task = False
         self.is_open_ended_task = True
-        self.metrics = nn.ModuleDict({
-            "rouge": ROUGEScore()
+        self.metrics = torch.nn.ModuleDict({
+            "accuracy": Accuracy(task="multiclass", num_classes=self.num_classes),
+            "f1": F1Score(task="multiclass", num_classes=self.num_classes)
         })
 
         self.starting_prompts = [
@@ -862,8 +916,43 @@ class LastMCCCodeTaskOpenEnded(CategoricalTaskAbstract):
             with_numeric_output=self.numeric_outputs
         )
 
+    def process_outputs(self, outputs: Any, answers: torch.Tensor, as_strings: Optional[bool] = False) -> Any:
+        """
+        Processing target text and output text to get the predictions
+        """
+        # Get predictions as list of strings
+        default_value = 0
+        predictions_decoded = self.tokenizer.batch_decode(outputs['logits'].argmax(2),
+                                                          skip_special_tokens=True)
+        batch_answers_decoded = self.tokenizer.batch_decode(outputs['labels'],
+                                                            skip_special_tokens=True)
+        # Clean predicted texts and map them to categorical labels
+        predictions_clean = [transform_labels(pred,
+                                              do_make_numeric=True,
+                                              do_clean_text=False,
+                                              default_value=default_value)
+                             for pred in predictions_decoded]
+
+        batch_answers_decoded = [transform_labels(answer,
+                                                  do_make_numeric=True,
+                                                  do_clean_text=False,
+                                                  default_value=default_value)
+                                 for answer in batch_answers_decoded]
+
+        # Map to available labels
+        classes = [int(answer) for answer in self.answers_options]
+        predictions_clean = [pred if pred in classes else default_value
+                             for pred in predictions_clean]
+
+        # To Tensors
+        targets = torch.LongTensor(batch_answers_decoded)
+        predictions = torch.LongTensor(predictions_clean)
+
+        return targets, predictions
+
     def calculate_metrics(self, outputs: Any, answers: torch.Tensor,
-                          task_metrics: Union[nn.ModuleDict, Dict[str, Any]], **kwargs) -> dict:
+                          task_metrics: Union[torch.nn.ModuleDict, Dict[str, Any]],
+                          **kwargs) -> dict:
         """
         Calculate task metrics for a task.
         Args:
@@ -879,7 +968,22 @@ class LastMCCCodeTaskOpenEnded(CategoricalTaskAbstract):
                 key - metric name,
                 value - metric score.
         """
-        return {}
+        metrics = {}
+        try:
+            targets, preds = self.process_outputs(outputs, answers)
+
+            if 'accuracy' in task_metrics:
+                acc = task_metrics['accuracy'](preds, targets)
+                metrics['accuracy'] = task_metrics['accuracy']
+
+            if 'f1' in task_metrics:
+                f1 = task_metrics['f1'](preds, targets)
+                metrics['f1'] = task_metrics['f1']
+
+        except Exception as e:
+            print(f"Error during metrics calculation: {e}")
+
+        return metrics
 
 
 @dataclass
@@ -1334,8 +1438,9 @@ class OccurenceMCCCodeTaskBinary(CategoricalTaskAbstract):
         self.is_text_task = False
         self.is_binary_task = True
         self.is_open_ended_task = False
-        self.metrics = nn.ModuleDict({
-            "rouge": ROUGEScore(),
+        self.metrics = torch.nn.ModuleDict({
+            "accuracy": Accuracy(task="multiclass", num_classes=self.num_classes),
+            "f1": F1Score(task="multiclass", num_classes=self.num_classes)
         })
         self.starting_prompts = [
             "This is the client's transaction history:",
@@ -1503,8 +1608,43 @@ class OccurenceMCCCodeTaskBinary(CategoricalTaskAbstract):
             with_numeric_output=self.numeric_outputs
         )
 
+    def process_outputs(self, outputs: Any, answers: torch.Tensor, as_strings: Optional[bool] = False) -> Any:
+        """
+        Processing target text and output text to get the predictions
+        """
+        # Get predictions as list of strings
+        default_value = 0
+        predictions_decoded = self.tokenizer.batch_decode(outputs['logits'].argmax(2),
+                                                          skip_special_tokens=True)
+        batch_answers_decoded = self.tokenizer.batch_decode(outputs['labels'],
+                                                            skip_special_tokens=True)
+        # Clean predicted texts and map them to categorical labels
+        predictions_clean = [transform_labels(pred,
+                                              do_make_numeric=True,
+                                              do_clean_text=False,
+                                              default_value=default_value)
+                             for pred in predictions_decoded]
+
+        batch_answers_decoded = [transform_labels(answer,
+                                                  do_make_numeric=True,
+                                                  do_clean_text=False,
+                                                  default_value=default_value)
+                                 for answer in batch_answers_decoded]
+
+        # Map to available labels
+        classes = [int(answer) for answer in self.answers_options]
+        predictions_clean = [pred if pred in classes else default_value
+                             for pred in predictions_clean]
+
+        # To Tensors
+        targets = torch.LongTensor(batch_answers_decoded)
+        predictions = torch.LongTensor(predictions_clean)
+
+        return targets, predictions
+
     def calculate_metrics(self, outputs: Any, answers: torch.Tensor,
-                          task_metrics: Union[nn.ModuleDict, Dict[str, Any]], **kwargs) -> dict:
+                          task_metrics: Union[torch.nn.ModuleDict, Dict[str, Any]],
+                          **kwargs) -> dict:
         """
         Calculate task metrics for a task.
         Args:
@@ -1520,4 +1660,19 @@ class OccurenceMCCCodeTaskBinary(CategoricalTaskAbstract):
                 key - metric name,
                 value - metric score.
         """
-        return {}
+        metrics = {}
+        try:
+            targets, preds = self.process_outputs(outputs, answers)
+
+            if 'accuracy' in task_metrics:
+                acc = task_metrics['accuracy'](preds, targets)
+                metrics['accuracy'] = task_metrics['accuracy']
+
+            if 'f1' in task_metrics:
+                f1 = task_metrics['f1'](preds, targets)
+                metrics['f1'] = task_metrics['f1']
+
+        except Exception as e:
+            print(f"Error during metrics calculation: {e}")
+
+        return metrics
