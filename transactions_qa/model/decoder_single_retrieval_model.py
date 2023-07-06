@@ -117,7 +117,8 @@ class DecoderSingleRetrievalModel(DecoderSimpleModel):
                         self._transactions_embeddings_end_token],
             tokenizer=self.tokenizer,
             # model=self.language_model,  # -> optionally
-            return_ids=True
+            return_ids=True,
+            special=True
         )
 
         # Init transactions injection tokens ids

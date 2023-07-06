@@ -132,7 +132,8 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
                         self._transactions_embeddings_end_token],
             tokenizer=self.tokenizer,
             # model=self.language_model,  # -> optionally
-            return_ids=True
+            return_ids=True,
+            special=True
         )
 
         # Init transactions injection tokens ids
@@ -181,7 +182,8 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
             new_tokens=self.ret_tokens,
             tokenizer=self.tokenizer,
             # model=self.language_model,  # -> optionally
-            return_ids=True
+            return_ids=True,
+            special=True
         )
         self._logger.info(f"Retrieval tokens added to tokenizer: {len(self.ret_tokens)}\ntokens: {self.ret_tokens}.")
 
@@ -196,9 +198,9 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
         self.task_special_tokens = collect_task_specific_tokens(self.tasks)
         self.register_buffer("task_special_tokens_ids",
                              self.tokenizer(self.task_special_tokens,
-                                                   add_special_tokens=False,
-                                                   padding=False,
-                                                   return_tensors='pt')['input_ids'].flatten())
+                                            add_special_tokens=False,
+                                            padding=False,
+                                            return_tensors='pt')['input_ids'].flatten())
         self._logger.info(f"Collected {len(self.task_special_tokens)} task special tokens: {self.task_special_tokens} "
                           f"with corresponding ids: {self.task_special_tokens_ids}")
         params_dim = None

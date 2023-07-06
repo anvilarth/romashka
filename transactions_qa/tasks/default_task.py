@@ -45,7 +45,6 @@ class DefaultTask(AbstractTask):
 
         super().__post_init__()
 
-
         if self.tokenizer is None:
             raise AttributeError("This task requires tokenizer to be set!")
         if self.add_tokens_to_tokenizer:
@@ -55,7 +54,7 @@ class DefaultTask(AbstractTask):
                 new_tokens += [self.task_special_token]
             self.extend_vocabulary(tokenizer=self.tokenizer,
                                    new_tokens=new_tokens,
-                                   special=False)
+                                   special=True)
 
         self.positive_token = self.tokenizer(self.positive_answer_word).input_ids[0]
         self.negative_token = self.tokenizer(self.negative_answer_word).input_ids[0]

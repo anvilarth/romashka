@@ -134,7 +134,8 @@ class EncoderEndingRetrievalModel(EncoderSimpleModel):
                         self._transactions_embeddings_end_token],
             tokenizer=self.tokenizer,
             # model=self.language_model,  # -> optionally
-            return_ids=True
+            return_ids=True,
+            special=True
         )
 
         # Init transactions injection tokens ids
@@ -183,7 +184,8 @@ class EncoderEndingRetrievalModel(EncoderSimpleModel):
             new_tokens=self.ret_tokens,
             tokenizer=self.tokenizer,
             # model=self.language_model,  # -> optionally
-            return_ids=True
+            return_ids=True,
+            special=True
         )
         self._logger.info(f"Retrieval tokens added to tokenizer: {len(self.ret_tokens)}\ntokens: {self.ret_tokens}.")
 

@@ -74,7 +74,7 @@ class MostFrequentHourTaskMulti(CategoricalTaskAbstract):
         if self.add_tokens_to_tokenizer:
             self.extend_vocabulary(tokenizer=self.tokenizer,
                                    new_tokens=self.special_tokens,
-                                   special=False)
+                                   special=True)
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         # Construct templates
@@ -253,7 +253,7 @@ class MostFrequentHourTaskBinary(CategoricalTaskAbstract):
         if self.add_tokens_to_tokenizer:
             self.extend_vocabulary(tokenizer=self.tokenizer,
                                    new_tokens=self.special_tokens,
-                                   special=False)
+                                   special=True)
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         # Construct templates
@@ -436,7 +436,7 @@ class MostFrequentHourTaskOpenEnded(CategoricalTaskAbstract):
         if self.add_tokens_to_tokenizer:
             self.extend_vocabulary(tokenizer=self.tokenizer,
                                    new_tokens=self.special_tokens,
-                                   special=False)
+                                   special=True)
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         # Construct templates
@@ -596,7 +596,7 @@ class LeastFrequentHourTaskOpenEnded(CategoricalTaskAbstract):
         if self.add_tokens_to_tokenizer:
             self.extend_vocabulary(tokenizer=self.tokenizer,
                                    new_tokens=self.special_tokens,
-                                   special=False)
+                                   special=True)
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         # Construct templates
@@ -757,7 +757,7 @@ class LastHourTaskOpenEnded(CategoricalTaskAbstract):
         if self.add_tokens_to_tokenizer:
             self.extend_vocabulary(tokenizer=self.tokenizer,
                                    new_tokens=self.special_tokens,
-                                   special=False)
+                                   special=True)
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         # Construct templates
@@ -920,7 +920,7 @@ class OccurenceHourTaskBinary(CategoricalTaskAbstract):
         if self.add_tokens_to_tokenizer:
             self.extend_vocabulary(tokenizer=self.tokenizer,
                                    new_tokens=self.special_tokens,
-                                   special=False)
+                                   special=True)
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         # Construct templates

@@ -80,7 +80,7 @@ class PredMCCCodeTaskBinary(CategoricalTaskAbstract):
         if self.add_tokens_to_tokenizer:
             self.extend_vocabulary(tokenizer=self.tokenizer,
                                    new_tokens=self.special_tokens,
-                                   special=False)
+                                   special=True)
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
@@ -371,7 +371,7 @@ class PredMCCCodeTaskOpenEnded(CategoricalTaskAbstract):
         if self.add_tokens_to_tokenizer:
             self.extend_vocabulary(tokenizer=self.tokenizer,
                                    new_tokens=self.special_tokens,
-                                   special=False)
+                                   special=True)
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """

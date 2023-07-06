@@ -126,7 +126,8 @@ class EncoderSingleRetrievalModel(EncoderSimpleModel):
                         self._transactions_embeddings_end_token],
             tokenizer=self.tokenizer,
             # model=self.language_model,  # -> optionally
-            return_ids=True
+            return_ids=True,
+            special=True
         )
 
         # Init transactions injection tokens ids
@@ -166,7 +167,8 @@ class EncoderSingleRetrievalModel(EncoderSimpleModel):
         self.transactions_ret_token2id_mapping = AbstractTask.extend_vocabulary(
             new_tokens=[self.ret_token],
             tokenizer=self.tokenizer,
-            return_ids=True
+            return_ids=True,
+            special=True
         )
         self._logger.info(f"Retrieval tokens added to tokenizer: {len(self.ret_token)}\ntoken: {self.ret_token}.")
 

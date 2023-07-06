@@ -373,8 +373,6 @@ class TransactionQAModel(pl.LightningModule):
                      verbose: Optional[bool] = False) -> Any:
         """
         Step function called during Trainer.predict().
-
-        TODO: to use pytorch_lightning.callbacks.BasePredictionWriter callback
         to write the predictions to disk or database after each batch or on epoch end.
 
         Args:

@@ -89,7 +89,7 @@ class MeanAmountBinnedTaskBinary(NumericTaskAbstract):
         if self.add_tokens_to_tokenizer:
             self.extend_vocabulary(tokenizer=self.tokenizer,
                                    new_tokens=self.special_tokens,
-                                   special=False)
+                                   special=True)
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
@@ -374,7 +374,7 @@ class MeanAmountNumericTaskBinary(NumericTaskAbstract):
         if self.add_tokens_to_tokenizer:
             self.extend_vocabulary(tokenizer=self.tokenizer,
                                    new_tokens=self.special_tokens,
-                                   special=False)
+                                   special=True)
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
@@ -635,7 +635,7 @@ class MeanAmountBinnedTaskOpenEnded(NumericTaskAbstract):
         if self.add_tokens_to_tokenizer:
             self.extend_vocabulary(tokenizer=self.tokenizer,
                                    new_tokens=self.special_tokens,
-                                   special=False)
+                                   special=True)
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
@@ -867,7 +867,7 @@ class MeanAmountNumericTaskOpenEnded(NumericTaskAbstract):
         if self.add_tokens_to_tokenizer:
             self.extend_vocabulary(tokenizer=self.tokenizer,
                                    new_tokens=self.special_tokens,
-                                   special=False)
+                                   special=True)
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
@@ -1103,7 +1103,7 @@ class MinAmountNumericTaskOpenEnded(NumericTaskAbstract):
         if self.add_tokens_to_tokenizer:
             self.extend_vocabulary(tokenizer=self.tokenizer,
                                    new_tokens=self.special_tokens,
-                                   special=False)
+                                   special=True)
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
@@ -1334,7 +1334,7 @@ class MaxAmountNumericTaskOpenEnded(NumericTaskAbstract):
         if self.add_tokens_to_tokenizer:
             self.extend_vocabulary(tokenizer=self.tokenizer,
                                    new_tokens=self.special_tokens,
-                                   special=False)
+                                   special=True)
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
@@ -1567,7 +1567,7 @@ class LastAmountNumericTaskOpenEnded(NumericTaskAbstract):
         if self.add_tokens_to_tokenizer:
             self.extend_vocabulary(tokenizer=self.tokenizer,
                                    new_tokens=self.special_tokens,
-                                   special=False)
+                                   special=True)
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
@@ -1805,7 +1805,7 @@ class LastAmountNumericTaskBinary(NumericTaskAbstract):
         if self.add_tokens_to_tokenizer:
             self.extend_vocabulary(tokenizer=self.tokenizer,
                                    new_tokens=self.special_tokens,
-                                   special=False)
+                                   special=True)
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """

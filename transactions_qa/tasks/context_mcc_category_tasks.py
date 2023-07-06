@@ -75,7 +75,7 @@ class MostFrequentMCCCategoryTaskMulti(CategoricalTaskAbstract):
         if self.add_tokens_to_tokenizer:
             self.extend_vocabulary(tokenizer=self.tokenizer,
                                    new_tokens=self.special_tokens,
-                                   special=False)
+                                   special=True)
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         # Construct templates
@@ -252,7 +252,7 @@ class MostFrequentMCCCategoryTaskBinary(CategoricalTaskAbstract):
         if self.add_tokens_to_tokenizer:
             self.extend_vocabulary(tokenizer=self.tokenizer,
                                    new_tokens=self.special_tokens,
-                                   special=False)
+                                   special=True)
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         # Construct templates
@@ -437,7 +437,7 @@ class MostFrequentMCCCategoryTaskOpenEnded(CategoricalTaskAbstract):
         if self.add_tokens_to_tokenizer:
             self.extend_vocabulary(tokenizer=self.tokenizer,
                                    new_tokens=self.special_tokens,
-                                   special=False)
+                                   special=True)
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         # Construct templates
@@ -596,7 +596,7 @@ class LeastFrequentMCCCategoryTaskOpenEnded(CategoricalTaskAbstract):
         if self.add_tokens_to_tokenizer:
             self.extend_vocabulary(tokenizer=self.tokenizer,
                                    new_tokens=self.special_tokens,
-                                   special=False)
+                                   special=True)
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         # Construct templates
@@ -758,7 +758,7 @@ class LastMCCCategoryTaskOpenEnded(CategoricalTaskAbstract):
         if self.add_tokens_to_tokenizer:
             self.extend_vocabulary(tokenizer=self.tokenizer,
                                    new_tokens=self.special_tokens,
-                                   special=False)
+                                   special=True)
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         # Construct templates
@@ -920,7 +920,7 @@ class OccurenceMCCCategoryTaskBinary(CategoricalTaskAbstract):
         if self.add_tokens_to_tokenizer:
             self.extend_vocabulary(tokenizer=self.tokenizer,
                                    new_tokens=self.special_tokens,
-                                   special=False)
+                                   special=True)
 
     def process_input_batch(self, batch: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         # Construct templates
