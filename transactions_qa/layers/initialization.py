@@ -42,6 +42,19 @@ def init_embeddings(module: torch.nn.Module):
             module.weight.data[module.padding_idx].zero_()
 
 
+def init_embeddings_with_tensor(module: torch.nn.Module, embedding_tensor: torch.Tensor):
+    """
+    Initialize embeddings layer.
+    Fills the input Tensor with values from input LLM embedding space.
+    """
+    if len(embedding_tensor.size()) > 1:
+        raise AttributeError(f"A tensor for embeddings initialization is multidimensional: {embedding_tensor.size()}")
+    if isinstance(module, torch.nn.Embedding):
+        module.weight.data = embedding_tensor.unsqueeze(0).repeat(module.weight.size(0), 1)
+        if module.padding_idx is not None:
+            module.weight.data[module.padding_idx].zero_()
+
+
 def init_layernorm(module: torch.nn.Module):
     """
     Initialize Layer Normalization layer.
@@ -50,3 +63,18 @@ def init_layernorm(module: torch.nn.Module):
     if isinstance(module, torch.nn.LayerNorm):
         module.bias.data.zero_()
         module.weight.data.fill_(1.0)
+
+
+def init_parameter_with_tensor(module: torch.nn.Parameter, init_tensor: torch.Tensor):
+    """
+    Initialize nn.Parameters.
+    Fills the input Tensor with values from input LLM embedding space.
+    """
+    if (len(init_tensor.size()) > 1) and (init_tensor.size(0) != module.size(0)):
+        raise AttributeError(f"A tensor for parameter initialization is multi-dimensional: {init_tensor.size()}"
+                             f" and 0 dimension is not equals to parameter 0 dimension.")
+    if isinstance(module, torch.nn.Parameter):
+        if init_tensor.size(0) == module.size(0):
+            module.data = init_tensor
+        else:
+            module.data = init_tensor.unsqueeze(0).repeat(module.size(0), 1)

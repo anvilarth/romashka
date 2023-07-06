@@ -12,7 +12,8 @@ from romashka.transactions_qa.model.encoder_model import EncoderSimpleModel
 from romashka.transactions_qa.tasks.task_abstract import AbstractTask
 from romashka.transactions_qa.tasks.task_token_updater import collect_task_specific_tokens
 from romashka.transactions_qa.losses.infonce_loss import InfoNCE
-
+from romashka.transactions_qa.layers.initialization import (init_embeddings_with_tensor,
+                                                            init_parameter_with_tensor)
 
 class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
     def __init__(self,
@@ -69,6 +70,8 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
         super()._prepare_model()
         self.register_buffer("whitespace_token_id",
                              torch.Tensor(self.tokenizer.encode(' ', add_special_tokens=False)).long())
+
+        self.lm_mean_embedding = self._create_mean_lm_embedding()
 
         self._create_trainable_parameters()
 
@@ -159,6 +162,9 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
             torch.normal(mean=torch.zeros(params_dim), std=torch.ones(params_dim)), requires_grad=True)
         self.transactions_end_embedding = nn.Parameter(
             torch.normal(mean=torch.zeros(params_dim), std=torch.ones(params_dim)), requires_grad=True)
+
+        init_parameter_with_tensor(self.transactions_start_embedding, self.lm_mean_embedding)
+        init_parameter_with_tensor(self.transactions_end_embedding, self.lm_mean_embedding)
         self._logger.info(f"Initialized trainable parameters for transactions embeddings start/end tokens.")
 
     def _create_retrieval_parameters(self):
@@ -216,6 +222,7 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
         # Embeddings for special tokens
         self.task_special_tokens_embeddings = nn.Embedding(num_embeddings=self.task_special_tokens_ids.size(0),
                                                            embedding_dim=params_dim)
+        init_embeddings_with_tensor(self.task_special_tokens_embeddings, self.lm_mean_embedding)
 
     def _create_projection_layers(self):
         """

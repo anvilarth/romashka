@@ -11,6 +11,8 @@ from romashka.transactions_qa.model.encoder_model import EncoderSimpleModel
 from romashka.transactions_qa.tasks.task_abstract import AbstractTask
 from romashka.transactions_qa.utils import maybe_autocast
 from romashka.transactions_qa.losses.infonce_loss import InfoNCE
+from romashka.transactions_qa.layers.initialization import (init_embeddings_with_tensor,
+                                                            init_parameter_with_tensor)
 
 
 class EncoderRetrievalModel(EncoderSimpleModel):
@@ -70,6 +72,8 @@ class EncoderRetrievalModel(EncoderSimpleModel):
         super()._prepare_model()
         self.register_buffer("whitespace_token_id",
                              torch.Tensor(self.tokenizer.encode(' ', add_special_tokens=False)).long())
+
+        self.lm_mean_embedding = self._create_mean_lm_embedding()
 
         self._create_trainable_parameters()
         self._create_losses()
@@ -132,7 +136,6 @@ class EncoderRetrievalModel(EncoderSimpleModel):
             new_tokens=[self._transactions_embeddings_start_token,
                         self._transactions_embeddings_end_token],
             tokenizer=self.tokenizer,
-            # model=self.language_model,  # -> optionally
             return_ids=True,
             special=True
         )
@@ -160,6 +163,9 @@ class EncoderRetrievalModel(EncoderSimpleModel):
             torch.normal(mean=torch.zeros(params_dim), std=torch.ones(params_dim)), requires_grad=True)
         self.transactions_end_embedding = nn.Parameter(
             torch.normal(mean=torch.zeros(params_dim), std=torch.ones(params_dim)), requires_grad=True)
+
+        init_parameter_with_tensor(self.transactions_start_embedding, self.lm_mean_embedding)
+        init_parameter_with_tensor(self.transactions_end_embedding, self.lm_mean_embedding)
         self._logger.info(f"Initialized trainable parameters for transactions embeddings start/end tokens.")
 
     def _create_retrieval_parameters(self):

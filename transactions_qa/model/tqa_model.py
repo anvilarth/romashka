@@ -589,6 +589,7 @@ class TransactionQAModel(pl.LightningModule):
     def on_before_optimizer_step(self, optimizer, optimizer_idx = 0):
         # example to inspect gradient information in tensorboard
         if self.trainer.global_step % 25 == 0:  # don't make logging too much
+            # log gradients
             for param_name, param in self.model.named_parameters():
                 if param_name.startswith("transactions_start_embedding") \
                         or param_name.startswith("transactions_end_embedding") \

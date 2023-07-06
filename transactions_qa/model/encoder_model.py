@@ -81,6 +81,22 @@ class EncoderSimpleModel(nn.Module):
                                  f"`{self.language_model.config.architectures[0]}`. "
                                  "Try running on your own risk.")
 
+    def _create_mean_lm_embedding(self) -> torch.Tensor:
+        """
+        Creates an embedding vector based on all LLM input embeddings
+        averaged across vocabulary.
+        Returns: an embedding tensor, with size (embedd_dim,)
+        """
+        embedds = None
+        if (self.language_model_arch_type == "T5") \
+                and hasattr(self.language_model.config, "hidden_size"):
+            embedds = self.language_model.encoder.embed_tokens.weight.cpu()
+        else:
+            raise AttributeError(f"Provided language model architecture is not currently supported "
+                                 f"`{self.language_model.config.architectures[0]}`.")
+        embedds_mean = torch.mean(embedds, dim=0).detach()
+        return embedds_mean
+
     def _prepare_model(self):
         # Set language model architecture type / family (i.e. T5/...)
         self._set_language_model_arch_type()
