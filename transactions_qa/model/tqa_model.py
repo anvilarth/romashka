@@ -1,6 +1,7 @@
+
 import random
 import numpy as np
-import inspect
+import collections
 from typing import List, Optional, Tuple, Any, Dict, Union
 
 import wandb
@@ -51,6 +52,7 @@ class TransactionQAModel(pl.LightningModule):
         self.tasks = tasks
         self.task_specific_tokens = collect_task_specific_tokens(self.tasks)
         self.task_specific_tokens_map = create_task_specific_tokens_map(self.model.tokenizer)
+        self.train_task_batch_cnt = collections.defaultdict(int)
 
         self.metrics = nn.ModuleDict({task.task_name: deepcopy(task.metrics) for task in self.tasks})
 
@@ -228,6 +230,7 @@ class TransactionQAModel(pl.LightningModule):
         # Sample a random single task
         task_idx = random.sample(list(range(len(self.tasks))), k=1)[0]
         task_name = self.tasks[task_idx].task_name
+        self.train_task_batch_cnt[task_name] += 1
 
         outputs, answer = self.model_step(batch, task_idx=task_idx)
         if outputs is None:
@@ -585,6 +588,15 @@ class TransactionQAModel(pl.LightningModule):
         # was directly to W&B: wandb.log({"val_predictions": self.log_eval_predictions_table})
         # ✨ W&B: Mark the run as complete (useful for multi-cell notebook)
         # wandb.finish()
+
+    def on_train_epoch_end(self) -> None:
+        """
+        Called in the training loop at the very end of the epoch.
+        """
+        self._logger.info(f"Training epoch task statistics:\n{self.train_task_batch_cnt}")
+        # Reset counter
+        self.train_task_batch_cnt = collections.defaultdict(int)
+
 
     def on_before_optimizer_step(self, optimizer, optimizer_idx = 0):
         # example to inspect gradient information in tensorboard
