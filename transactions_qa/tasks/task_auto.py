@@ -46,6 +46,12 @@ from romashka.transactions_qa.tasks.context_country_tasks import (MostFrequentCo
                                                                   LastCountryTaskOpenEnded)
 from romashka.transactions_qa.tasks.context_currency_tasks import (MostFrequentCurrencyTaskOpenEnded,
                                                                    LastCurrencyTaskOpenEnded)
+from romashka.transactions_qa.tasks.context_operation_kind_tasks import (MostFrequentOpKindTaskOpenEnded,
+                                                                          LastOpKindTaskOpenEnded)
+from romashka.transactions_qa.tasks.context_operation_type_tasks import (MostFrequentOpTypeTaskOpenEnded,
+                                                                          LastOpTypeTaskOpenEnded,
+                                                                          MostFrequentOpTypeGroupTaskOpenEnded,
+                                                                          LastOpTypeGroupTaskOpenEnded)
 
 from romashka.transactions_qa.tasks.predictive_amnt_tasks import (PredNumericAmountTaskBinary,
                                                                   PredOverThresholdAmountTaskBinary,
@@ -65,6 +71,9 @@ from romashka.transactions_qa.tasks.predictive_weekofyear_tasks import (PredWeek
 from romashka.transactions_qa.tasks.predictive_city_tasks import PredCityTaskOpenEnded
 from romashka.transactions_qa.tasks.predictive_country_tasks import PredCountryTaskOpenEnded
 from romashka.transactions_qa.tasks.predictive_currency_tasks import PredCurrencyTaskOpenEnded
+from romashka.transactions_qa.tasks.predictive_operation_kind_tasks import PredOpKindTaskOpenEnded
+from romashka.transactions_qa.tasks.predictive_operation_type_tasks import (PredOpTypeTaskOpenEnded,
+                                                                             PredOpTypeGroupTaskOpenEnded)
 from romashka.transactions_qa.tasks.predictive_default_task import PredDefaultTaskBinary
                                                                
 from romashka.transactions_qa.tasks.default_task import DefaultTask
@@ -133,6 +142,16 @@ AUTO_TASKS = [
         # Currency
         ("most_frequent_currency_open-ended", MostFrequentCurrencyTaskOpenEnded),
         ("last_currency_open-ended", LastCurrencyTaskOpenEnded),
+        # Operation Kind
+        ("most_frequent_operation_kind_open-ended", MostFrequentOpKindTaskOpenEnded),
+        ("last_operation_kind_open-ended", LastOpKindTaskOpenEnded),
+        # Operation type
+        ("most_frequent_operation_type_open-ended", MostFrequentOpTypeTaskOpenEnded),
+        ("last_operation_type_open-ended", LastOpTypeTaskOpenEnded),
+        # Operation type group
+        ("most_frequent_operation_type_group_open-ended", MostFrequentOpTypeGroupTaskOpenEnded),
+        ("last_operation_type_group_open-ended", LastOpTypeGroupTaskOpenEnded),
+
         # Predictive
         # Amount
         ("pred_numeric_amount_binary", PredNumericAmountTaskBinary),
@@ -161,6 +180,12 @@ AUTO_TASKS = [
         ("pred_country_open-ended", PredCountryTaskOpenEnded),
         # Currency
         ("pred_currency_open-ended", PredCurrencyTaskOpenEnded),
+        # Operation Kind
+        ("pred_operation_kind_open-ended", PredOpKindTaskOpenEnded),
+        # Operation type
+        ("pred_operation_type_open-ended", PredOpTypeTaskOpenEnded),
+        # Operation type group
+        ("pred_operation_type_group_open-ended", PredOpTypeGroupTaskOpenEnded),
         # Default
         ("pred_default_binary", PredDefaultTaskBinary)
     ]
