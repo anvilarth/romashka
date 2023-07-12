@@ -192,6 +192,46 @@ class PredCurrencyTaskOpenEnded(CategoricalTaskAbstract):
 
         return targets, predictions
 
+    def generate_target(self, batch: Any, **kwargs) -> Tuple[List[str], List[str]]:
+        """
+        Creates target values vector for a batch.
+        Args:
+            batch: a dict with required for target creation fields;
+            **kwargs: **optional**
+
+        Returns: a tuple which contains:
+            a question endings - as they (in this task cannot be separated from targets);
+            a target values if strings form.
+        """
+        device = batch['mask'].device
+        mask_batch = batch['mask']  # bool Tensor [batch_size, seq_len]
+        batch_size = batch['mask'].shape[0]
+
+        # Use a default formatted question end template
+        question_end = kwargs.get("question_end", "%s")
+
+        target_feature_batch = batch[self.target_feature_type][
+            self.target_feature_index]  # Tensor [batch_size, seq_len]
+
+        # Construct target values
+        target_feature_value_batch = []
+        for i, (feature_, mask_) in enumerate(zip(target_feature_batch, mask_batch)):
+            last_feature_index = mask_.sum() - 1
+            feature_masked = torch.masked_select(feature_.to("cpu"),
+                                                 mask=mask_.to("cpu")).long()  # get feature without padding
+            last_feature = feature_masked[-1]  # get a single Tensor value of a feature
+            target_feature_value_batch.append(last_feature.to(device))
+            # Mask last feature to predict it!
+            batch['mask'][i, last_feature_index] = 0
+
+        # Map to strings
+        target_batch = list(map(lambda x: str(x.item()), target_feature_value_batch))
+
+        # Construct target sequences
+        question_target_batch = [question_end for _ in range(batch_size)]  # as strings
+
+        return question_target_batch, target_batch
+
     def calculate_metrics(self, outputs: Any, answers: torch.Tensor,
                           task_metrics: Union[torch.nn.ModuleDict, Dict[str, Any]],
                           **kwargs) -> dict:
