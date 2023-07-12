@@ -75,6 +75,6 @@ def init_parameter_with_tensor(module: torch.nn.Parameter, init_tensor: torch.Te
                              f" and 0 dimension is not equals to parameter 0 dimension.")
     if isinstance(module, torch.nn.Parameter):
         if init_tensor.size(0) == module.size(0):
-            module.data = init_tensor
+            module.data = init_tensor.clone().contiguous()
         else:
-            module.data = init_tensor.unsqueeze(0).repeat(module.size(0), 1)
+            module.data = init_tensor.clone().contiguous().unsqueeze(0).repeat(module.size(0), 1)
