@@ -12,7 +12,7 @@ import torch
 import torch.nn as nn
 
 PREFIX_CHECKPOINT_DIR = "checkpoint"
-_re_checkpoint = re.compile(r"^" + PREFIX_CHECKPOINT_DIR + r"\-(\d+)$")
+_re_checkpoint = re.compile(r"^" + PREFIX_CHECKPOINT_DIR)
 
 
 def seed_everything(seed):
@@ -240,11 +240,14 @@ def get_last_checkpoint(folder):
     checkpoints = [
         path
         for path in content
-        if _re_checkpoint.search(path) is not None and os.path.isdir(os.path.join(folder, path))
+        if (_re_checkpoint.search(path) is not None) and path.endswith("ckpt")
     ]
     if len(checkpoints) == 0:
         return
-    return os.path.join(folder, max(checkpoints, key=lambda x: int(_re_checkpoint.search(x).groups()[0])))
+
+    checkpoints = [os.path.join(folder, fn) for fn in checkpoints]
+    checkpoints.sort(key=lambda x: os.path.getmtime(x))
+    return checkpoints[0]
 
 
 def get_projections_maps(num_embedding_projections_fn: str = './assets/num_embedding_projections.pkl',
