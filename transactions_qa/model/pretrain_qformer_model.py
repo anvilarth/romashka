@@ -3,10 +3,10 @@ import numpy as np
 from copy import deepcopy
 from typing import List, Optional, Tuple, Any, Dict, Union
 
-import wandb
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.distributed as dist
 
 import transformers
 import pytorch_lightning as pl
@@ -15,10 +15,11 @@ from transformers.models.blip_2.configuration_blip_2 import Blip2QFormerConfig
 
 from romashka.logging_handler import get_logger
 from romashka.transactions_qa.layers.qformer_text import Blip2QFormerTextEncoder
+from romashka.transactions_qa.dist_utils import concat_all_gather
 
 DEFAULT_CONFIG = {
     "num_queries": 32,
-    "hidden_size": 256,
+    "hidden_size": 512,
     "num_attention_heads": 4,
     "num_hidden_layers": 4,
     "intermediate_size": 1024,
@@ -31,6 +32,7 @@ DEFAULT_CONFIG = {
     "max_text_sequence_len": 512,
     "truncation_side": "right",
     "position_embedding_type": "absolute",
+    "use_decoder_only_language_model": False
 }
 
 
@@ -64,7 +66,7 @@ class PretrainQFormerModel(pl.LightningModule):
         self.sequence_encoder_model = sequence_encoder_model
         self.tokenizer = tokenizer
         self.q_qformer = qformer  # a part for vis + queries part
-        self.t_qformer = Blip2QFormerTextEncoder(qformer_kwargs)  # a text part
+        self.t_qformer = Blip2QFormerTextEncoder(self.qformer_config)  # a text part
 
         # A shared dim for contrastive loss computation
         self.shared_dim = shared_dim if shared_dim is not None else self._get_hidden_dim()
@@ -117,6 +119,7 @@ class PretrainQFormerModel(pl.LightningModule):
         """
         self._create_layers()
         self._tie_parameters()
+        self.temp = nn.Parameter(0.07 * torch.ones([]))
 
     def _get_hidden_dim(self) -> int:
         """
@@ -136,7 +139,7 @@ class PretrainQFormerModel(pl.LightningModule):
 
     def _create_layers(self):
         self.query_tokens_embeddings = torch.nn.Parameter(
-                torch.zeros(1, self.qformer_config.num_queries, self.qformer_config.hidden_size))
+            torch.zeros(1, self.qformer_config.num_queries, self.qformer_config.hidden_size))
 
         self.text_projection_layer = torch.nn.Linear(self._get_hidden_dim(),
                                                      self.shared_dim)
@@ -164,10 +167,7 @@ class PretrainQFormerModel(pl.LightningModule):
                 self._logger.error(f"Error occurred during parameter: `{param_name}` weights tying:\n{e}")
         self._logger.info(f"{len(shared_params_names)} parameters tied:\n{shared_params_names}")
 
-    def model_step(self, batch: Union[Dict[str, torch.Tensor], Any],
-                   output_hidden_states: Optional[bool] = False,
-                   output_attentions: Optional[bool] = True,
-                   return_dict: Optional[bool] = True) -> Any:
+    def model_step(self, batch: Union[Dict[str, torch.Tensor], Any]) -> Any:
         """
         Passes input batch through inner parts of module:
         1) input sequences through Sequence embedder model (i.e. sequence_encoder_model)
@@ -193,7 +193,7 @@ class PretrainQFormerModel(pl.LightningModule):
         # 2) Pass the query tokens through queries part of full Q-Former model,
         #  using input embeddings for cross-attention
         query_tokens = self.query_tokens_embeddings.expand(sequences_embeddings.shape[0], -1, -1)
-        query_outputs = self.qformer(
+        query_outputs = self.q_qformer(
             query_embeds=query_tokens,
             encoder_hidden_states=sequences_embeddings,
             encoder_attention_mask=sequences_embeddings_mask,
@@ -210,8 +210,8 @@ class PretrainQFormerModel(pl.LightningModule):
         batch_captions = [caption[0] for caption in batch['captions']]
         # 4.2) Tokenize captions
         captions_encoded = self.tokenizer.batch_encode_plus(batch_captions,
-                                                       padding='longest',
-                                                       return_tensors='pt')
+                                                            padding='longest',
+                                                            return_tensors='pt')
         # 4.3) Pass through LM
         if self.qformer_config.use_decoder_only_language_model:
             text_outputs = self.language_model(
@@ -244,6 +244,17 @@ class PretrainQFormerModel(pl.LightningModule):
         # 5) Project text tokens to shared dim for loss computation
         pooled_last_hidden_state = self.text_projection_layer(pooled_last_hidden_state)
         pooled_last_hidden_state = F.normalize(pooled_last_hidden_state, dim=-1)
+
+        # 6) Calculate loss
+        outputs = {
+                    "query_output": query_output,
+                    "pooled_last_hidden_state": pooled_last_hidden_state
+                }
+        loss_outputs = self._compute_loss(outputs)
+
+        # join two output dicts
+        for key, val in loss_outputs.items():
+            outputs[key] = val
 
         return outputs
 
@@ -302,21 +313,57 @@ class PretrainQFormerModel(pl.LightningModule):
         )
         return loss
 
-    def _compute_retrieval_loss(self,
-                                outputs: Dict[str, torch.Tensor],
-                                ret_start_i: int, ret_end_i: int,
-                                ret_embeddings: torch.Tensor,
-                                output_hidden_states: Optional[bool] = False) -> Dict[str, torch.Tensor]:
+    def _compute_loss(self,
+                      outputs: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
         Calculate contrastive retrieval loss based on InfoNCE loss implementation.
         Args:
             outputs: a LLM outputs, containing: 'logits', 'hidden_states', etc.
-            ret_start_i: a starting index of transactions embeddings injection;
-            ret_end_i: an ending index of transactions embeddings injection (non-inclusive);
-            ret_embeddings: a reference embeddings (i.e. target embeddings);
             output_hidden_states: whether to output hidden_states for retrieval tokens;
-            output_logits: whether to output logits for retrieval tokens;
 
         Returns:
             a dict, containing 'loss' and,  optionally, 'last_hidden_state' and 'ret_tokens_logits'.
         """
+        sequence_feats = outputs['query_output']
+        text_feats = outputs['pooled_last_hidden_state']
+
+        # Collect across GPUs
+        sequence_feats = concat_all_gather(
+            sequence_feats
+        )  # [batch_size*num_gpu, num_query_tokens, embed_dim]
+
+        text_feats = concat_all_gather(text_feats)  # [batch_size*num_gpu, embed_dim]
+
+        # Queries - text similarity
+        sim_q2t = torch.matmul(
+            sequence_feats.unsqueeze(1), text_feats.unsqueeze(-1)
+        ).squeeze()
+        # [batch_size, batch_size*num_gpu, num_query_tokens]
+
+        # Sequences - text similarity: aggregate across all query tokens
+        sim_seq2t, _ = sim_q2t.max(-1)
+        sim_seq2t = sim_seq2t / self.temp
+
+        # Text - Queries similarity: [batch_size, batch_size*num_gpu, num_query_tokens]
+        sim_t2q = torch.matmul(
+            text_feats.unsqueeze(1).unsqueeze(1), sequence_feats.permute(0, 2, 1)
+        ).squeeze()
+
+        # Text - sequences similarity: aggregate across all query tokens
+        sim_t2seq, _ = sim_t2q.max(-1)
+        sim_t2seq = sim_t2seq / self.temp  # [batch_size, batch_size*num_gpu]
+
+        try:
+            rank = dist.get_rank()
+        except:
+            rank = 0
+        bs = sequence_feats.size(0)
+        targets = torch.linspace(rank * bs, rank * bs + bs - 1, bs, dtype=int).to(
+            sequence_feats.device
+        )
+        # Total loss
+        loss_seq2text_contrastive = (F.cross_entropy(sim_seq2t, targets, label_smoothing=0.1)
+                                     + F.cross_entropy(sim_t2seq, targets, label_smoothing=0.1)) / 2
+
+        loss_outputs = dict(loss=loss_seq2text_contrastive)
+        return loss_outputs

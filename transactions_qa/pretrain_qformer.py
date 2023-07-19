@@ -15,7 +15,16 @@ warnings.filterwarnings("ignore")
 import torch
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
-from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
+from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor, EarlyStopping
+
+# Use custom transformers version == 4.27.4 + modifications
+# sys.path.insert(0, "/home/jovyan/abdullaeva/transactionsQA/transformers/src/")
+import transformers
+from transformers import (AutoModelForSeq2SeqLM,
+                          AutoModelForCausalLM,
+                          AutoTokenizer,
+                          AutoConfig,
+                          HfArgumentParser)
 
 # Use custom transformers version == 4.27.4 + modifications
 # sys.path.insert(0, "/home/jovyan/abdullaeva/transactionsQA/transformers/src/")
@@ -38,7 +47,7 @@ from romashka.transactions_qa.dataset.pretrain.dataloader import (TransactionCap
                                                                   TransactionCaptioningDataModule)
 from romashka.transactions_qa.dataset.serializers import TemplateSerializer
 from romashka.transactions_qa.transactions_model.model import TransactionsModel
-from romashka.transactions_qa.layers.qformer import QFormerModel
+from romashka.transactions_qa.layers.connector import make_qformer_connector
 from romashka.transactions_qa.model.pretrain_qformer_model import PretrainQFormerModel
 from romashka.transactions_qa.train_utils import get_warmup_steps
 from romashka.transactions_qa.utils import (get_last_checkpoint, get_projections_maps)
@@ -69,23 +78,8 @@ def main():
     os.environ["WANDB_API_KEY"] = cfg['wandb_key']
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-    # Detecting last checkpoint.
-    last_checkpoint = None
-    if (os.path.isdir(training_args.save_checkpoints_dir)
-            and training_args.do_train
-            and not training_args.overwrite_output_dir):
-        last_checkpoint = get_last_checkpoint(training_args.save_checkpoints_dir)
-        if last_checkpoint is None and len(os.listdir(training_args.save_checkpoints_dir)) > 0:
-            raise ValueError(
-                f"Output directory ({training_args.save_checkpoints_dir}) already exists and is not empty. "
-                "Use --overwrite_output_dir to overcome."
-            )
-        elif last_checkpoint is not None and training_args.resume_from_checkpoint is None:
-            logger.info(
-                f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
-                "the `--save_checkpoints_dir` or add `--overwrite_output_dir` to train from scratch."
-            )
-    elif not os.path.exists(training_args.save_checkpoints_dir):
+    # Create & clear
+    if not os.path.exists(training_args.save_checkpoints_dir):
         os.makedirs(training_args.save_checkpoints_dir)
     elif os.path.exists(training_args.save_checkpoints_dir) and training_args.overwrite_output_dir:
         shutil.rmtree(training_args.save_checkpoints_dir)
@@ -94,7 +88,7 @@ def main():
         logger.error(f"Output directory argument: ({training_args.save_checkpoints_dir}) is not a directory!")
         raise AttributeError(f"Output directory argument: ({training_args.save_checkpoints_dir}) is not a directory!")
 
-        # Get the datasets
+    # Get the datasets
     data_files = {}
     if data_args.train_folder is not None and training_args.do_train:
         dir_with_datasets = os.listdir(os.path.join(data_args.data_path, data_args.train_folder))
@@ -213,10 +207,48 @@ def main():
         renamed_state_dict[key_] = param
 
     logger.info(f"Renaming & loading transactions model...")
-    transactions_model.load_state_dict(renamed_state_dict)
+    transactions_model.load_state_dict(renamed_state_dict, strict=False)
 
-    # Configure and load from HF hub LM for Q-Former model
+    # Configure and load from HF hub LM model
     logger.info(f"Loading Language model: `{model_args.language_model_name_or_path}`...")
+    config_kwargs = {
+        "cache_dir": model_args.cache_dir,
+        "revision": model_args.model_revision,
+        "use_auth_token": True if model_args.use_auth_token else None,
+        "return_unused_kwargs": True
+    }
+
+    # Load pretrained model and tokenizer
+    if model_args.use_fast_tokenizer:
+        logger.warning(f'-- Using fast Tokenizer --')
+
+    tokenizer_kwargs = {
+        "cache_dir": model_args.cache_dir,
+        "use_fast": model_args.use_fast_tokenizer,
+        "revision": model_args.model_revision,
+        "use_auth_token": True if model_args.use_auth_token else None,
+        "do_lowercase": False
+    }
+
+    config, unused_kwargs = AutoConfig.from_pretrained(
+        model_args.language_model_name_or_path, **config_kwargs
+    )
+    # Download vocabulary from huggingface.co and define model-specific arguments
+    tokenizer = AutoTokenizer.from_pretrained(model_args.language_model_name_or_path, **tokenizer_kwargs)
+
+    # Download model from huggingface.co and cache.
+    # Make encoder-decoder model for LM
+    model_loading_kwargs = {
+        "pretrained_model_name_or_path": model_args.language_model_name_or_path,
+        "config": config
+    }
+
+    if model_args.language_model_type == "encoder-decoder":
+        lm_model = AutoModelForSeq2SeqLM.from_pretrained(**model_loading_kwargs)
+    else:
+        # Otherwise try to cerate decoder-only model for CLM
+        lm_model = AutoModelForCausalLM.from_pretrained(**model_loading_kwargs
+                                                        )
 
     # Create connector
     if model_args.shared_dim is not None:
@@ -240,7 +272,7 @@ def main():
         "sequence_len": trns_output_size,
         "num_queries": model_args.num_queries,
         "shared_dim": shared_dim,
-        "hidden_size": 256,
+        "hidden_size": 512,
         "num_attention_heads": model_args.num_attention_heads,
         "num_hidden_layers": model_args.num_hidden_layers,
         "intermediate_size": 1024,
@@ -256,8 +288,16 @@ def main():
         "device": device
     }
 
-    qformer = QFormerModel(
-        **qformer_config
+    connector_args = {
+        'config': qformer_config,
+        'vocab_size': len(tokenizer),
+        "pad_token_id": tokenizer.pad_token_id,
+        "num_queries": 32
+    }
+    qformer = make_qformer_connector(
+        output_size=384,
+        input_size=lm_model.config.d_model if hasattr(lm_model.config, "d_model") else lm_model.config.hidden_size,
+        **connector_args
     )
 
     # Full model
@@ -276,8 +316,8 @@ def main():
     full_model = PretrainQFormerModel(
         language_model_name=model_args.language_model_name_or_path,
         sequence_encoder_model=transactions_model,
-        qformer=qformer,
-        qformer_kwargs=qformer_config,
+        qformer=qformer.qformer,
+        # qformer_kwargs=qformer_config,
         **training_model_config
     )
 
@@ -287,16 +327,18 @@ def main():
         group=training_args.group_name,
         name=training_args.run_name
     )
-    # log gradients, parameter histogram and model topology
-    # wb_logger.watch(model, log="all")
 
     # log gradients and model topology
     wb_logger.watch(full_model, log_graph=False)
-
-    tb_logger = TensorBoardLogger(name=training_args.run_name,
-                                  save_dir="./tb_logs",
-                                  default_hp_metric=False)
     lr_monitor_callback = LearningRateMonitor(logging_interval='step')
+
+    early_stopping_callback = EarlyStopping(
+        monitor="val_loss",
+        patience=2,  # training_args.early_stopping_patience,
+        mode="min",
+        strict=False,
+        verbose=True
+    )
 
     # Create separate checkpoints directory for each run
     save_checkpoints_dir = f"{training_args.save_checkpoints_dir}/{training_args.run_name}"
@@ -316,33 +358,28 @@ def main():
         mode=training_args.save_strategy_mode,  # default: 'max'
     )
 
+    callbacks = [checkpoint_callback, lr_monitor_callback]
+    until_convergence = True
+    if until_convergence:  # training_args.until_convergence:
+        callbacks += [early_stopping_callback]
+
     trainer = pl.Trainer(
         fast_dev_run=training_args.fast_dev_run,
-        max_steps=training_args.max_steps,
-        max_epochs=training_args.max_epochs,
+        # training_args.until_convergence
+        max_steps=-1 if until_convergence else training_args.max_steps,
+        max_epochs=-1 if until_convergence else training_args.max_epochs,
         gpus=len(available_gpus),
         auto_select_gpus=True,
-        log_every_n_steps=100,
-        # val_check_interval=training_args.val_check_interval,
+        log_every_n_steps=10,
         reload_dataloaders_every_n_epochs=1,
         gradient_clip_val=training_args.gradient_clip_val,
         accumulate_grad_batches=training_args.gradient_accumulation_steps,
-        logger=wb_logger,  # [tb_logger, wb_logger],
-        callbacks=[checkpoint_callback, lr_monitor_callback])
+        logger=wb_logger,
+        callbacks=callbacks)
 
     trainer.fit(model=full_model, datamodule=datamodule)
 
+
 if __name__ == '__main__':
     import os
-
-    # os.environ['HF_DATASETS_OFFLINE'] = '1'  # offline mode for HF datasets
-    # os.environ['TRANSFORMERS_OFFLINE'] = '1'  # offline mode for HF Transformers
-    os.environ['CUDA_VISIBLE_DEVICES'] = '0,1'  # disable DataParallel for test
-
-    # Pretrained models are downloaded and locally cached at: ~/.cache/huggingface/transformers/.
-    # This is the default directory given by the shell environment variable TRANSFORMERS_CACHE.
-    # os.environ['TRANSFORMERS_CACHE'] = "/Users/abdullaeva/Documents/Projects/TransactionsQA/checkpoints/cache"
-    # or "/home/jovyan/.cache/huggingface/hub"
-    # os.environ['HF_DATASETS_CACHE'] = "/Users/abdullaeva/Documents/Projects/TransactionsQA/checkpoints/cache"
-    # or "/home/jovyan/.cache/huggingface/datasets"
     main()
