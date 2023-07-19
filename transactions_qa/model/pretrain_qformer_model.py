@@ -42,6 +42,8 @@ class PretrainQFormerModel(pl.LightningModule):
                  sequence_encoder_model: nn.Module,
                  tokenizer: transformers.PreTrainedTokenizerBase,
                  qformer: nn.Module,
+                 do_freeze_seq_m: Optional[bool] = True,
+                 do_freeze_lm: Optional[bool] = True,
                  shared_dim: Optional[int] = None,
                  learning_rate: Optional[float] = 5e-5,
                  scheduler_type: Optional[Union[transformers.SchedulerType, str]] = "linear",
@@ -67,6 +69,9 @@ class PretrainQFormerModel(pl.LightningModule):
         self.tokenizer = tokenizer
         self.q_qformer = qformer  # a part for vis + queries part
         self.t_qformer = Blip2QFormerTextEncoder(self.qformer_config)  # a text part
+
+        self.do_freeze_seq_m = do_freeze_seq_m
+        self.do_freeze_lm = do_freeze_lm
 
         # A shared dim for contrastive loss computation
         self.shared_dim = shared_dim if shared_dim is not None else self._get_hidden_dim()
@@ -120,6 +125,12 @@ class PretrainQFormerModel(pl.LightningModule):
         self._create_layers()
         self._tie_parameters()
         self.temp = nn.Parameter(0.07 * torch.ones([]))
+        self._freeze()
+
+        # Check total trainable parameters
+        parameters = list(self.parameters())
+        trainable_parameters = list(filter(lambda p: p.requires_grad, parameters))
+        self._logger.info(f"Totally trainable parameters: {len(trainable_parameters)} from {len(parameters)}")
 
     def _get_hidden_dim(self) -> int:
         """
@@ -136,6 +147,23 @@ class PretrainQFormerModel(pl.LightningModule):
                                  "equals to LLM hidden dimensionality can not be run because "
                                  "model do not have required attribute: `hidden_size` or `d_model` in config.")
         return hidden_dim
+
+    def _freeze(self):
+        """
+        Freeze sequence encoder and language model.
+        """
+        # Freezing some weights
+        if self.do_freeze_seq_m:
+            self.sequence_encoder_model.eval()
+            self._logger.info(f"Freezing sequence encoder model's parameters...")
+            for param in self.sequence_encoder_model.parameters():
+                param.requires_grad = False
+
+        if self.do_freeze_lm:
+            self.language_model.eval()
+            self._logger.info(f"Freezing language model's parameters...")
+            for param in self.language_model.parameters():
+                param.requires_grad = False
 
     def _create_layers(self):
         self.query_tokens_embeddings = torch.nn.Parameter(
@@ -221,10 +249,12 @@ class PretrainQFormerModel(pl.LightningModule):
                 return_dict=True,
             )
         else:
-            inputs_embeds = self.language_model.get_input_embeddings()(captions_encoded['input_ids'])
+            inputs_embeds = self.language_model.get_input_embeddings()(
+                captions_encoded['input_ids'].to(self.language_model.device)
+            )
             text_outputs = self.language_model.encoder(
                 inputs_embeds=inputs_embeds,
-                attention_mask=captions_encoded['attention_mask'],
+                attention_mask=captions_encoded['attention_mask'].to(self.language_model.device),
                 output_hidden_states=True,
                 return_dict=True,
             )

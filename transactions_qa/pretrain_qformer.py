@@ -90,15 +90,15 @@ def main():
 
     # Get the datasets
     data_files = {}
-    if data_args.train_folder is not None and training_args.do_train:
-        dir_with_datasets = os.listdir(os.path.join(data_args.data_path, data_args.train_folder))
-        dataset_files = sorted([os.path.join(data_args.data_path, data_args.train_folder, x)
+    if "train_buckets_captioning" is not None and training_args.do_train:
+        dir_with_datasets = [fn for fn in os.listdir(os.path.join(data_args.data_path, "train_buckets_captioning")) if ".ipynb_checkpoints" not in fn]
+        dataset_files = sorted([os.path.join(data_args.data_path, "train_buckets_captioning", x)
                                 for x in dir_with_datasets])
         logger.info(f"Detected {len(dataset_files)} files for training.")
         data_files["train"] = dataset_files
-    if data_args.validation_folder is not None and training_args.do_eval:
-        dir_with_datasets = os.listdir(os.path.join(data_args.data_path, data_args.validation_folder))
-        dataset_files = sorted([os.path.join(data_args.data_path, data_args.validation_folder, x)
+    if "val_buckets_captioning" is not None and training_args.do_eval:
+        dir_with_datasets = [fn for fn in os.listdir(os.path.join(data_args.data_path, "val_buckets_captioning")) if ".ipynb_checkpoints" not in fn]
+        dataset_files = sorted([os.path.join(data_args.data_path, "val_buckets_captioning", x)
                                 for x in dir_with_datasets])
         logger.info(f"Detected {len(dataset_files)} files for validation.")
         data_files["validation"] = dataset_files
@@ -311,13 +311,15 @@ def main():
             num_training_steps=training_args.max_steps,
             num_warmup_steps=training_args.warmup_steps,
             warmup_ratio=training_args.warmup_ratio),
-        "training_steps": training_args.max_steps
+        "training_steps": training_args.max_steps,
+        "do_freeze_seq_m": training_args.do_freeze_transactions_model,
+        "do_freeze_lm": training_args.do_freeze_language_model,
     }
     full_model = PretrainQFormerModel(
-        language_model_name=model_args.language_model_name_or_path,
+        language_model=lm_model,
         sequence_encoder_model=transactions_model,
+        tokenizer=tokenizer,
         qformer=qformer.qformer,
-        # qformer_kwargs=qformer_config,
         **training_model_config
     )
 
