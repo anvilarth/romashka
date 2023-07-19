@@ -470,7 +470,7 @@ class TransactionQAModel(pl.LightningModule):
             pred_output['metrics'] = metrics_scores
 
         if self._return_logits:
-            pred_output['logits'] = outputs['logits']
+            pred_output['logits'] = outputs['logits'].detach().cpu()
 
         return pred_output
 
@@ -570,7 +570,7 @@ class TransactionQAModel(pl.LightningModule):
         if return_embeddings:
             outputs['embeddings'] = predictions['output_embeddings']
         if return_logits:
-            outputs['logits'] = predictions['output_logits']
+            outputs['logits'] = predictions['output_logits'].detach().cpu()
         return outputs
 
     def on_validation_epoch_start(self) -> None:

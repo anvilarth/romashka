@@ -139,3 +139,6 @@ checkpoints/
 .DS_Store
 checkpoints/
 .vscode/
+
+# Other
+./peft/*
