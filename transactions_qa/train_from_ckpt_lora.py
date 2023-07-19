@@ -98,33 +98,35 @@ def main():
 
     # Detecting last checkpoint.
     last_checkpoint = None
-    if (os.path.isdir(training_args.save_checkpoints_dir)
-            and training_args.do_train
-            and not training_args.overwrite_output_dir):
-        last_checkpoint = get_last_checkpoint(training_args.save_checkpoints_dir)
-        if last_checkpoint is None and len(os.listdir(training_args.save_checkpoints_dir)) > 0:
+    if (training_args.resume_from_checkpoint is not None) \
+            and (os.path.isdir(training_args.resume_from_checkpoint)
+            and training_args.do_train):
+        last_checkpoint = get_last_checkpoint(training_args.resume_from_checkpoint)
+        if last_checkpoint is None and len(os.listdir(training_args.resume_from_checkpoint)) > 0:
             raise ValueError(
-                f"Output directory ({training_args.save_checkpoints_dir}) already exists and is not empty. "
-                "Use --overwrite_output_dir to overcome."
+                f"Output directory for checkpoint selection: ({training_args.resume_from_checkpoint}) "
+                f"exists, but no valid checkpoints detected."
             )
-        elif last_checkpoint is not None and training_args.resume_from_checkpoint is None:
-            logger.info(
-                f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
-                "the `--save_checkpoints_dir` or add `--overwrite_output_dir` to train from scratch."
-            )
-    elif not os.path.exists(training_args.save_checkpoints_dir):
-        os.makedirs(training_args.save_checkpoints_dir)
-    elif os.path.exists(training_args.save_checkpoints_dir) and training_args.overwrite_output_dir:
-        shutil.rmtree(training_args.save_checkpoints_dir)
-        os.makedirs(training_args.save_checkpoints_dir)
-    else:
-        logger.error(f"Output directory argument: ({training_args.save_checkpoints_dir}) is not a directory!")
-        raise AttributeError(f"Output directory argument: ({training_args.save_checkpoints_dir}) is not a directory!")
-
     if last_checkpoint is not None:
         logger.info(f"---"*10)
         logger.info(f"Checkpoint detected: {last_checkpoint}")
         logger.info(f"---" * 10)
+
+    # Create & clear saving dir
+    if not os.path.exists(training_args.save_checkpoints_dir):
+        os.makedirs(training_args.save_checkpoints_dir)
+    elif os.path.exists(training_args.save_checkpoints_dir) \
+        and (len(os.listdir(training_args.save_checkpoints_dir)) > 0):
+        if training_args.overwrite_output_dir:
+            shutil.rmtree(training_args.save_checkpoints_dir)
+            os.makedirs(training_args.save_checkpoints_dir)
+        else:
+            logger.error(f"Output directory: ({training_args.save_checkpoints_dir}) is not empty!")
+            raise AttributeError(
+                f"Output directory argument: ({training_args.save_checkpoints_dir}) is not empty!")
+    else:
+        logger.error(f"Output directory argument: ({training_args.save_checkpoints_dir}) is not a directory!")
+        raise AttributeError(f"Output directory argument: ({training_args.save_checkpoints_dir}) is not a directory!")
 
     # Get the datasets
     data_files = {}
@@ -261,14 +263,14 @@ def main():
 
         # Load tokenizer
         logger.info(f"Trying to load pretrained tokenizer...")
-        if os.path.isdir(training_args.save_checkpoints_dir):
-            ckpt_files = [fn for fn in os.listdir(training_args.save_checkpoints_dir) if fn.endswith("json")]
+        if os.path.isdir(training_args.resume_from_checkpoint):
+            ckpt_files = [fn for fn in os.listdir(training_args.resume_from_checkpoint) if fn.endswith("json")]
             logger.info(f"Found {len(ckpt_files)} json files:\n{ckpt_files}")
 
             if ("tokenizer_config.json" in ckpt_files) or ("config.json" in ckpt_files):
                 tok_fn = [fn for fn in ckpt_files if ("tokenizer_config.json" in fn) or ("config.json" in fn)][0]
                 logger.info(f"\nPretrained tokenizer will be loaded from: {tok_fn}")
-                tokenizer = AutoTokenizer.from_pretrained(training_args.save_checkpoints_dir)
+                tokenizer = AutoTokenizer.from_pretrained(training_args.resume_from_checkpoint)
                 logger.info(f"Loaded tokenizer of length: {len(tokenizer)}, "
                             f"with added tokens: {tokenizer.get_added_vocab()}")
 
