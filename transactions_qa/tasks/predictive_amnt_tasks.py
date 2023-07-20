@@ -1008,8 +1008,8 @@ class PredNumericAmountTaskOpenEnded(NumericTaskAbstract):
         predictions = [pred if pred <= self.feature_max else self.feature_max for pred in predictions]
         predictions = [pred if pred >= self.feature_min else self.feature_min for pred in predictions]
 
-        processed_outputs = dict(targets=targets,
-                                 predictions=predictions)
+        processed_outputs = dict(targets=torch.FloatTensor(targets),
+                                 predictions=torch.FloatTensor(predictions))
         if return_logits:
             processed_outputs['predictions_logits'] = outputs['logits']
             processed_outputs['labels_tokens'] = outputs['labels']
