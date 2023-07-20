@@ -19,10 +19,10 @@ from romashka.transactions_qa.dist_utils import concat_all_gather
 
 DEFAULT_CONFIG = {
     "num_queries": 32,
-    "hidden_size": 512,
-    "num_attention_heads": 4,
-    "num_hidden_layers": 4,
-    "intermediate_size": 1024,
+    "hidden_size": 768,
+    "num_attention_heads": 12,
+    "num_hidden_layers": 12,
+    "intermediate_size": 3072,
     "cross_attention_frequency": 2,
     "attention_probs_dropout_prob": 0.1,
     "hidden_act": "gelu",
@@ -33,7 +33,25 @@ DEFAULT_CONFIG = {
     "truncation_side": "right",
     "position_embedding_type": "absolute",
     "use_decoder_only_language_model": False
-}
+}  # as BERT-base
+
+# DEFAULT_CONFIG = {
+#     "num_queries": 32,
+#     "hidden_size": 512,
+#     "num_attention_heads": 4,
+#     "num_hidden_layers": 4,
+#     "intermediate_size": 1024,
+#     "cross_attention_frequency": 2,
+#     "attention_probs_dropout_prob": 0.1,
+#     "hidden_act": "gelu",
+#     "hidden_dropout_prob": 0.1,
+#     "initializer_range": 0.02,
+#     "max_position_embeddings": 1024,
+#     "max_text_sequence_len": 512,
+#     "truncation_side": "right",
+#     "position_embedding_type": "absolute",
+#     "use_decoder_only_language_model": False
+# }  # as BERT-mini
 
 
 class PretrainQFormerModel(pl.LightningModule):

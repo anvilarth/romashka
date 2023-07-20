@@ -288,8 +288,27 @@ def main():
         "device": device
     }
 
+    bert_base_qformer_config = {
+        "text_model_name": 'bert-base-uncased',  # model_args.language_model_name_or_path
+        "sequence_len": trns_output_size,
+        "num_queries": model_args.num_queries,
+        "shared_dim": shared_dim,
+        "attention_probs_dropout_prob": 0.1,
+        "classifier_dropout": 0.1,
+        "cross_attention_frequency": 2,
+        "hidden_act": "gelu",
+        "hidden_dropout_prob": 0.1,
+        "hidden_size": 768,  # == lm_model.config.hidden_size
+        "initializer_range": 0.02,
+        "intermediate_size": 3072,
+        "max_position_embeddings": 1024,
+        "num_attention_heads": 12,
+        "num_hidden_layers": 12,
+        "position_embedding_type": "absolute",
+    }
+
     connector_args = {
-        'config': qformer_config,
+        'config': bert_base_qformer_config,
         'vocab_size': len(tokenizer),
         "pad_token_id": tokenizer.pad_token_id,
         "num_queries": 32
