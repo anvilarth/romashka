@@ -6,10 +6,10 @@ from dataclasses import dataclass
 from typing import (Dict, Tuple, List,
                     Any, Optional, Union)
 
+from torchmetrics import Perplexity, AUROC
 from torchmetrics.classification import (BinaryAccuracy, BinaryF1Score, F1Score, Accuracy)
 from romashka.transactions_qa.tasks.categorical_task_abstract import CategoricalTaskAbstract
 
-from romashka.transactions_qa.model.generation_utils import isin
 from romashka.transactions_qa.evaluation.eval_processings_utils import (map_prediction_to_answer,
                                                                         transform_labels)
 
@@ -30,7 +30,8 @@ class PredCurrencyTaskOpenEnded(CategoricalTaskAbstract):
         self.is_open_ended_task = True
         self.metrics = torch.nn.ModuleDict({
             "accuracy": Accuracy(task="multiclass", num_classes=self.num_classes),
-            "f1": F1Score(task="multiclass", num_classes=self.num_classes)
+            "f1": F1Score(task="multiclass", num_classes=self.num_classes),
+            "ppl": Perplexity(ignore_index=-100)
         })
 
         self.starting_prompts = [
@@ -158,40 +159,6 @@ class PredCurrencyTaskOpenEnded(CategoricalTaskAbstract):
             with_numeric_output=self.numeric_outputs
         )
 
-    def process_outputs(self, outputs: Any, answers: torch.Tensor, as_strings: Optional[bool] = False) -> Any:
-        """
-        Processing target text and output text to get the predictions
-        """
-        # Get predictions as list of strings
-        default_value = 0
-        predictions_decoded = self.tokenizer.batch_decode(outputs['logits'].argmax(2),
-                                                          skip_special_tokens=True)
-        batch_answers_decoded = self.tokenizer.batch_decode(outputs['labels'],
-                                                            skip_special_tokens=True)
-        # Clean predicted texts and map them to categorical labels
-        predictions_clean = [transform_labels(pred,
-                                              do_make_numeric=True,
-                                              do_clean_text=False,
-                                              default_value=default_value)
-                             for pred in predictions_decoded]
-
-        batch_answers_decoded = [transform_labels(answer,
-                                                  do_make_numeric=True,
-                                                  do_clean_text=False,
-                                                  default_value=default_value)
-                                 for answer in batch_answers_decoded]
-
-        # Map to available labels
-        classes = [int(answer) for answer in self.answers_options]
-        predictions_clean = [pred if pred in classes else default_value
-                             for pred in predictions_clean]
-
-        # To Tensors
-        targets = torch.LongTensor(batch_answers_decoded)
-        predictions = torch.LongTensor(predictions_clean)
-
-        return targets, predictions
-
     def generate_target(self, batch: Any, **kwargs) -> Tuple[List[str], List[str]]:
         """
         Creates target values vector for a batch.
@@ -232,6 +199,48 @@ class PredCurrencyTaskOpenEnded(CategoricalTaskAbstract):
 
         return question_target_batch, target_batch
 
+    def process_outputs(self, outputs: Any, answers: torch.Tensor,
+                        return_logits: Optional[bool] = True,
+                        as_strings: Optional[bool] = False) -> Any:
+        """
+        Processing target text and output text to get the predictions
+        """
+        # Get predictions as list of strings
+        default_value = 0
+        predictions_decoded = self.tokenizer.batch_decode(outputs['logits'].argmax(2),
+                                                          skip_special_tokens=True)
+        batch_answers_decoded = self.tokenizer.batch_decode(outputs['labels'],
+                                                            skip_special_tokens=True)
+        # Clean predicted texts and map them to categorical labels
+        predictions_clean = [transform_labels(pred,
+                                              do_make_numeric=True,
+                                              do_clean_text=False,
+                                              default_value=default_value)
+                             for pred in predictions_decoded]
+
+        batch_answers_decoded = [transform_labels(answer,
+                                                  do_make_numeric=True,
+                                                  do_clean_text=False,
+                                                  default_value=default_value)
+                                 for answer in batch_answers_decoded]
+
+        # Map to available labels
+        classes = [int(answer) for answer in self.answers_options]
+        predictions_clean = [pred if pred in classes else default_value
+                             for pred in predictions_clean]
+
+        # To Tensors
+        targets = torch.LongTensor(batch_answers_decoded)
+        predictions = torch.LongTensor(predictions_clean)
+
+        processed_outputs = dict(targets=targets,
+                                 predictions=predictions)
+        if return_logits:
+            processed_outputs['predictions_logits'] = outputs['logits']
+            processed_outputs['labels_tokens'] = outputs['labels']
+
+        return processed_outputs
+
     def calculate_metrics(self, outputs: Any, answers: torch.Tensor,
                           task_metrics: Union[torch.nn.ModuleDict, Dict[str, Any]],
                           **kwargs) -> dict:
@@ -251,18 +260,32 @@ class PredCurrencyTaskOpenEnded(CategoricalTaskAbstract):
                 value - metric score.
         """
         metrics = {}
-        try:
-            targets, preds = self.process_outputs(outputs, answers)
 
+        processed_outputs = self.process_outputs(outputs, answers, return_logits=True)
+        targets = processed_outputs['targets']
+        preds = processed_outputs['predictions']
+        preds_logits = processed_outputs['predictions_logits'] if 'predictions_logits' in processed_outputs else None
+        targets_tokens = processed_outputs['labels_tokens'] if 'predictions_logits' in processed_outputs else None
+
+        try:
             if 'accuracy' in task_metrics:
                 acc = task_metrics['accuracy'](preds, targets)
                 metrics['accuracy'] = task_metrics['accuracy']
+        except Exception as e:
+            print(f"Error during `accuracy` metric calculation: {e}")
 
+        try:
             if 'f1' in task_metrics:
                 f1 = task_metrics['f1'](preds, targets)
                 metrics['f1'] = task_metrics['f1']
-
         except Exception as e:
-            print(f"Error during metrics calculation: {e}")
+            print(f"Error during `f1` metric calculation: {e}")
+
+        try:
+            if 'ppl' in task_metrics:
+                ppl = task_metrics['ppl'](preds_logits, targets_tokens)
+                metrics['ppl'] = task_metrics['ppl']
+        except Exception as e:
+            print(f"Error during `ppl` metric calculation: {e}")
 
         return metrics

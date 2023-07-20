@@ -7,17 +7,16 @@ from dataclasses import dataclass
 from typing import (Dict, Tuple, List,
                     Any, Optional, Union)
 
+from torchmetrics import Perplexity
 from torchmetrics.classification import BinaryAccuracy, Accuracy
-from torchmetrics.text.rouge import ROUGEScore
+
 from torchmetrics.regression import MeanAbsoluteError, MeanSquaredError
 
 from .numeric_task_abstract import NumericTaskAbstract
 from romashka.transactions_qa.utils import get_buckets_info
-
-from romashka.transactions_qa.dataset.data_generator import (
-    transaction_features,
-    num_features_names
-)
+from romashka.transactions_qa.evaluation.eval_processings_utils import (float_splitter,
+                                                                        make_float,
+                                                                        transform_labels)
 
 
 @dataclass
@@ -779,7 +778,8 @@ class PredNumericAmountTaskOpenEnded(NumericTaskAbstract):
 
         self.metrics = {
             "mae": MeanAbsoluteError(),
-            "mse": MeanSquaredError()
+            "mse": MeanSquaredError(),
+            "ppl": Perplexity(ignore_index=-100)
         }
         self.starting_prompts = [
             "This is the client's transaction history:",
@@ -975,8 +975,50 @@ class PredNumericAmountTaskOpenEnded(NumericTaskAbstract):
 
         return question_target_batch, target_feature_value_batch
 
+    def process_outputs(self, outputs: Any, answers: torch.Tensor,
+                        return_logits: Optional[bool] = True,
+                        as_strings: Optional[bool] = False) -> Any:
+        """
+        Processing target text and output text to get the predictions
+        """
+        # Get predictions as list of strings
+        default_value = 0.0
+        predictions_decoded = self.tokenizer.batch_decode(outputs['logits'].argmax(2),
+                                                          skip_special_tokens=True)
+        targets = self.tokenizer.batch_decode(outputs['labels'],
+                                              skip_special_tokens=True)
+
+        # In case multiple floating points in numeric answers -> take last one: 0.0.9 => 0.9
+        predictions = [make_float(float_splitter(pred)) for pred in predictions_decoded]
+
+        # Clean predicted texts and map them to categorical labels
+        predictions = [float(transform_labels(pred,
+                                        do_make_numeric=True,
+                                        do_clean_text=False,
+                                        default_value=default_value))
+                       for pred in predictions]
+
+        targets = [float(transform_labels(answer,
+                                    do_make_numeric=True,
+                                    do_clean_text=False,
+                                    default_value=default_value))
+                   for answer in targets]
+
+        # Assumed, that floating point features are in provided values range
+        predictions = [pred if pred <= self.feature_max else self.feature_max for pred in predictions]
+        predictions = [pred if pred >= self.feature_min else self.feature_min for pred in predictions]
+
+        processed_outputs = dict(targets=targets,
+                                 predictions=predictions)
+        if return_logits:
+            processed_outputs['predictions_logits'] = outputs['logits']
+            processed_outputs['labels_tokens'] = outputs['labels']
+
+        return processed_outputs
+
     def calculate_metrics(self, outputs: Any, answers: torch.Tensor,
-                          task_metrics: Union[torch.nn.ModuleDict, Dict[str, Any]], **kwargs) -> dict:
+                          task_metrics: Union[torch.nn.ModuleDict, Dict[str, Any]],
+                          **kwargs) -> dict:
         """
         Calculate task metrics for a task.
         Args:
@@ -992,7 +1034,36 @@ class PredNumericAmountTaskOpenEnded(NumericTaskAbstract):
                 key - metric name,
                 value - metric score.
         """
-        return {}
+        metrics = {}
+
+        processed_outputs = self.process_outputs(outputs, answers, return_logits=True)
+        targets = processed_outputs['targets']
+        preds = processed_outputs['predictions']
+        preds_logits = processed_outputs['predictions_logits'] if 'predictions_logits' in processed_outputs else None
+        targets_tokens = processed_outputs['labels_tokens'] if 'predictions_logits' in processed_outputs else None
+
+        try:
+            if 'mse' in task_metrics:
+                mse = task_metrics['mse'](preds, targets)
+                metrics['mse'] = task_metrics['mse']
+        except Exception as e:
+            print(f"Error during `MSE` metric calculation: {e}")
+
+        try:
+            if 'mae' in task_metrics:
+                mae = task_metrics['mae'](preds, targets)
+                metrics['mae'] = task_metrics['mae']
+        except Exception as e:
+            print(f"Error during `mae` metric calculation: {e}")
+
+        try:
+            if 'ppl' in task_metrics:
+                ppl = task_metrics['ppl'](preds_logits, targets_tokens)
+                metrics['ppl'] = task_metrics['ppl']
+        except Exception as e:
+            print(f"Error during `ppl` metric calculation: {e}")
+
+        return metrics
 
 
 @dataclass
@@ -1062,7 +1133,8 @@ class PredBinnedAmountTaskOpenEnded(NumericTaskAbstract):
         self.answers_options = [str(i) for i in range(1, len(self.buckets) + 1)]
 
         self.metrics = {
-            "mae": Accuracy(task='multiclass', num_classes=len(self.buckets)),
+            "accuracy": Accuracy(task='multiclass', num_classes=len(self.buckets)),
+            "ppl": Perplexity(ignore_index=-100)
         }
 
         super().__post_init__()
@@ -1206,8 +1278,51 @@ class PredBinnedAmountTaskOpenEnded(NumericTaskAbstract):
 
         return question_target_batch, target_feature_value_bucket_batch
 
+    def process_outputs(self, outputs: Any, answers: torch.Tensor,
+                        return_logits: Optional[bool] = True,
+                        as_strings: Optional[bool] = False) -> Any:
+        """
+        Processing target text and output text to get the predictions
+        """
+        # Get predictions as list of strings
+        default_value = 0
+        predictions_decoded = self.tokenizer.batch_decode(outputs['logits'].argmax(2),
+                                                          skip_special_tokens=True)
+        batch_answers_decoded = self.tokenizer.batch_decode(outputs['labels'],
+                                                            skip_special_tokens=True)
+        # Clean predicted texts and map them to categorical labels
+        predictions_clean = [transform_labels(pred,
+                                              do_make_numeric=True,
+                                              do_clean_text=False,
+                                              default_value=default_value)
+                             for pred in predictions_decoded]
+
+        batch_answers_decoded = [transform_labels(answer,
+                                                  do_make_numeric=True,
+                                                  do_clean_text=False,
+                                                  default_value=default_value)
+                                 for answer in batch_answers_decoded]
+
+        # Map to available labels
+        classes = [int(answer) for answer in self.answers_options]
+        predictions_clean = [pred if pred in classes else default_value
+                             for pred in predictions_clean]
+
+        # To Tensors
+        targets = torch.LongTensor(batch_answers_decoded)
+        predictions = torch.LongTensor(predictions_clean)
+
+        processed_outputs = dict(targets=targets,
+                                 predictions=predictions)
+        if return_logits:
+            processed_outputs['predictions_logits'] = outputs['logits']
+            processed_outputs['labels_tokens'] = outputs['labels']
+
+        return processed_outputs
+
     def calculate_metrics(self, outputs: Any, answers: torch.Tensor,
-                          task_metrics: Union[torch.nn.ModuleDict, Dict[str, Any]], **kwargs) -> dict:
+                          task_metrics: Union[torch.nn.ModuleDict, Dict[str, Any]],
+                          **kwargs) -> dict:
         """
         Calculate task metrics for a task.
         Args:
@@ -1223,4 +1338,33 @@ class PredBinnedAmountTaskOpenEnded(NumericTaskAbstract):
                 key - metric name,
                 value - metric score.
         """
-        return {}
+        metrics = {}
+
+        processed_outputs = self.process_outputs(outputs, answers, return_logits=True)
+        targets = processed_outputs['targets']
+        preds = processed_outputs['predictions']
+        preds_logits = processed_outputs['predictions_logits'] if 'predictions_logits' in processed_outputs else None
+        targets_tokens = processed_outputs['labels_tokens'] if 'predictions_logits' in processed_outputs else None
+
+        try:
+            if 'accuracy' in task_metrics:
+                acc = task_metrics['accuracy'](preds, targets)
+                metrics['accuracy'] = task_metrics['accuracy']
+        except Exception as e:
+            print(f"Error during `accuracy` metric calculation: {e}")
+
+        try:
+            if 'f1' in task_metrics:
+                f1 = task_metrics['f1'](preds, targets)
+                metrics['f1'] = task_metrics['f1']
+        except Exception as e:
+            print(f"Error during `f1` metric calculation: {e}")
+
+        try:
+            if 'ppl' in task_metrics:
+                ppl = task_metrics['ppl'](preds_logits, targets_tokens)
+                metrics['ppl'] = task_metrics['ppl']
+        except Exception as e:
+            print(f"Error during `ppl` metric calculation: {e}")
+
+        return metrics

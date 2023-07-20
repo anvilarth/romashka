@@ -6,7 +6,8 @@ from dataclasses import dataclass
 from typing import (Dict, Tuple, List,
                     Any, Optional, Union)
 
-from torchmetrics.classification import (BinaryAccuracy, BinaryF1Score, F1Score, Accuracy)
+from torchmetrics import Perplexity
+from torchmetrics.classification import F1Score, Accuracy
 from romashka.transactions_qa.tasks.categorical_task_abstract import CategoricalTaskAbstract
 from romashka.transactions_qa.evaluation.eval_processings_utils import (map_prediction_to_answer,
                                                                         transform_labels)
@@ -28,7 +29,8 @@ class PredOpKindTaskOpenEnded(CategoricalTaskAbstract):
         self.is_open_ended_task = True
         self.metrics = torch.nn.ModuleDict({
             "accuracy": Accuracy(task="multiclass", num_classes=self.num_classes),
-            "f1": F1Score(task="multiclass", num_classes=self.num_classes)
+            "f1": F1Score(task="multiclass", num_classes=self.num_classes),
+            "ppl": Perplexity(ignore_index=-100)
         })
 
         self.starting_prompts = [
@@ -196,7 +198,9 @@ class PredOpKindTaskOpenEnded(CategoricalTaskAbstract):
 
         return question_target_batch, target_batch
 
-    def process_outputs(self, outputs: Any, answers: torch.Tensor, as_strings: Optional[bool] = False) -> Any:
+    def process_outputs(self, outputs: Any, answers: torch.Tensor,
+                        return_logits: Optional[bool] = True,
+                        as_strings: Optional[bool] = False) -> Any:
         """
         Processing target text and output text to get the predictions
         """
@@ -228,7 +232,13 @@ class PredOpKindTaskOpenEnded(CategoricalTaskAbstract):
         targets = torch.LongTensor(batch_answers_decoded)
         predictions = torch.LongTensor(predictions_clean)
 
-        return targets, predictions
+        processed_outputs = dict(targets=targets,
+                                 predictions=predictions)
+        if return_logits:
+            processed_outputs['predictions_logits'] = outputs['logits']
+            processed_outputs['labels_tokens'] = outputs['labels']
+
+        return processed_outputs
 
     def calculate_metrics(self, outputs: Any, answers: torch.Tensor,
                           task_metrics: Union[torch.nn.ModuleDict, Dict[str, Any]],
@@ -249,18 +259,32 @@ class PredOpKindTaskOpenEnded(CategoricalTaskAbstract):
                 value - metric score.
         """
         metrics = {}
-        try:
-            targets, preds = self.process_outputs(outputs, answers)
 
+        processed_outputs = self.process_outputs(outputs, answers, return_logits=True)
+        targets = processed_outputs['targets']
+        preds = processed_outputs['predictions']
+        preds_logits = processed_outputs['predictions_logits'] if 'predictions_logits' in processed_outputs else None
+        targets_tokens = processed_outputs['labels_tokens'] if 'predictions_logits' in processed_outputs else None
+
+        try:
             if 'accuracy' in task_metrics:
                 acc = task_metrics['accuracy'](preds, targets)
                 metrics['accuracy'] = task_metrics['accuracy']
+        except Exception as e:
+            print(f"Error during `accuracy` metric calculation: {e}")
 
+        try:
             if 'f1' in task_metrics:
                 f1 = task_metrics['f1'](preds, targets)
                 metrics['f1'] = task_metrics['f1']
-
         except Exception as e:
-            print(f"Error during metrics calculation: {e}")
+            print(f"Error during `f1` metric calculation: {e}")
+
+        try:
+            if 'ppl' in task_metrics:
+                ppl = task_metrics['ppl'](preds_logits, targets_tokens)
+                metrics['ppl'] = task_metrics['ppl']
+        except Exception as e:
+            print(f"Error during `ppl` metric calculation: {e}")
 
         return metrics

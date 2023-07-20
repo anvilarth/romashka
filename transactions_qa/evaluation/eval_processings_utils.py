@@ -2,7 +2,7 @@ import re
 import sys
 import string
 import unicodedata
-from typing import Optional, List, Union
+from typing import Optional, List, Union, Dict, Any
 
 
 PUNCT = {chr(i) for i in range(sys.maxunicode)
@@ -245,3 +245,30 @@ def transform_labels(label: str,
 
     print(f"Unknown label type: {label}")
     return default_value
+
+
+def multiple_replace(dict: Dict[str, Any], text: str):
+  # Create a regular expression  from the dictionary keys
+  regex = re.compile("(%s)" % "|".join(map(re.escape, dict.keys())))
+  # For each match, look-up corresponding value in dictionary
+  return regex.sub(lambda mo: dict[mo.string[mo.start():mo.end()]], text)
+
+
+
+def float_splitter(x: str) -> str:
+    splitted_x = re.split("\\.| |:|,|-|_", x)
+    splitted_x = [s for s in splitted_x if len(s)]
+    if len(splitted_x) > 1:
+        # generated duplicate symbols -> take last
+        if splitted_x[0] == splitted_x[1]:
+            splitted_x = splitted_x[1:]
+        else:
+            # otherwise take first two as float = '[num_1].[num_2]'
+            splitted_x = splitted_x[:2]  #[:2]  #[1:3]
+    return ".".join(splitted_x)
+
+
+def make_float(x: str) -> str:
+    if "." not in x:
+        x = "0." + x
+    return x

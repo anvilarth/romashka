@@ -7,7 +7,7 @@ from typing import (Dict, Tuple, List,
                     Any, Optional, Union)
 
 from torchmetrics.text.rouge import ROUGEScore
-from torchmetrics import AUROC
+from torchmetrics import AUROC, Perplexity
 from torchmetrics.classification import (BinaryAccuracy, BinaryF1Score, F1Score, Accuracy)
 from romashka.transactions_qa.tasks.categorical_task_abstract import CategoricalTaskAbstract
 
@@ -323,23 +323,29 @@ class PredDayOfWeekTaskBinary(CategoricalTaskAbstract):
                 value - metric score.
         """
         metrics = {}
-        try:
-            targets, preds = self.process_outputs(outputs, answers)
 
+        targets, preds = self.process_outputs(outputs, answers)
+        try:
             if 'auc' in task_metrics:
                 task_metrics['auc'](preds, targets)
                 metrics['auc'] = task_metrics['auc']
 
-            if 'accuracy' in task_metrics:
-                task_metrics['accuracy'](preds, targets)
-                metrics['accuracy'] = task_metrics['accuracy']
-
-            if 'f1' in task_metrics:
-                task_metrics['f1'](preds, targets)
-                metrics['f1'] = task_metrics['f1']
-
         except Exception as e:
-            print(f"Error during metrics calculation: {e}")
+            print(f"Error during `auc` metric calculation: {e}")
+
+        try:
+            if 'accuracy' in task_metrics:
+                acc = task_metrics['accuracy'](preds, targets)
+                metrics['accuracy'] = task_metrics['accuracy']
+        except Exception as e:
+            print(f"Error during `accuracy` metric calculation: {e}")
+
+        try:
+            if 'f1' in task_metrics:
+                f1 = task_metrics['f1'](preds, targets)
+                metrics['f1'] = task_metrics['f1']
+        except Exception as e:
+            print(f"Error during `f1` metric calculation: {e}")
 
         return metrics
 
@@ -364,7 +370,8 @@ class PredDayOfWeekTaskOpenEnded(CategoricalTaskAbstract):
                                  threshold=self.decision_threshold,
                                  average='weighted',
                                  ignore_index=self.ignore_class_index,
-                                 num_classes=self.num_classes)
+                                 num_classes=self.num_classes),
+            "ppl": Perplexity(ignore_index=-100)
         })
 
         self.starting_prompts = [
@@ -539,7 +546,9 @@ class PredDayOfWeekTaskOpenEnded(CategoricalTaskAbstract):
 
         return question_target_batch, target_batch
 
-    def process_outputs(self, outputs: Any, answers: torch.Tensor, as_strings: Optional[bool] = False) -> Any:
+    def process_outputs(self, outputs: Any, answers: torch.Tensor,
+                        return_logits: Optional[bool] = True,
+                        as_strings: Optional[bool] = False) -> Any:
         """
         Processing target text and output text to get the predictions
         """
@@ -551,34 +560,33 @@ class PredDayOfWeekTaskOpenEnded(CategoricalTaskAbstract):
                                                             skip_special_tokens=True)
         # Clean predicted texts and map them to categorical labels
         predictions_clean = [transform_labels(pred,
-                                              do_make_numeric=True if not self.is_text_task else False,
-                                              do_clean_text=True if self.is_text_task else False,
-                                              default_value=default_value if not self.is_text_task
-                                                  else str(default_value))
+                                              do_make_numeric=True,
+                                              do_clean_text=False,
+                                              default_value=default_value)
                              for pred in predictions_decoded]
 
         batch_answers_decoded = [transform_labels(answer,
-                                                  do_make_numeric=True if not self.is_text_task else False,
-                                                  do_clean_text=True if self.is_text_task else False,
-                                                  default_value=default_value if not self.is_text_task
-                                                  else str(default_value))
+                                                  do_make_numeric=True,
+                                                  do_clean_text=False,
+                                                  default_value=default_value)
                                  for answer in batch_answers_decoded]
 
         # Map to available labels
-        if not self.is_text_task:
-            classes = [int(answer) for answer in self.answers_options]
-        else:
-            classes = [str(answer) for answer in self.answers_options]
+        classes = [int(answer) for answer in self.answers_options]
         predictions_clean = [pred if pred in classes else default_value
                              for pred in predictions_clean]
-        if self.is_text_task:
-            predictions_clean = [weekday_mapping_reverse.get(pred, 0) for pred in predictions_clean]
 
         # To Tensors
         targets = torch.LongTensor(batch_answers_decoded)
         predictions = torch.LongTensor(predictions_clean)
 
-        return targets, predictions
+        processed_outputs = dict(targets=targets,
+                                 predictions=predictions)
+        if return_logits:
+            processed_outputs['predictions_logits'] = outputs['logits']
+            processed_outputs['labels_tokens'] = outputs['labels']
+
+        return processed_outputs
 
     def calculate_metrics(self, outputs: Any, answers: torch.Tensor,
                           task_metrics: Union[torch.nn.ModuleDict, Dict[str, Any]],
@@ -599,18 +607,32 @@ class PredDayOfWeekTaskOpenEnded(CategoricalTaskAbstract):
                 value - metric score.
         """
         metrics = {}
-        try:
-            targets, preds = self.process_outputs(outputs, answers)
 
+        processed_outputs = self.process_outputs(outputs, answers, return_logits=True)
+        targets = processed_outputs['targets']
+        preds = processed_outputs['predictions']
+        preds_logits = processed_outputs['predictions_logits'] if 'predictions_logits' in processed_outputs else None
+        targets_tokens = processed_outputs['labels_tokens'] if 'predictions_logits' in processed_outputs else None
+
+        try:
             if 'accuracy' in task_metrics:
                 acc = task_metrics['accuracy'](preds, targets)
                 metrics['accuracy'] = task_metrics['accuracy']
+        except Exception as e:
+            print(f"Error during `accuracy` metric calculation: {e}")
 
+        try:
             if 'f1' in task_metrics:
                 f1 = task_metrics['f1'](preds, targets)
                 metrics['f1'] = task_metrics['f1']
-
         except Exception as e:
-            print(f"Error during metrics calculation: {e}")
+            print(f"Error during `f1` metric calculation: {e}")
+
+        try:
+            if 'ppl' in task_metrics:
+                ppl = task_metrics['ppl'](preds_logits, targets_tokens)
+                metrics['ppl'] = task_metrics['ppl']
+        except Exception as e:
+            print(f"Error during `ppl` metric calculation: {e}")
 
         return metrics
