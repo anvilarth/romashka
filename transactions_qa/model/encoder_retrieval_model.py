@@ -377,9 +377,14 @@ class EncoderRetrievalModel(EncoderSimpleModel):
 
         # 4) Get general LM's encoder input as:
         # Q_start_tokens + TRNS_embeddings + Q_end_tokens
-        encoder_input = torch.cat([question_start_embeddings_batch,
-                                   transactions_embeddings,
-                                   question_end_embeddings_batch], dim=1)
+        if question_start_embeddings_batch.size(0) != batch['answer_tokens'].size(0):
+            encoder_input = torch.cat([question_start_embeddings_batch,
+                                       transactions_embeddings,
+                                       question_end_embeddings_batch], dim=1).repeat(batch['answer_tokens'].size(0), 1, 1)
+        else:
+            encoder_input = torch.cat([question_start_embeddings_batch,
+                                       transactions_embeddings,
+                                       question_end_embeddings_batch], dim=1)
         if ('encoder_input_mask' in batch) \
                 and (batch['encoder_input_mask'].size(1) == encoder_input.size(1)):
             encoder_input_mask = batch['encoder_input_mask']
@@ -393,9 +398,12 @@ class EncoderRetrievalModel(EncoderSimpleModel):
                      question_end_attention_mask], dim=1
                 )
             else:
+                if question_end_attention_mask.size(0) != question_start_attention_mask.size(0):
+                    question_end_attention_mask = question_end_attention_mask.repeat(question_start_attention_mask.size(0), 1)
+
                 encoder_input_mask = torch.cat(
                     [question_start_attention_mask,
-                     torch.ones(transactions_embeddings.size()[:2], dtype=batch['mask'].dtype, device=device),
+                     torch.ones(transactions_embeddings.size()[:2], dtype=batch['mask'].dtype, device=device).repeat(question_start_attention_mask.size(0), 1),
                      question_end_attention_mask], dim=1
                 )
 
@@ -436,11 +444,15 @@ class EncoderRetrievalModel(EncoderSimpleModel):
         lm_outputs['answer_tokens'] = batch_answers
 
         # 7) Calculate retrival loss
-        ret_loss_outputs = self._compute_retrieval_loss_fromage(lm_outputs,
-                                                                ret_start_i=transactions_start_i,
-                                                                ret_end_i=transactions_end_i,
-                                                                ret_embeddings=transactions_embeddings,
-                                                                output_hidden_states=True)
+        try:
+            ret_loss_outputs = self._compute_retrieval_loss_fromage(lm_outputs,
+                                                                    ret_start_i=transactions_start_i,
+                                                                    ret_end_i=transactions_end_i,
+                                                                    ret_embeddings=transactions_embeddings,
+                                                                    output_hidden_states=True)
+        except Exception as e:
+            self._logger.error(f"Contrastive loss error: {e}")
+            ret_loss_outputs = {'loss': torch.Tensor([0.0]).to(lm_outputs.loss.device)}
 
         # Re-scale losses
         total_loss = lm_outputs.loss * self._text_loss_scale + \
