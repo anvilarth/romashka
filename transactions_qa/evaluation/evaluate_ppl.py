@@ -31,29 +31,28 @@ def evaluate_ppl(logits: torch.Tensor,
     return ce_to_ppl(ce).mean().item()  # averaged
 
 
-def evaluate_ppl_variants(input_ids: Union[torch.Tensor, List[torch.Tensor]],
-                          model: nn.Module,
-                          input_prompt_length: Optional[int] = -1,
+def evaluate_ppl_variants(model_outputs: Dict[str, Any],
+                          true_target_idx: int,
+                          input_prompt_length: Optional[int] = 0,
                           ignore_index: Optional[int] = -100,
-                          reduction: Optional[str] = "none") -> Tuple[int, List[float]]:
+                          reduction: Optional[str] = "none") -> Tuple[int, torch.Tensor, List[float]]:
     """
     Select answer's variant index based on PPL score.
     """
+    pred_logits = model_outputs.get("logits")   # of size [n_variants, target_seq_len, vocab_size]
+    labels = model_outputs.get("labels")   # of size [n_variants, target_seq_len]
+    true_target = labels[true_target_idx].clone()
+    true_target[true_target == 0] = ignore_index  # mask paddings
+    true_target[:input_prompt_length] = ignore_index  # exclude general prompt from PPL calculation
+
     # PPL with logits
     ppl_per_var = []
-    for i, inputs in enumerate(input_ids):
-        inputs = inputs.to(model.device)
-        targets = inputs.clone()
-        targets[:input_prompt_length] = -100.
-        targets = targets.contiguous().long()
-
-        with torch.no_grad():
-            outputs = model(inputs, labels = targets)
-            logits = outputs.logits.contiguous().float()
-
-        ppl_per_var.append(float(evaluate_ppl(logits, targets,
-                                              ignore_index = ignore_index,
-                                              reduction = reduction)))
+    for i, logits in enumerate(pred_logits):
+        ppl_per_var.append(float(evaluate_ppl(logits.contiguous().float(),
+                                              true_target.contiguous().long(),
+                                              ignore_index=ignore_index,
+                                              reduction=reduction)))
 
     selected_var_idx = np.argmin(ppl_per_var)
-    return selected_var_idx, ppl_per_var
+    pred_label = labels[selected_var_idx]
+    return selected_var_idx, pred_label, ppl_per_var

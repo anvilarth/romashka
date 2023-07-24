@@ -478,21 +478,21 @@ class PredHourTaskOpenEnded(CategoricalTaskAbstract):
         """
         # Construct templates
         question_start, question_end = random.choice(self.question_templates)
+
         if self.task_special_token is not None:
             question_start = self.task_special_token + " " + question_start
         question_start = question_start + self.transactions_embeddings_start_token
         question_end = self.transactions_embeddings_end_token + question_end
 
         device = sample['mask'].device
-        batch_size = sample['mask'].shape[0]  # [bs, seq_len] -> bs == 1
 
         # Create question targets as concatenation of "question end + target (true/random) + ?"
         # and targets as string targets representation, for binary task: Yes/No options
         question_target_batch, target_batch = self.generate_target(sample, question_end=question_end)
 
-        # Generate all options + get index of true variant
         true_target_idx = self.answers_options.index(target_batch[0])
         all_targets_options = self.answers_options
+        batch_size = len(all_targets_options)
 
         # Encode
         # question_start  -> '[task_special_token] + start str [trx]'
@@ -514,14 +514,17 @@ class PredHourTaskOpenEnded(CategoricalTaskAbstract):
                                                              truncation=True,
                                                              return_attention_mask=True
                                                              ).to(device)
+
         # Attention masks
         # already for full batch
         question_start_tokens_mask = torch.ones(question_start_tokens.size()).repeat(batch_size, 1).to(device)
         question_end_tokens_mask = question_target_encoded_batch['attention_mask']
-        transactions_embedding_mask = sample['mask']
+        transactions_embedding_mask = sample['mask'].repeat(batch_size, 1).to(device)
 
         encoder_input_mask = torch.cat(
-            [question_start_tokens_mask, transactions_embedding_mask, question_end_tokens_mask],
+            [question_start_tokens_mask,
+             transactions_embedding_mask,
+             question_end_tokens_mask.repeat(batch_size, 1).to(device)],
             dim=1)
 
         # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
@@ -537,7 +540,6 @@ class PredHourTaskOpenEnded(CategoricalTaskAbstract):
         answer_template_encoded = self.custom_tokenize(self.answer_template,
                                                        return_tensors='pt',
                                                        return_attention_mask=False)['input_ids'][:, :-1].to(device)
-
         # Answer template encoding + target tokens + EOS token
         answer_template_encoded = answer_template_encoded.repeat(
             targets_options_encoded['input_ids'].size(0), 1)
@@ -565,7 +567,6 @@ class PredHourTaskOpenEnded(CategoricalTaskAbstract):
             with_numeric_input=self.numeric_inputs,
             with_numeric_output=self.numeric_outputs
         )
-
 
     def generate_target(self, batch: Any, **kwargs) -> Tuple[List[str], List[str]]:
         """

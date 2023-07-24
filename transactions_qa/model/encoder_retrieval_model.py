@@ -460,7 +460,7 @@ class EncoderRetrievalModel(EncoderSimpleModel):
 
         # join two output dicts
         outputs = dict()
-        outputs["logits"] = lm_outputs.logits
+        outputs["logits"] = lm_outputs.logits.contiguous().float()
 
         outputs["text_loss"] = lm_outputs.loss * self._text_loss_scale
         ret_loss = ret_loss_outputs.pop('loss')
@@ -478,7 +478,7 @@ class EncoderRetrievalModel(EncoderSimpleModel):
             outputs[key] = val
 
         if is_train:
-            outputs['labels'] = batch_answers
+            outputs['labels'] = batch_answers.contiguous().long()
         if self._is_debug:
             outputs['input_embeddings'] = encoder_input  # for debug purposes
             question_start_tokens_batch = batch['question_start_tokens'].repeat(batch_size, 1)
