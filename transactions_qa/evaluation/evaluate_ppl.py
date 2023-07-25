@@ -41,6 +41,8 @@ def evaluate_ppl_variants(model_outputs: Dict[str, Any],
     """
     pred_logits = model_outputs.get("logits")   # of size [n_variants, target_seq_len, vocab_size]
     labels = model_outputs.get("labels")   # of size [n_variants, target_seq_len]
+    labels[labels == 0] = ignore_index  # mask paddings
+
     true_target = labels[true_target_idx].clone()
     true_target[true_target == 0] = ignore_index  # mask paddings
     true_target[:input_prompt_length] = ignore_index  # exclude general prompt from PPL calculation
@@ -49,7 +51,7 @@ def evaluate_ppl_variants(model_outputs: Dict[str, Any],
     ppl_per_var = []
     for i, logits in enumerate(pred_logits):
         ppl_per_var.append(float(evaluate_ppl(logits.contiguous().float(),
-                                              true_target.contiguous().long(),
+                                              labels[i].contiguous().long(),
                                               ignore_index=ignore_index,
                                               reduction=reduction)))
 

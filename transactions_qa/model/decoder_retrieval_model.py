@@ -32,6 +32,7 @@ class DecoderRetrievalModel(DecoderSimpleModel):
                  embeddings_dropout_p: Optional[float] = 0.1,
                  retrieval_loss_scale: Optional[float] = 1.0,
                  text_loss_scale: Optional[float] = 1.0,
+                 add_temporal_embeddings: Optional[bool] = False,
                  transactions_embeddings_start_token: Optional[str] = r"[trx]",
                  transactions_embeddings_end_token: Optional[str] = r"[/trx]",
                  generation_config: Optional[Dict[str, Any]] = None,
@@ -51,6 +52,8 @@ class DecoderRetrievalModel(DecoderSimpleModel):
         self._retrieval_loss_scale = retrieval_loss_scale
         self._text_loss_scale = text_loss_scale
 
+        self._add_temporal_embeddings = add_temporal_embeddings
+
         super().__init__(language_model=language_model,
                          transaction_model=transaction_model,
                          tokenizer=tokenizer,
@@ -66,12 +69,13 @@ class DecoderRetrievalModel(DecoderSimpleModel):
 
     def _prepare_model(self):
         super()._prepare_model()
+        self.register_buffer("whitespace_token_id",
+                             torch.Tensor(self.tokenizer.encode(' ', add_special_tokens=False)).long())
+
+        self.lm_mean_embedding = self._create_mean_lm_embedding()
 
         self._create_trainable_parameters()
         self._create_losses()
-
-        # Additionally re-assign embeddings
-        self._set_language_model_embedding_func()
 
         # Check if language model is frozen, optionally freeze
         self._logger.info(f"Check language model's parameters to be frozen...")
@@ -79,6 +83,9 @@ class DecoderRetrievalModel(DecoderSimpleModel):
             if param.requires_grad:
                 self._logger.warning(f"Parameter `{param_name}` of LM requires grad, freezing..")
                 param.requires_grad = False
+
+        # Additionally re-assign embeddings
+        self._set_language_model_embedding_func()
 
         # Check total trainable parameters
         parameters = list(self.parameters())
@@ -107,6 +114,10 @@ class DecoderRetrievalModel(DecoderSimpleModel):
         # Create projection layers from LM output hidden states to shared dim for loss calculation
         self._create_projection_layers()
 
+        # Creates position embeddings layers (optionally)
+        if self._add_temporal_embeddings:
+            self._create_position_parameters()
+
     def _create_surrounding_parameters(self):
         """
         Creates trainable parameters for:
@@ -123,8 +134,8 @@ class DecoderRetrievalModel(DecoderSimpleModel):
             new_tokens=[self._transactions_embeddings_start_token,
                         self._transactions_embeddings_end_token],
             tokenizer=self.tokenizer,
-            # model=self.language_model,  # -> optionally
-            return_ids=True
+            return_ids=True,
+            special=True
         )
 
         # Init transactions injection tokens ids
@@ -150,6 +161,9 @@ class DecoderRetrievalModel(DecoderSimpleModel):
             torch.normal(mean=torch.zeros(params_dim), std=torch.ones(params_dim)), requires_grad=True)
         self.transactions_end_embedding = nn.Parameter(
             torch.normal(mean=torch.zeros(params_dim), std=torch.ones(params_dim)), requires_grad=True)
+
+        init_parameter_with_tensor(self.transactions_start_embedding, self.lm_mean_embedding)
+        init_parameter_with_tensor(self.transactions_end_embedding, self.lm_mean_embedding)
         self._logger.info(f"Initialized trainable parameters for transactions embeddings start/end tokens.")
 
     def _create_retrieval_parameters(self):
@@ -163,6 +177,7 @@ class DecoderRetrievalModel(DecoderSimpleModel):
                 + [trns_start_embedding, trns_end_embedding]
                 + [ret_embeddings], lr=1e-2, relative_step=False)
         """
+        self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
 
         self.ret_tokens = [self._ret_tokens_template % str(i) for i in range(self.max_ret_tokens)]
 
@@ -172,7 +187,8 @@ class DecoderRetrievalModel(DecoderSimpleModel):
             new_tokens=self.ret_tokens,
             tokenizer=self.tokenizer,
             # model=self.language_model,  # -> optionally
-            return_ids=True
+            return_ids=True,
+            special=True
         )
         self._logger.info(f"Retrieval tokens added to tokenizer: {len(self.ret_tokens)}\ntokens: {self.ret_tokens}.")
 
@@ -180,10 +196,18 @@ class DecoderRetrievalModel(DecoderSimpleModel):
         self.transactions_ret_ids2tokens_mapping = {token_id: token for token, token_id
                                                     in self.transactions_ret_tokens2ids_mapping.items()}
 
+    def _create_position_parameters(self):
+        """
+        Creates position embeddings layers as the indicator of temporal information
+        to the representations from different events in sequence.
+        """
+        self.temp_position_embedding = nn.Embedding(self.max_ret_tokens, 384)
+        self._logger.info(f"Created position embeddings layers for maximum {self.max_ret_tokens} positions.")
+
     def _create_projection_layers(self):
         """
         Creates a linear mappings from language model hidden dimensionality
-        to shared embeddings dimensionality for rET tokens loss calculation.
+        to shared embeddings dimensionality for RET tokens loss calculation.
         """
         # List of indexes of hidden states to take for information extraction
         if self._n_retrieval_layers is None:
@@ -209,12 +233,12 @@ class DecoderRetrievalModel(DecoderSimpleModel):
                 else:  # for GPT-like
                     in_dim = self.language_model.config.hidden_size
                 # Maps from LM hidden_size -> shared dim
-                text_fc = [nn.Linear(in_dim, shared_dim),
+                text_fc = [nn.Linear(in_dim, shared_dim),  # , dtype=torch.float16
                            nn.Dropout(self._embeddings_dropout_p)]
                 self.projection_layers.append(nn.Sequential(*text_fc))
             # Take representation from any middle layer
             elif layer_idx < self.language_model.config.num_hidden_layers:
-                text_fc = [nn.Linear(self.language_model.config.hidden_size, shared_dim),
+                text_fc = [nn.Linear(self.language_model.config.hidden_size, shared_dim),  # , dtype=torch.float16
                            nn.Dropout(self._embeddings_dropout_p)]
                 self.projection_layers.append(nn.Sequential(*text_fc))
             else:
@@ -243,7 +267,7 @@ class DecoderRetrievalModel(DecoderSimpleModel):
         Replace transactions injection start tokens' embedding with trainable parameter.
         """
         mask = input_tokens_ids == self.transactions_start_token_id
-        input_embeddings[mask] = self.transactions_start_embedding
+        input_embeddings[mask] = self.transactions_start_embedding.to(input_embeddings.dtype)
 
     def has_end_token(self, input_tokens_ids: Union[List[int], torch.Tensor]) -> bool:
         """
@@ -257,7 +281,7 @@ class DecoderRetrievalModel(DecoderSimpleModel):
         Replace transactions injection end tokens' embedding with trainable parameter.
         """
         mask = input_tokens_ids == self.transactions_end_token_id
-        input_embeddings[mask] = self.transactions_end_embedding
+        input_embeddings[mask] = self.transactions_end_embedding.to(input_embeddings.dtype)
 
     def forward(self, batch: Union[Dict[str, torch.Tensor], Any],
                 output_attentions: Optional[bool] = True,
@@ -278,16 +302,24 @@ class DecoderRetrievalModel(DecoderSimpleModel):
             LM model's outputs with added labels (if `is_train` was set).
         """
         # 1) Get transactions embeddings for initial batch
-        # transactions model requires: ['mask', 'cat_features', 'num_features', 'meta_features']
         # return: Tuple[
         # torch.Tensor, - embeddings
         # torch.Tensor - mask
         # ]
         transaction_mask = batch['mask']
+        batch_size = transaction_mask.size(0)
         device = transaction_mask.device
 
-        batch_size = transaction_mask.size(0)
         transactions_embeddings, transactions_embeddings_mask = self.transaction_model.get_embs(batch)
+
+        # 1.2) If created position embeddings, apply them first
+        if hasattr(self, "temp_position_embedding"):
+            batch_size, seq_len = transactions_embeddings.size()[:2]
+            position_ids = torch.arange(seq_len, dtype=torch.long, device=device)
+            position_ids = position_ids.unsqueeze(0).expand(batch_size, -1)
+
+            transactions_position_embeddings = self.temp_position_embedding(position_ids)
+            transactions_embeddings = transactions_embeddings + transactions_position_embeddings
 
         # 2) Next pass them to connector == linear mapping -> to LM inner dim
         # Checks whether a connector requires mask argument
@@ -435,7 +467,7 @@ class DecoderRetrievalModel(DecoderSimpleModel):
 
         # join two output dicts
         outputs = dict()
-        outputs["logits"] = lm_outputs.logits
+        outputs["logits"] = lm_outputs.logits.contiguous().float()
 
         outputs["text_loss"] = lm_outputs.loss * self._text_loss_scale
         ret_loss = ret_loss_outputs.pop('loss')
@@ -476,7 +508,7 @@ class DecoderRetrievalModel(DecoderSimpleModel):
                                 output_hidden_states: Optional[bool] = False,
                                 output_logits: Optional[bool] = False) -> Dict[str, torch.Tensor]:
         """
-        Calculate contrastive retrival loss based on InfoNCE loss implementation.
+        Calculate contrastive retrieval loss based on InfoNCE loss implementation.
         Args:
             outputs: a LLM outputs, containing: 'logits', 'hidden_states', etc.
             ret_start_i: a starting index of transactions embeddings injection;

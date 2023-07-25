@@ -1,4 +1,3 @@
-
 import random
 import numpy as np
 import collections
@@ -14,7 +13,7 @@ from pytorch_lightning.utilities import rank_zero_info
 from pytorch_lightning.loggers import WandbLogger
 
 import bitsandbytes as bnb
-from  romashka.transactions_qa.lion_optim import Lion
+from romashka.transactions_qa.lion_optim import Lion
 from romashka.transactions_qa.utils import inspect_init_signature
 from romashka.transactions_qa.model.generation_utils import AnsweredQACriteria
 from romashka.transactions_qa.tasks.task_abstract import AbstractTask
@@ -42,8 +41,9 @@ class TransactionQAModel(pl.LightningModule):
                  training_steps: Optional[int] = 10_000,
                  verbose_for_debug: Optional[bool] = False,
                  return_logits: Optional[bool] = False,
+                 multiple_choice_grade: Optional[bool] = False,
                  **additional_kwargs
-                ):
+                 ):
         super().__init__()
         self._logger = get_logger(
             name=self.__class__.__name__,
@@ -70,6 +70,7 @@ class TransactionQAModel(pl.LightningModule):
         self._is_multitask: bool = False
         self._is_encoder_decoder: bool = False
 
+        self._multiple_choice_grade: bool = multiple_choice_grade
         self._verbose_for_debug: bool = verbose_for_debug
         self._return_logits: bool = return_logits
 
@@ -211,7 +212,10 @@ class TransactionQAModel(pl.LightningModule):
         if task_idx is None:
             task_idx = 0
         task = self.tasks[task_idx]
-        qa_batch = task.process_input_batch(batch)
+        if multiple_choice_grade or self._multiple_choice_grade:
+            qa_batch = task.process_input_multichoice(batch)
+        else:
+            qa_batch = task.process_input_batch(batch)
 
         if len(qa_batch) == 0:
             return None, None
@@ -353,7 +357,8 @@ class TransactionQAModel(pl.LightningModule):
         metrics_scores = {}
         try:
             metrics_scores = task.calculate_metrics(outputs, batch_answers, self.metrics[task.task_name])
-            metrics_scores = {metric_name + "_" + task.task_name: score for metric_name, score in metrics_scores.items()}
+            metrics_scores = {metric_name + "_" + task.task_name: score for metric_name, score in
+                              metrics_scores.items()}
         except Exception as e:
             self._logger.error(f"error occurred during task metric calculation:\n{e}")
 
@@ -440,6 +445,12 @@ class TransactionQAModel(pl.LightningModule):
                                                           task_idx=task_idx,
                                                           verbose=verbose,
                                                           calculate_metrics=False)
+                elif multiple_choice_grade or self._multiple_choice_grade:
+                    predictions = self._predict_step_multichoice(batch,
+                                                                 batch_idx=batch_idx,
+                                                                 task_idx=task_idx,
+                                                                 verbose=verbose,
+                                                                 calculate_metrics=False)
                 else:
                     # For decoder-only models run generate() on questions
                     predictions = self._predict_with_generate_step_task(batch,
@@ -525,7 +536,6 @@ class TransactionQAModel(pl.LightningModule):
 
         return pred_output
 
-
     def _predict_step_task(self, batch: Any, task_idx: int,
                            calculate_metrics: Optional[bool] = False,
                            verbose: Optional[bool] = False,
@@ -552,9 +562,10 @@ class TransactionQAModel(pl.LightningModule):
             outputs['logits'].argmax(2) if isinstance(outputs, dict) else outputs.logits.argmax(2),
             skip_special_tokens=True)
         batch_answers_decoded = self.model.tokenizer.batch_decode(batch_answers,
-                                                            skip_special_tokens=True)
+                                                                  skip_special_tokens=True)
         batch_questions_decoded = self.model.tokenizer.batch_decode(
-             outputs['question_encoded'].detach().cpu() if isinstance(outputs, dict) else outputs.question_encoded.detach().cpu(),
+            outputs['question_encoded'].detach().cpu() if isinstance(outputs,
+                                                                     dict) else outputs.question_encoded.detach().cpu(),
             skip_special_tokens=True)
 
         if verbose:
@@ -688,6 +699,7 @@ class TransactionQAModel(pl.LightningModule):
 
     def on_validation_epoch_start(self) -> None:
         print(f"\n----------- Validation start ----------\n")
+
     #     # Reset log counter
     #     self.log_eval_steps_counter = 0
 
@@ -710,8 +722,7 @@ class TransactionQAModel(pl.LightningModule):
         # Reset counter
         self.train_task_batch_cnt = collections.defaultdict(int)
 
-
-    def on_before_optimizer_step(self, optimizer, optimizer_idx = 0):
+    def on_before_optimizer_step(self, optimizer, optimizer_idx=0):
         # example to inspect gradient information in tensorboard
         if self.trainer.global_step % 25 == 0:  # don't make logging too much
             # log gradients
@@ -719,7 +730,7 @@ class TransactionQAModel(pl.LightningModule):
                 if param_name.startswith("transactions_start_embedding") \
                         or param_name.startswith("transactions_end_embedding") \
                         or param_name.startswith("ret_embedding") \
-                        or param_name.startswith("projection_layers")\
+                        or param_name.startswith("projection_layers") \
                         or param_name.startswith("connector.query_tokens_embeddings"):
                     if param.grad is not None:
                         grad_sum = np.sum(np.abs(param.grad.detach().cpu().numpy()))
