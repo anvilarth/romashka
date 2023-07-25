@@ -20,6 +20,7 @@ from romashka.transactions_qa.model.generation_utils import AnsweredQACriteria
 from romashka.transactions_qa.tasks.task_abstract import AbstractTask
 from romashka.transactions_qa.tasks.task_token_updater import (collect_task_specific_tokens,
                                                                create_task_specific_tokens_map)
+from romashka.transactions_qa.evaluation.evaluate_ppl import evaluate_ppl_variants
 from romashka.logging_handler import get_logger
 
 from transformers import GenerationConfig
@@ -187,8 +188,24 @@ class TransactionQAModel(pl.LightningModule):
     def model_step(self, batch,
                    task_idx: Optional[int] = None,
                    generate: Optional[bool] = False,
+                   multiple_choice_grade: Optional[bool] = False,
                    generation_options: Optional[Dict[str, Any]] = None,
                    output_attentions: Optional[bool] = False) -> Tuple[Any, torch.Tensor]:
+        """
+
+        Args:
+            batch: a batch of samples;
+            task_idx: a task index;
+            generate: whether to generate an answer in autoregressive manner;
+            multiple_choice_grade: A weighted multiple choice accuracy between 0-100, where a set of targets
+                            and scores for each potential target are specified;
+            generation_options: a generation kwargs or GenerationConfig;
+            output_attentions: whether to output attentions from LLM;
+        Returns:
+            a tuple of:
+                - predicted outputs (usually as dict);
+                - answers;
+        """
 
         # Sample single task
         if task_idx is None:
@@ -203,6 +220,30 @@ class TransactionQAModel(pl.LightningModule):
         if generate:
             generation_config = GenerationConfig(**generation_options)
             return self.model.generate(qa_batch, generation_config)
+
+        elif multiple_choice_grade:
+            # join two batches
+            for key, val in batch.items():
+                qa_batch[key] = val
+
+            true_target_idx = qa_batch.get('true_target_idx')
+            outputs = self.model(qa_batch, output_attentions=output_attentions)
+            preds_outputs = evaluate_ppl_variants(model_outputs=outputs,
+                                                  true_target_idx=true_target_idx,
+                                                  input_prompt_length=0,
+                                                  ignore_index=-100,
+                                                  reduction='none')
+            selected_var_idx, pred_label, ppl_per_var = preds_outputs
+            batch_answers = outputs.get("labels")
+
+            outputs['selected_var_idx'] = selected_var_idx
+            outputs['true_target_idx'] = true_target_idx
+            outputs['predicted_label'] = pred_label
+            outputs['true_label'] = batch_answers[true_target_idx]
+            outputs['ppl_per_var'] = ppl_per_var
+
+            return outputs, batch_answers
+
         else:
             # join two batches
             for key, val in batch.items():
@@ -373,6 +414,7 @@ class TransactionQAModel(pl.LightningModule):
     def predict_step(self,
                      batch: Any, batch_idx: int,
                      dataloader_idx: int = 0,
+                     multiple_choice_grade: Optional[bool] = False,
                      verbose: Optional[bool] = False) -> Any:
         """
         Step function called during Trainer.predict().
@@ -380,7 +422,8 @@ class TransactionQAModel(pl.LightningModule):
 
         Args:
             batch: Current batch.
-            batch_idx: Index of current batch.
+            batch_idx: Index of current batch;
+            multiple_choice_grade: whether to use multiple_choice_grade evaluation scheme;
             dataloader_idx: Index of the current dataloader.
         Return:
             Predicted output
@@ -412,6 +455,76 @@ class TransactionQAModel(pl.LightningModule):
                 self._logger.error(f"Error occurred during task `{task.task_name}` evaluation:\n{e}")
 
         return tasks_predictions
+
+    def _predict_step_multichoice(self, batch: Any, task_idx: int,
+                                  calculate_metrics: Optional[bool] = False,
+                                  verbose: Optional[bool] = False,
+                                  batch_idx: Optional[int] = 0, **kwargs) -> Dict[str, Any]:
+        """
+        Predict for single task.
+        Args:
+            batch: Current batch - in this case it should be a single sample, i.e batch_size = 1;
+            task_idx: selected task index;
+            batch_idx: Index of current batch.
+
+        Returns:
+            results: as dictionary, where:
+                keys are - metrics / predictions / answers / questions.
+        """
+        task = self.tasks[task_idx]
+        outputs, batch_answers = self.model_step(batch,
+                                                 task_idx=task_idx,
+                                                 multiple_choice_grade=True,
+                                                 generate=False)
+
+        if outputs is None:
+            return dict()
+
+        # Decode selected variant and GT answer
+        selected_var_idx = outputs.get('selected_var_idx', None)
+        true_target_idx = outputs.get('true_target_idx', None)
+        predicted_label = outputs.get('predicted_label', None)
+        true_label = outputs.get('true_label', None)
+        ppl_per_var = outputs.get('ppl_per_var', None)
+
+        # Decode predicted
+        predicted_label_decoded = self.model.tokenizer.decode(
+            predicted_label if predicted_label is not None else self.model.tokenizer.pad_token_id,
+            skip_special_tokens=True)  # as a single string
+        # Decode true answer
+        true_label_decoded = self.model.tokenizer.decode(
+            true_label if true_label is not None else self.model.tokenizer.pad_token_id,
+            skip_special_tokens=True)  # as a single string
+        # Decode all variants
+        all_answers_vars_decoded = self.model.tokenizer.batch_decode(batch_answers,
+                                                                     skip_special_tokens=True)
+        # Decode question
+        question_decoded = self.model.tokenizer.decode(
+            outputs['question_encoded'][0].squeeze().detach().cpu(),
+            skip_special_tokens=True)
+
+        if verbose:
+            print("----- Prediction step -----")
+            print(f"{question_decoded}:\n\tpredicted: {predicted_label_decoded},\n\tanswer: {true_label_decoded}")
+            print(f"---" * 10)
+
+        pred_output = dict(
+            predictions=predicted_label_decoded,
+            answers=true_label_decoded,
+            variants=all_answers_vars_decoded,
+            ppl_per_variant=ppl_per_var,
+            predictedtarget_idx=selected_var_idx,
+            true_target_idx=true_target_idx,
+            questions=question_decoded,
+            task=task.task_name,
+            batch_idx=batch_idx
+        )
+
+        if self._return_logits:
+            pred_output['logits'] = outputs['logits'].detach().cpu()
+
+        return pred_output
+
 
     def _predict_step_task(self, batch: Any, task_idx: int,
                            calculate_metrics: Optional[bool] = False,
