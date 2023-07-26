@@ -10,16 +10,19 @@ from typing import (Dict, Tuple, List,
 import transformers
 from torchmetrics import Accuracy, MeanAbsoluteError, MeanSquaredError
 from torchmetrics.classification import BinaryAccuracy
-from torchmetrics.text.rouge import ROUGEScore
 
 from .task_abstract import AbstractTask
 from .numeric_task_abstract import NumericTaskAbstract
-from romashka.transactions_qa.utils import get_buckets_info
 
 from romashka.transactions_qa.dataset.data_generator import (
     transaction_features,
     num_features_names
 )
+
+from romashka.transactions_qa.utils import get_buckets_info
+from romashka.transactions_qa.evaluation.eval_processings_utils import (float_splitter,
+                                                                        make_float,
+                                                                        transform_labels)
 
 
 @dataclass
@@ -1012,8 +1015,50 @@ class MeanAmountNumericTaskOpenEnded(NumericTaskAbstract):
 
         return question_target_batch, target_batch
 
+    def process_outputs(self, outputs: Any, answers: torch.Tensor,
+                        return_logits: Optional[bool] = True,
+                        as_strings: Optional[bool] = False) -> Any:
+        """
+        Processing target text and output text to get the predictions
+        """
+        # Get predictions as list of strings
+        default_value = 0.0
+        predictions_decoded = self.tokenizer.batch_decode(outputs['logits'].argmax(2),
+                                                          skip_special_tokens=True)
+        targets = self.tokenizer.batch_decode(outputs['labels'],
+                                              skip_special_tokens=True)
+
+        # In case multiple floating points in numeric answers -> take last one: 0.0.9 => 0.9
+        predictions = [make_float(float_splitter(pred)) for pred in predictions_decoded]
+
+        # Clean predicted texts and map them to categorical labels
+        predictions = [float(transform_labels(pred,
+                                              do_make_numeric=True,
+                                              do_clean_text=False,
+                                              default_value=default_value))
+                       for pred in predictions]
+
+        targets = [float(transform_labels(answer,
+                                          do_make_numeric=True,
+                                          do_clean_text=False,
+                                          default_value=default_value))
+                   for answer in targets]
+
+        # Assumed, that floating point features are in provided values range
+        predictions = [pred if pred <= self.feature_max else self.feature_max for pred in predictions]
+        predictions = [pred if pred >= self.feature_min else self.feature_min for pred in predictions]
+
+        processed_outputs = dict(targets=torch.FloatTensor(targets),
+                                 predictions=torch.FloatTensor(predictions))
+        if return_logits:
+            processed_outputs['predictions_logits'] = outputs['logits']
+            processed_outputs['labels_tokens'] = outputs['labels']
+
+        return processed_outputs
+
     def calculate_metrics(self, outputs: Any, answers: torch.Tensor,
-                          task_metrics: Union[torch.nn.ModuleDict, Dict[str, Any]], **kwargs) -> dict:
+                          task_metrics: Union[torch.nn.ModuleDict, Dict[str, Any]],
+                          **kwargs) -> dict:
         """
         Calculate task metrics for a task.
         Args:
@@ -1029,7 +1074,36 @@ class MeanAmountNumericTaskOpenEnded(NumericTaskAbstract):
                 key - metric name,
                 value - metric score.
         """
-        return {}
+        metrics = {}
+
+        processed_outputs = self.process_outputs(outputs, answers, return_logits=True)
+        targets = processed_outputs['targets']
+        preds = processed_outputs['predictions']
+        preds_logits = processed_outputs['predictions_logits'] if 'predictions_logits' in processed_outputs else None
+        targets_tokens = processed_outputs['labels_tokens'] if 'predictions_logits' in processed_outputs else None
+
+        try:
+            if 'mse' in task_metrics:
+                mse = task_metrics['mse'](preds, targets)
+                metrics['mse'] = task_metrics['mse']
+        except Exception as e:
+            print(f"Error during `MSE` metric calculation: {e}")
+
+        try:
+            if 'mae' in task_metrics:
+                mae = task_metrics['mae'](preds, targets)
+                metrics['mae'] = task_metrics['mae']
+        except Exception as e:
+            print(f"Error during `mae` metric calculation: {e}")
+
+        try:
+            if 'ppl' in task_metrics:
+                ppl = task_metrics['ppl'](preds_logits, targets_tokens)
+                metrics['ppl'] = task_metrics['ppl']
+        except Exception as e:
+            print(f"Error during `ppl` metric calculation: {e}")
+
+        return metrics
 
 
 @dataclass
@@ -1723,8 +1797,50 @@ class LastAmountNumericTaskOpenEnded(NumericTaskAbstract):
 
         return question_target_batch, target_batch
 
+    def process_outputs(self, outputs: Any, answers: torch.Tensor,
+                        return_logits: Optional[bool] = True,
+                        as_strings: Optional[bool] = False) -> Any:
+        """
+        Processing target text and output text to get the predictions
+        """
+        # Get predictions as list of strings
+        default_value = 0.0
+        predictions_decoded = self.tokenizer.batch_decode(outputs['logits'].argmax(2),
+                                                          skip_special_tokens=True)
+        targets = self.tokenizer.batch_decode(outputs['labels'],
+                                              skip_special_tokens=True)
+
+        # In case multiple floating points in numeric answers -> take last one: 0.0.9 => 0.9
+        predictions = [make_float(float_splitter(pred)) for pred in predictions_decoded]
+
+        # Clean predicted texts and map them to categorical labels
+        predictions = [float(transform_labels(pred,
+                                              do_make_numeric=True,
+                                              do_clean_text=False,
+                                              default_value=default_value))
+                       for pred in predictions]
+
+        targets = [float(transform_labels(answer,
+                                          do_make_numeric=True,
+                                          do_clean_text=False,
+                                          default_value=default_value))
+                   for answer in targets]
+
+        # Assumed, that floating point features are in provided values range
+        predictions = [pred if pred <= self.feature_max else self.feature_max for pred in predictions]
+        predictions = [pred if pred >= self.feature_min else self.feature_min for pred in predictions]
+
+        processed_outputs = dict(targets=torch.FloatTensor(targets),
+                                 predictions=torch.FloatTensor(predictions))
+        if return_logits:
+            processed_outputs['predictions_logits'] = outputs['logits']
+            processed_outputs['labels_tokens'] = outputs['labels']
+
+        return processed_outputs
+
     def calculate_metrics(self, outputs: Any, answers: torch.Tensor,
-                          task_metrics: Union[torch.nn.ModuleDict, Dict[str, Any]], **kwargs) -> dict:
+                          task_metrics: Union[torch.nn.ModuleDict, Dict[str, Any]],
+                          **kwargs) -> dict:
         """
         Calculate task metrics for a task.
         Args:
@@ -1740,7 +1856,36 @@ class LastAmountNumericTaskOpenEnded(NumericTaskAbstract):
                 key - metric name,
                 value - metric score.
         """
-        return {}
+        metrics = {}
+
+        processed_outputs = self.process_outputs(outputs, answers, return_logits=True)
+        targets = processed_outputs['targets']
+        preds = processed_outputs['predictions']
+        preds_logits = processed_outputs['predictions_logits'] if 'predictions_logits' in processed_outputs else None
+        targets_tokens = processed_outputs['labels_tokens'] if 'predictions_logits' in processed_outputs else None
+
+        try:
+            if 'mse' in task_metrics:
+                mse = task_metrics['mse'](preds, targets)
+                metrics['mse'] = task_metrics['mse']
+        except Exception as e:
+            print(f"Error during `MSE` metric calculation: {e}")
+
+        try:
+            if 'mae' in task_metrics:
+                mae = task_metrics['mae'](preds, targets)
+                metrics['mae'] = task_metrics['mae']
+        except Exception as e:
+            print(f"Error during `mae` metric calculation: {e}")
+
+        try:
+            if 'ppl' in task_metrics:
+                ppl = task_metrics['ppl'](preds_logits, targets_tokens)
+                metrics['ppl'] = task_metrics['ppl']
+        except Exception as e:
+            print(f"Error during `ppl` metric calculation: {e}")
+
+        return metrics
 
 @dataclass
 class LastAmountNumericTaskBinary(NumericTaskAbstract):

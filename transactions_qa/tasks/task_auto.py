@@ -52,6 +52,8 @@ from romashka.transactions_qa.tasks.context_operation_type_tasks import (MostFre
                                                                           LastOpTypeTaskOpenEnded,
                                                                           MostFrequentOpTypeGroupTaskOpenEnded,
                                                                           LastOpTypeGroupTaskOpenEnded)
+from romashka.transactions_qa.tasks.context_hour_diff_tasks import (MeanHourDiffTaskOpenEnded,
+                                                                    LastHourDiffTaskOpenEnded)
 
 from romashka.transactions_qa.tasks.predictive_amnt_tasks import (PredNumericAmountTaskBinary,
                                                                   PredOverThresholdAmountTaskBinary,
@@ -74,6 +76,7 @@ from romashka.transactions_qa.tasks.predictive_currency_tasks import PredCurrenc
 from romashka.transactions_qa.tasks.predictive_operation_kind_tasks import PredOpKindTaskOpenEnded
 from romashka.transactions_qa.tasks.predictive_operation_type_tasks import (PredOpTypeTaskOpenEnded,
                                                                              PredOpTypeGroupTaskOpenEnded)
+from romashka.transactions_qa.tasks.predictive_hour_diff_tasks import PredHourDiffTaskOpenEnded
 from romashka.transactions_qa.tasks.predictive_default_task import PredDefaultTaskBinary
                                                                
 from romashka.transactions_qa.tasks.default_task import DefaultTask
@@ -151,6 +154,9 @@ AUTO_TASKS = [
         # Operation type group
         ("most_frequent_operation_type_group_open-ended", MostFrequentOpTypeGroupTaskOpenEnded),
         ("last_operation_type_group_open-ended", LastOpTypeGroupTaskOpenEnded),
+        # Hour diff
+        ("mean_hour_diff_open-ended", MeanHourDiffTaskOpenEnded),
+        ("last_hour_diff_open-ended", LastHourDiffTaskOpenEnded),
 
         # Predictive
         # Amount
@@ -186,6 +192,8 @@ AUTO_TASKS = [
         ("pred_operation_type_open-ended", PredOpTypeTaskOpenEnded),
         # Operation type group
         ("pred_operation_type_group_open-ended", PredOpTypeGroupTaskOpenEnded),
+        # Hour diff
+        ("pred_hour_diff_open-ended", PredHourDiffTaskOpenEnded),
         # Default
         ("pred_default_binary", PredDefaultTaskBinary)
     ]
