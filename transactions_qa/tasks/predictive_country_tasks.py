@@ -40,17 +40,28 @@ class PredCountryTaskOpenEnded(CategoricalTaskAbstract):
             "The client's transaction history is given as a context:"
         ]
         self.ending_prompts = [
-            ". What is the country of the next transaction?",
-            ". What is the country of the next transaction based on the provided transaction history?",
-            ". Choose in which country the upcoming transaction will be made.",
-            ". Select the country of the next transaction.",
-            ". Find out what is the country of upcoming transaction.",
-            ". Can you please answer the question: in which country the next transaction will be made?",
-            ". Determine the country of the next transaction.",
-            ". Select the country of the upcoming transaction based on provided history.",
-            ". Choose the country of the next transaction.",
-            ". Can you find out in which country will be the next transaction?",
+            ". What is the country of the next transaction?"
+            " Answer an index of a country from 0 to 25.",
+            ". What is the country of the next transaction based on the provided transaction history?"
+            " Answer an index of a country from 0 to 25.",
+            ". Choose in which country the upcoming transaction will be made."
+            " Answer an index of a country from 0 to 25.",
+            ". Select the country of the next transaction."
+            " Answer an index of a country from 0 to 25.",
+            ". Find out what is the country of upcoming transaction."
+            " Answer an index of a country from 0 to 25.",
+            ". Can you please answer the question: in which country the next transaction will be made?"
+            " Answer an index of a country from 0 to 25.",
+            ". Determine the country of the next transaction."
+            " Answer an index of a country from 0 to 25.",
+            ". Select the country of the upcoming transaction based on provided history."
+            " Answer an index of a country from 0 to 25.",
+            ". Choose the country of the next transaction."
+            " Answer an index of a country from 0 to 25.",
+            ". Can you find out in which country will be the next transaction?"
+            " Answer an index of a country from 0 to 25.",
             ". Answer the question: what is the country of the upcoming transaction?"
+            " Answer an index of a country from 0 to 25.",
         ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,

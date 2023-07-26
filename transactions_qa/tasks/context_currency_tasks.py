@@ -38,19 +38,30 @@ class MostFrequentCurrencyTaskOpenEnded(CategoricalTaskAbstract):
         ]
 
         self.ending_prompts = [
-            ". Which currency is the most frequent?",
-            ". Answer the question: which currency is the most frequent?",
-            ". Choose the most frequent currency.",
-            ". Select the most frequent currency.",
+            ". Which currency is the most frequent?"
+            " Answer an index of a currency starting from 1 to 11 inclusive.",
+            ". Answer the question: which currency is the most frequent?"
+            " Answer an index of a currency starting from 1 to 11 inclusive.",
+            ". Choose the most frequent currency."
+            " Answer an index of a currency starting from 1 to 11 inclusive.",
+            ". Select the most frequent currency."
+            " Answer an index of a currency starting from 1 to 11 inclusive.",
             ". Answer the question: which currency is the most frequent within "
-            "clients' transactions throughout the history?",
-            ". Find out which currency is the most frequent in history?",
-            ". Which currency is the most frequent within clients' transactions throughout the history?",
-            ". Identify which currency is the most frequent within clients' transactions?",
-            ". Can you find out which currency is the most frequent?",
+            "clients' transactions throughout the history?"
+            " Answer an index of a currency starting from 1 to 11 inclusive.",
+            ". Find out which currency is the most frequent in history?"
+            " Answer an index of a currency starting from 1 to 11 inclusive.",
+            ". Which currency is the most frequent within clients' transactions throughout the history?"
+            " Answer an index of a currency starting from 1 to 11 inclusive.",
+            ". Identify which currency is the most frequent within clients' transactions?"
+            " Answer an index of a currency starting from 1 to 11 inclusive.",
+            ". Can you find out which currency is the most frequent?"
+            " Answer an index of a currency starting from 1 to 11 inclusive.",
             ". Can you find out the most frequent currency of clients' transactions?"
+            " Answer an index of a currency starting from 1 to 11 inclusive.",
             ". Would you answer the question: which currency is the most frequent based "
             "on the client's transaction history?"
+            " Answer an index of a currency starting from 1 to 11 inclusive.",
         ]
         self.question_templates = self.generate_question_templates(self.starting_prompts,
                                                                    self.ending_prompts)
@@ -251,17 +262,28 @@ class LastCurrencyTaskOpenEnded(CategoricalTaskAbstract):
         ]
 
         self.ending_prompts = [
-            ". What is the currency of the last transaction that occurred in history?",
-            ". What is the currency of the very last transaction encountered in the transaction history?",
-            ". Choose the last transaction currency.",
-            ". Select the currency of the most recently occurred transaction.",
-            ". Find out what is the currency of last transaction that occurred in history.",
-            ". Can you please answer the question: what is the currency of the most recent transaction?",
-            ". Determine the currency of the last transaction in history?",
-            ". Select the currency of the last transaction that encountered in history.",
-            ". Choose the currency of the most recent transaction in the history",
-            ". Can you find out of which currency was the most recent transaction?",
+            ". What is the currency of the last transaction that occurred in history?"
+            " Answer an index of a currency starting from 1 to 11 inclusive.",
+            ". What is the currency of the very last transaction encountered in the transaction history?"
+            " Answer an index of a currency starting from 1 to 11 inclusive.",
+            ". Choose the last transaction currency."
+            " Answer an index of a currency starting from 1 to 11 inclusive.",
+            ". Select the currency of the most recently occurred transaction."
+            " Answer an index of a currency starting from 1 to 11 inclusive.",
+            ". Find out what is the currency of last transaction that occurred in history."
+            " Answer an index of a currency starting from 1 to 11 inclusive.",
+            ". Can you please answer the question: what is the currency of the most recent transaction?"
+            " Answer an index of a currency starting from 1 to 11 inclusive.",
+            ". Determine the currency of the last transaction in history?"
+            " Answer an index of a currency starting from 1 to 11 inclusive.",
+            ". Select the currency of the last transaction that encountered in history."
+            " Answer an index of a currency starting from 1 to 11 inclusive.",
+            ". Choose the currency of the most recent transaction in the history"
+            " Answer an index of a currency starting from 1 to 11 inclusive.",
+            ". Can you find out of which currency was the most recent transaction?"
+            " Answer an index of a currency starting from 1 to 11 inclusive.",
             ". Answer the question: what is the currency of the latest transaction?"
+            " Answer an index of a currency starting from 1 to 11 inclusive.",
         ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,

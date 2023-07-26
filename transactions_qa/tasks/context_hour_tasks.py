@@ -408,20 +408,24 @@ class MostFrequentHourTaskOpenEnded(CategoricalTaskAbstract):
             "You are given the client's transaction history:",
             "The client's transaction history is given as a context:"
         ]
-
         self.ending_prompts = [
-            ". On which hour of the day did the client make the most transactions?",
-            ". Which hour of the day was the most frequent one for the client's transactions?",
-            ". On which hour of the day did the client make the maximum number of transactions?",
-            ". What was the most frequent hour of the day for this client's transactions?",
-            ". Select the hour of the day on which client made the largest amount of transactions?",
-            ". Which was the most frequent hour of the day for making transactions by this client?",
-            ". Answer the question: which was the most frequent hour of the day for making transactions by this client?",
-            ". Identify on which hour of the day did the client make the most transactions?",
-            ". Answer the question: on which hour of the day did the client make the most transactions?",
-            ". Answer the following question: on which hour of the day did the client make the most transactions?",
-            ". Answer the following question: which hour of the day was the most popular for this client for making transactions?"
+            ". What was the index of the most frequent hour for this client for making transactions?"
+            " Answer an index of an hour starting from 0 to 23 inclusive."
         ]
+
+        # self.ending_prompts = [
+        #     ". On which hour of the day did the client make the most transactions?",
+        #     ". Which hour of the day was the most frequent one for the client's transactions?",
+        #     ". On which hour of the day did the client make the maximum number of transactions?",
+        #     ". What was the most frequent hour of the day for this client's transactions?",
+        #     ". Select the hour of the day on which client made the largest amount of transactions?",
+        #     ". Which was the most frequent hour of the day for making transactions by this client?",
+        #     ". Answer the question: which was the most frequent hour of the day for making transactions by this client?",
+        #     ". Identify on which hour of the day did the client make the most transactions?",
+        #     ". Answer the question: on which hour of the day did the client make the most transactions?",
+        #     ". Answer the following question: on which hour of the day did the client make the most transactions?",
+        #     ". Answer the following question: which hour of the day was the most popular for this client for making transactions?"
+        # ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,
                                                                    self.ending_prompts)
@@ -622,17 +626,22 @@ class LeastFrequentHourTaskOpenEnded(CategoricalTaskAbstract):
         ]
 
         self.ending_prompts = [
-            ". On which hour of the day did the client make the least number of transactions?",
-            ". Choose the most infrequent hour of the day for making transactions.",
-            ". What is the rarest hour of the day to make transactions for this client?",
-            ". Answer the question: what is the rarest hour of the day to make transactions for this client?",
-            ". Select the most infrequent hour of the day to make transactions for this client.",
-            ". Answer the question: which hour of the day is the least frequent within clients' transactions throughout the history?",
-            ". Find out which hour of the day is the least frequent in history?",
-            ". Which hour of the day is the most rare within clients' transactions throughout the history?"
-            ". Identify on which hour of the day did the client make the least number of transactions?"
-            ". Can you find out which hour of the day is the most rare?"
+            ". What was the index of the least frequent hour for this client for making transactions?"
+            " Answer an index of an hour starting from 0 to 23 inclusive."
         ]
+
+        # self.ending_prompts = [
+        #     ". On which hour of the day did the client make the least number of transactions?",
+        #     ". Choose the most infrequent hour of the day for making transactions.",
+        #     ". What is the rarest hour of the day to make transactions for this client?",
+        #     ". Answer the question: what is the rarest hour of the day to make transactions for this client?",
+        #     ". Select the most infrequent hour of the day to make transactions for this client.",
+        #     ". Answer the question: which hour of the day is the least frequent within clients' transactions throughout the history?",
+        #     ". Find out which hour of the day is the least frequent in history?",
+        #     ". Which hour of the day is the most rare within clients' transactions throughout the history?"
+        #     ". Identify on which hour of the day did the client make the least number of transactions?"
+        #     ". Can you find out which hour of the day is the most rare?"
+        # ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,
                                                                    self.ending_prompts)
@@ -833,18 +842,23 @@ class LastHourTaskOpenEnded(CategoricalTaskAbstract):
         ]
 
         self.ending_prompts = [
-            ". What is the hour of a day of the last transaction that occurred in history?",
-            ". What is the hour of a day of the very last transaction encountered in the transaction history?",
-            ". Choose the last transaction's hour of a day.",
-            ". Select the hour of a day of the most recently occurred transaction.",
-            ". Find out what is the hour of a day of last transaction that occurred in history.",
-            ". Can you please answer the question: what is the hour of a day of the most recent transaction?",
-            ". Determine the hour of a day of the last transaction in history?",
-            ". Select the hour of a day of the last transaction that encountered in history.",
-            ". Choose the hour of a day of the most recent transaction in the history",
-            ". Can you find out of which hour of a day was the most recent transaction?",
-            ". Answer the question: what is the hour of a day of the latest transaction?"
+            ". What is the index of the hour of the last clients' transaction?"
+            " Answer an index of an hour starting from 0 to 23 inclusive."
         ]
+
+        # self.ending_prompts = [
+        #     ". What is the hour of a day of the last transaction that occurred in history?",
+        #     ". What is the hour of a day of the very last transaction encountered in the transaction history?",
+        #     ". Choose the last transaction's hour of a day.",
+        #     ". Select the hour of a day of the most recently occurred transaction.",
+        #     ". Find out what is the hour of a day of last transaction that occurred in history.",
+        #     ". Can you please answer the question: what is the hour of a day of the most recent transaction?",
+        #     ". Determine the hour of a day of the last transaction in history?",
+        #     ". Select the hour of a day of the last transaction that encountered in history.",
+        #     ". Choose the hour of a day of the most recent transaction in the history",
+        #     ". Can you find out of which hour of a day was the most recent transaction?",
+        #     ". Answer the question: what is the hour of a day of the latest transaction?"
+        # ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,
                                                                    self.ending_prompts)

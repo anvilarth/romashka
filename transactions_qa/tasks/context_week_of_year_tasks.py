@@ -45,20 +45,24 @@ class MostFrequentWeekOfYearTaskOpenEnded(CategoricalTaskAbstract):
             "You are given the client's transaction history:",
             "The client's transaction history is given as a context:"
         ]
-
         self.ending_prompts = [
-            ". On which week of year did the client make the most transactions?",
-            ". Which week of year was the most frequent one for the client's transactions?",
-            ". On which week of year did the client make the maximum number of transactions?",
-            ". What was the most frequent week of year for this client's transactions?",
-            ". Select the week of year on which client made the largest amount of transactions?",
-            ". Which was the most frequent week of year for making transactions by this client?",
-            ". Answer the question: which was the most frequent week of year for making transactions by this client?",
-            ". Identify on which week of year did the client make the most transactions?",
-            ". Answer the question: on which week of year did the client make the most transactions?",
-            ". Answer the following question: on which week of year did the client make the most transactions?",
-            ". Answer the following question: which week of year was the most popular for this client for making transactions?"
+            ". On which week of year did the client make the most transactions?"
+            " Answer an index of a week of year starting from 0 to 52 inclusive."
         ]
+
+        # self.ending_prompts = [
+        #     ". On which week of year did the client make the most transactions?",
+        #     ". Which week of year was the most frequent one for the client's transactions?",
+        #     ". On which week of year did the client make the maximum number of transactions?",
+        #     ". What was the most frequent week of year for this client's transactions?",
+        #     ". Select the week of year on which client made the largest amount of transactions?",
+        #     ". Which was the most frequent week of year for making transactions by this client?",
+        #     ". Answer the question: which was the most frequent week of year for making transactions by this client?",
+        #     ". Identify on which week of year did the client make the most transactions?",
+        #     ". Answer the question: on which week of year did the client make the most transactions?",
+        #     ". Answer the following question: on which week of year did the client make the most transactions?",
+        #     ". Answer the following question: which week of year was the most popular for this client for making transactions?"
+        # ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,
                                                                    self.ending_prompts)

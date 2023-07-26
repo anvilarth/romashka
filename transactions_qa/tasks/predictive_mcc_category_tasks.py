@@ -358,17 +358,28 @@ class PredMCCCategoryTaskOpenEnded(CategoricalTaskAbstract):
             "The client's transaction history is given as a context:"
         ]
         self.ending_prompts = [
-            ". What is the MCC category of the next transaction?",
-            ". What is the MCC category of the next transaction based on the provided transaction history?",
-            ". Choose the upcoming transaction MCC category.",
-            ". Select the MCC category of the next transaction.",
-            ". Find out what is the MCC category of upcoming transaction.",
-            ". Can you please answer the question: what is the MCC category of the next transaction?",
-            ". Determine the MCC category of the next transaction.",
-            ". Select the MCC category of the upcoming transaction based on provided history.",
-            ". Choose the MCC category of the next transaction based on provided history.",
-            ". Can you find out of which MCC category will be in next transaction?",
+            ". What is the MCC category of the next transaction?"
+            " Answer a number from the range from 0 to 28 inclusive.",
+            ". What is the MCC category of the next transaction based on the provided transaction history?"
+            " Answer a number from the range from 0 to 28 inclusive.",
+            ". Choose the upcoming transaction MCC category."
+            " Answer a number from the range from 0 to 28 inclusive.",
+            ". Select the MCC category of the next transaction."
+            " Answer a number from the range from 0 to 28 inclusive.",
+            ". Find out what is the MCC category of upcoming transaction."
+            " Answer a number from the range from 0 to 28 inclusive.",
+            ". Can you please answer the question: what is the MCC category of the next transaction?"
+            " Answer a number from the range from 0 to 28 inclusive.",
+            ". Determine the MCC category of the next transaction."
+            " Answer a number from the range from 0 to 28 inclusive.",
+            ". Select the MCC category of the upcoming transaction based on provided history."
+            " Answer a number from the range from 0 to 28 inclusive.",
+            ". Choose the MCC category of the next transaction based on provided history."
+            " Answer a number from the range from 0 to 28 inclusive.",
+            ". Can you find out of which MCC category will be in next transaction?"
+            " Answer a number from the range from 0 to 28 inclusive.",
             ". Answer the question: what is the MCC category of the upcoming transaction?"
+            " Answer a number from the range from 0 to 28 inclusive.",
         ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,

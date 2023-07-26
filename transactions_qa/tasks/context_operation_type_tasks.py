@@ -36,19 +36,30 @@ class MostFrequentOpTypeTaskOpenEnded(CategoricalTaskAbstract):
         ]
 
         self.ending_prompts = [
-            ". Which operation type is the most frequent?",
-            ". Answer the question: which operation type is the most frequent?",
-            ". Choose the most frequent operation type.",
-            ". Select the most frequent operation type.",
+            ". Which operation type is the most frequent?"
+            " Answer an index of an operation type starting from 1 to 22 inclusive.",
+            ". Answer the question: which operation type is the most frequent?"
+            " Answer an index of an operation type starting from 1 to 22 inclusive.",
+            ". Choose the most frequent operation type."
+            " Answer an index of an operation type starting from 1 to 22 inclusive.",
+            ". Select the most frequent operation type."
+            " Answer an index of an operation type starting from 1 to 22 inclusive.",
             ". Answer the question: which operation type is the most frequent within "
-            "clients' transactions throughout the history?",
-            ". Find out which operation type is the most frequent in history?",
-            ". Which operation type is the most frequent within clients' transactions throughout the history?",
-            ". Identify which operation type is the most frequent within clients' transactions?",
-            ". Can you find out which operation type is the most frequent?",
+            "clients' transactions throughout the history?"
+            " Answer an index of an operation type starting from 1 to 22 inclusive.",
+            ". Find out which operation type is the most frequent in history?"
+            " Answer an index of an operation type starting from 1 to 22 inclusive.",
+            ". Which operation type is the most frequent within clients' transactions throughout the history?"
+            " Answer an index of an operation type starting from 1 to 22 inclusive.",
+            ". Identify which operation type is the most frequent within clients' transactions?"
+            " Answer an index of an operation type starting from 1 to 22 inclusive.",
             ". Can you find out which operation type is the most frequent?"
+            " Answer an index of an operation type starting from 1 to 22 inclusive.",
+            ". Can you find out which operation type is the most frequent?"
+            " Answer an index of an operation type starting from 1 to 22 inclusive.",
             ". Would you answer the question: which operation type is the most frequent based "
             "on the client's transaction history?"
+            " Answer an index of an operation type starting from 1 to 22 inclusive.",
         ]
         self.question_templates = self.generate_question_templates(self.starting_prompts,
                                                                    self.ending_prompts)
@@ -249,17 +260,28 @@ class LastOpTypeTaskOpenEnded(CategoricalTaskAbstract):
         ]
 
         self.ending_prompts = [
-            ". What is the operation type of the last transaction that occurred in history?",
-            ". What is the operation type of the very last transaction encountered in the transaction history?",
-            ". Choose the last transaction operation type.",
-            ". Select the operation type of the most recently occurred transaction.",
-            ". Find out what is the operation type of last transaction that occurred in history.",
-            ". Can you please answer the question: what is the operation type of the most recent transaction?",
-            ". Determine the operation type of the last transaction in history?",
-            ". Select the operation type of the last transaction that encountered in history.",
-            ". Choose the operation type of the most recent transaction in the history",
-            ". Can you find out of which operation type was the most recent transaction?",
+            ". What is the operation type of the last transaction that occurred in history?"
+            " Answer an index of an operation type starting from 1 to 22 inclusive.",
+            ". What is the operation type of the very last transaction encountered in the transaction history?"
+            " Answer an index of an operation type starting from 1 to 22 inclusive.",
+            ". Choose the last transaction operation type."
+            " Answer an index of an operation type starting from 1 to 22 inclusive.",
+            ". Select the operation type of the most recently occurred transaction."
+            " Answer an index of an operation type starting from 1 to 22 inclusive.",
+            ". Find out what is the operation type of last transaction that occurred in history."
+            " Answer an index of an operation type starting from 1 to 22 inclusive.",
+            ". Can you please answer the question: what is the operation type of the most recent transaction?"
+            " Answer an index of an operation type starting from 1 to 22 inclusive.",
+            ". Determine the operation type of the last transaction in history?"
+            " Answer an index of an operation type starting from 1 to 22 inclusive.",
+            ". Select the operation type of the last transaction that encountered in history."
+            " Answer an index of an operation type starting from 1 to 22 inclusive.",
+            ". Choose the operation type of the most recent transaction in the history"
+            " Answer an index of an operation type starting from 1 to 22 inclusive.",
+            ". Can you find out of which operation type was the most recent transaction?"
+            " Answer an index of an operation type starting from 1 to 22 inclusive.",
             ". Answer the question: what is the operation type of the latest transaction?"
+            " Answer an index of an operation type starting from 1 to 22 inclusive.",
         ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,
@@ -461,19 +483,30 @@ class MostFrequentOpTypeGroupTaskOpenEnded(CategoricalTaskAbstract):
         ]
 
         self.ending_prompts = [
-            ". Which operation type group is the most frequent?",
-            ". Answer the question: which operation type group is the most frequent?",
-            ". Choose the most frequent operation type group.",
-            ". Select the most frequent operation type group.",
+            ". Which operation type group is the most frequent?"
+            " Answer an index of an operation type group starting from 1 to 4 inclusive.",
+            ". Answer the question: which operation type group is the most frequent?"
+            " Answer an index of an operation type group starting from 1 to 4 inclusive.",
+            ". Choose the most frequent operation type group."
+            " Answer an index of an operation type group starting from 1 to 4 inclusive.",
+            ". Select the most frequent operation type group."
+            " Answer an index of an operation type group starting from 1 to 4 inclusive.",
             ". Answer the question: which operation type group is the most frequent within "
-            "clients' transactions throughout the history?",
-            ". Find out which operation type group is the most frequent in history?",
-            ". Which operation type group is the most frequent within clients' transactions throughout the history?",
-            ". Identify which operation type group is the most frequent within clients' transactions?",
-            ". Can you find out which operation type group is the most frequent?",
+            "clients' transactions throughout the history?"
+            " Answer an index of an operation type group starting from 1 to 4 inclusive.",
+            ". Find out which operation type group is the most frequent in history?"
+            " Answer an index of an operation type group starting from 1 to 4 inclusive.",
+            ". Which operation type group is the most frequent within clients' transactions throughout the history?"
+            " Answer an index of an operation type group starting from 1 to 4 inclusive.",
+            ". Identify which operation type group is the most frequent within clients' transactions?"
+            " Answer an index of an operation type group starting from 1 to 4 inclusive.",
             ". Can you find out which operation type group is the most frequent?"
+            " Answer an index of an operation type group starting from 1 to 4 inclusive.",
+            ". Can you find out which operation type group is the most frequent?"
+            " Answer an index of an operation type group starting from 1 to 4 inclusive.",
             ". Would you answer the question: which operation type group is the most frequent based "
             "on the client's transaction history?"
+            " Answer an index of an operation type group starting from 1 to 4 inclusive.",
         ]
         self.question_templates = self.generate_question_templates(self.starting_prompts,
                                                                    self.ending_prompts)
@@ -674,17 +707,28 @@ class LastOpTypeGroupTaskOpenEnded(CategoricalTaskAbstract):
         ]
 
         self.ending_prompts = [
-            ". What is the operation type group of the last transaction that occurred in history?",
-            ". What is the operation type group of the very last transaction encountered in the transaction history?",
-            ". Choose the last transaction operation type group.",
-            ". Select the operation type group of the most recently occurred transaction.",
-            ". Find out what is the operation type group of last transaction that occurred in history.",
-            ". Can you please answer the question: what is the operation type group of the most recent transaction?",
-            ". Determine the operation type group of the last transaction in history?",
-            ". Select the operation type group of the last transaction that encountered in history.",
-            ". Choose the operation type group of the most recent transaction in the history",
-            ". Can you find out of which operation type group was the most recent transaction?",
+            ". What is the operation type group of the last transaction that occurred in history?"
+            " Answer an index of an operation type group starting from 1 to 4 inclusive.",
+            ". What is the operation type group of the very last transaction encountered in the transaction history?"
+            " Answer an index of an operation type group starting from 1 to 4 inclusive.",
+            ". Choose the last transaction operation type group."
+            " Answer an index of an operation type group starting from 1 to 4 inclusive.",
+            ". Select the operation type group of the most recently occurred transaction."
+            " Answer an index of an operation type group starting from 1 to 4 inclusive.",
+            ". Find out what is the operation type group of last transaction that occurred in history."
+            " Answer an index of an operation type group starting from 1 to 4 inclusive.",
+            ". Can you please answer the question: what is the operation type group of the most recent transaction?"
+            " Answer an index of an operation type group starting from 1 to 4 inclusive.",
+            ". Determine the operation type group of the last transaction in history?"
+            " Answer an index of an operation type group starting from 1 to 4 inclusive.",
+            ". Select the operation type group of the last transaction that encountered in history."
+            " Answer an index of an operation type group starting from 1 to 4 inclusive.",
+            ". Choose the operation type group of the most recent transaction in the history"
+            " Answer an index of an operation type group starting from 1 to 4 inclusive.",
+            ". Can you find out of which operation type group was the most recent transaction?"
+            " Answer an index of an operation type group starting from 1 to 4 inclusive.",
             ". Answer the question: what is the operation type group of the latest transaction?"
+            " Answer an index of an operation type group starting from 1 to 4 inclusive.",
         ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,

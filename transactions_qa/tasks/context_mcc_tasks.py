@@ -415,17 +415,27 @@ class MostFrequentMCCCodeTaskOpenEnded(CategoricalTaskAbstract):
         ]
 
         self.ending_prompts = [
-            ". Which MCC code is the most frequent?",
-            ". Choose the most frequent MCC code.",
-            ". Which MCC code is the most frequent in all clint's transactions?",
-            ". Answer the question: which MCC code is the most frequent?",
-            ". Select the most frequent MCC code.",
+            ". Which MCC code is the most frequent?"
+            " Answer a number from the range from 0 to 108 inclusive.",
+            ". Choose the most frequent MCC code."
+            " Answer a number from the range from 0 to 108 inclusive.",
+            ". Which MCC code is the most frequent in all clint's transactions?"
+            " Answer a number from the range from 0 to 108 inclusive.",
+            ". Answer the question: which MCC code is the most frequent?"
+            " Answer a number from the range from 0 to 108 inclusive.",
+            ". Select the most frequent MCC code."
+            " Answer a number from the range from 0 to 108 inclusive.",
             ". Answer the question: which MCC code is the most frequent within "
-            "clients' transactions throughout the history?",
-            ". Find out which MCC code is the most frequent in history?",
-            ". Which MCC code is the most frequent within clients' transactions throughout the history?",
-            ". Identify which MCC code is the most frequent within clients' transactions?",
+            "clients' transactions throughout the history?"
+            " Answer a number from the range from 0 to 108 inclusive.",
+            ". Find out which MCC code is the most frequent in history?"
+            " Answer a number from the range from 0 to 108 inclusive.",
+            ". Which MCC code is the most frequent within clients' transactions throughout the history?"
+            " Answer a number from the range from 0 to 108 inclusive.",
+            ". Identify which MCC code is the most frequent within clients' transactions?"
+            " Answer a number from the range from 0 to 108 inclusive.",
             ". Can you find out which MCC code is the most frequent?"
+            " Answer a number from the range from 0 to 108 inclusive.",
         ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,
@@ -631,17 +641,27 @@ class LeastFrequentMCCCodeTaskOpenEnded(CategoricalTaskAbstract):
         ]
 
         self.ending_prompts = [
-            ". Which MCC code is the least frequent from it?",
-            ". Choose the most infrequent MCC code from transactions history.",
-            ". Which MCC code is the most rare in all clint's transactions?",
-            ". Answer the question: which MCC code is the most rare?",
-            ". Select the most infrequent MCC code.",
+            ". Which MCC code is the least frequent from it?"
+            " Answer a number from the range from 0 to 108 inclusive.",
+            ". Choose the most infrequent MCC code from transactions history."
+            " Answer a number from the range from 0 to 108 inclusive.",
+            ". Which MCC code is the most rare in all clint's transactions?"
+            " Answer a number from the range from 0 to 108 inclusive.",
+            ". Answer the question: which MCC code is the most rare?"
+            " Answer a number from the range from 0 to 108 inclusive.",
+            ". Select the most infrequent MCC code."
+            " Answer a number from the range from 0 to 108 inclusive.",
             ". Answer the question: which MCC code is the least frequent within "
-            "clients' transactions throughout the history?",
-            ". Find out which MCC code is the least frequent in history?",
-            ". Which MCC code is the most rare within clients' transactions throughout the history?",
-            ". Identify which MCC code is the most infrequent within clients' transactions?",
+            "clients' transactions throughout the history?"
+            " Answer a number from the range from 0 to 108 inclusive.",
+            ". Find out which MCC code is the least frequent in history?"
+            " Answer a number from the range from 0 to 108 inclusive.",
+            ". Which MCC code is the most rare within clients' transactions throughout the history?"
+            " Answer a number from the range from 0 to 108 inclusive.",
+            ". Identify which MCC code is the most infrequent within clients' transactions?"
+            " Answer a number from the range from 0 to 108 inclusive.",
             ". Can you find out which MCC code is the most rare?"
+            " Answer a number from the range from 0 to 108 inclusive.",
         ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,
@@ -796,17 +816,28 @@ class LastMCCCodeTaskOpenEnded(CategoricalTaskAbstract):
         ]
 
         self.ending_prompts = [
-            ". What is the MCC code of the last transaction that occurred in history?",
-            ". What is the MCC code of the very last transaction encountered in the transaction history?",
-            ". Choose the last transaction MCC code.",
-            ". Select the MCC code of the most recently occurred transaction.",
-            ". Find out what is the MCC code of last transaction that occurred in history.",
-            ". Can you please answer the question: what is the MCC code of the most recent transaction?",
-            ". Determine the MCC code of the last transaction in history?",
-            ". Select the MCC code of the last transaction that encountered in history.",
-            ". Choose the MCC code of the most recent transaction in the history",
-            ". Can you find out of which MCC code was the most recent transaction?",
+            ". What is the MCC code of the last transaction that occurred in history?"
+            " Answer a number from the range from 0 to 108 inclusive.",
+            ". What is the MCC code of the very last transaction encountered in the transaction history?"
+            " Answer a number from the range from 0 to 108 inclusive.",
+            ". Choose the last transaction MCC code."
+            " Answer a number from the range from 0 to 108 inclusive.",
+            ". Select the MCC code of the most recently occurred transaction."
+            " Answer a number from the range from 0 to 108 inclusive.",
+            ". Find out what is the MCC code of last transaction that occurred in history."
+            " Answer a number from the range from 0 to 108 inclusive.",
+            ". Can you please answer the question: what is the MCC code of the most recent transaction?"
+            " Answer a number from the range from 0 to 108 inclusive.",
+            ". Determine the MCC code of the last transaction in history?"
+            " Answer a number from the range from 0 to 108 inclusive.",
+            ". Select the MCC code of the last transaction that encountered in history."
+            " Answer a number from the range from 0 to 108 inclusive.",
+            ". Choose the MCC code of the most recent transaction in the history"
+            " Answer a number from the range from 0 to 108 inclusive.",
+            ". Can you find out of which MCC code was the most recent transaction?"
+            " Answer a number from the range from 0 to 108 inclusive.",
             ". Answer the question: what is the MCC code of the latest transaction?"
+            " Answer a number from the range from 0 to 108 inclusive.",
         ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,

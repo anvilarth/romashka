@@ -39,17 +39,28 @@ class PredOpKindTaskOpenEnded(CategoricalTaskAbstract):
             "The client's transaction history is given as a context:"
         ]
         self.ending_prompts = [
-            ". What is the operation kind of the next transaction?",
-            ". What is the operation kind of the next transaction based on the provided transaction history?",
-            ". Choose in which operation kind the upcoming transaction will be made.",
-            ". Select the operation kind of the next transaction.",
-            ". Find out what is the operation kind of upcoming transaction.",
-            ". Can you please answer the question: in which operation kind the next transaction will be made?",
-            ". Determine the operation kind of the next transaction.",
-            ". Select the operation kind of the upcoming transaction based on provided history.",
-            ". Choose the operation kind of the next transaction.",
-            ". Can you find out in which operation kind will be the next transaction?",
+            ". What is the operation kind of the next transaction?"
+            " Answer an index of an operation kind starting from 1 to 7 inclusive.",
+            ". What is the operation kind of the next transaction based on the provided transaction history?"
+            " Answer an index of an operation kind starting from 1 to 7 inclusive.",
+            ". Choose in which operation kind the upcoming transaction will be made."
+            " Answer an index of an operation kind starting from 1 to 7 inclusive.",
+            ". Select the operation kind of the next transaction."
+            " Answer an index of an operation kind starting from 1 to 7 inclusive.",
+            ". Find out what is the operation kind of upcoming transaction."
+            " Answer an index of an operation kind starting from 1 to 7 inclusive.",
+            ". Can you please answer the question: in which operation kind the next transaction will be made?"
+            " Answer an index of an operation kind starting from 1 to 7 inclusive.",
+            ". Determine the operation kind of the next transaction."
+            " Answer an index of an operation kind starting from 1 to 7 inclusive.",
+            ". Select the operation kind of the upcoming transaction based on provided history."
+            " Answer an index of an operation kind starting from 1 to 7 inclusive.",
+            ". Choose the operation kind of the next transaction."
+            " Answer an index of an operation kind starting from 1 to 7 inclusive.",
+            ". Can you find out in which operation kind will be the next transaction?"
+            " Answer an index of an operation kind starting from 1 to 7 inclusive.",
             ". Answer the question: what is the operation kind of the upcoming transaction?"
+            " Answer an index of an operation kind starting from 1 to 7 inclusive.",
         ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,

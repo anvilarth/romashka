@@ -38,19 +38,30 @@ class MostFrequentCityTaskOpenEnded(CategoricalTaskAbstract):
         ]
 
         self.ending_prompts = [
-            ". Which city is the most frequent?",
-            ". Answer the question: which city is the most frequent?",
-            ". Choose the most frequent city.",
-            ". Select the most frequent city.",
+            ". Which city is the most frequent?"
+            " Answer an index of a city from 0 to 164.",
+            ". Answer the question: which city is the most frequent?"
+            " Answer an index of a city from 0 to 164.",
+            ". Choose the most frequent city."
+            " Answer an index of a city from 0 to 164.",
+            ". Select the most frequent city."
+            " Answer an index of a city from 0 to 164.",
             ". Answer the question: which city is the most frequent within "
-            "clients' transactions throughout the history?",
-            ". Find out which city is the most frequent in history?",
-            ". Which city is the most frequent within clients' transactions throughout the history?",
-            ". Identify which city is the most frequent within clients' transactions?",
-            ". Can you find out which city is the most frequent?",
+            "clients' transactions throughout the history?"
+            " Answer an index of a city from 0 to 164.",
+            ". Find out which city is the most frequent in history?"
+            " Answer an index of a city from 0 to 164.",
+            ". Which city is the most frequent within clients' transactions throughout the history?"
+            " Answer an index of a city from 0 to 164.",
+            ". Identify which city is the most frequent within clients' transactions?"
+            " Answer an index of a city from 0 to 164.",
             ". Can you find out which city is the most frequent?"
+            " Answer an index of a city from 0 to 164.",
+            ". Can you find out which city is the most frequent?"
+            " Answer an index of a city from 0 to 164.",
             ". Would you answer the question: which city is the most frequent based "
             "on the client's transaction history?"
+            " Answer an index of a city from 0 to 164.",
         ]
         self.question_templates = self.generate_question_templates(self.starting_prompts,
                                                                    self.ending_prompts)
@@ -251,17 +262,28 @@ class LastCityTaskOpenEnded(CategoricalTaskAbstract):
         ]
 
         self.ending_prompts = [
-            ". What is the city of the last transaction that occurred in history?",
-            ". What is the city of the very last transaction encountered in the transaction history?",
-            ". Choose the last transaction city.",
-            ". Select the city of the most recently occurred transaction.",
-            ". Find out what is the city of last transaction that occurred in history.",
-            ". Can you please answer the question: what is the city of the most recent transaction?",
-            ". Determine the city of the last transaction in history?",
-            ". Select the city of the last transaction that encountered in history.",
-            ". Choose the city of the most recent transaction in the history",
-            ". Can you find out of which city was the most recent transaction?",
+            ". What is the city of the last transaction that occurred in history?"
+            " Answer an index of a city from 0 to 164.",
+            ". What is the city of the very last transaction encountered in the transaction history?"
+            " Answer an index of a city from 0 to 164.",
+            ". Choose the last transaction city."
+            " Answer an index of a city from 0 to 164.",
+            ". Select the city of the most recently occurred transaction."
+            " Answer an index of a city from 0 to 164.",
+            ". Find out what is the city of last transaction that occurred in history."
+            " Answer an index of a city from 0 to 164.",
+            ". Can you please answer the question: what is the city of the most recent transaction?"
+            " Answer an index of a city from 0 to 164.",
+            ". Determine the city of the last transaction in history?"
+            " Answer an index of a city from 0 to 164.",
+            ". Select the city of the last transaction that encountered in history."
+            " Answer an index of a city from 0 to 164.",
+            ". Choose the city of the most recent transaction in the history"
+            " Answer an index of a city from 0 to 164.",
+            ". Can you find out of which city was the most recent transaction?"
+            " Answer an index of a city from 0 to 164.",
             ". Answer the question: what is the city of the latest transaction?"
+            " Answer an index of a city from 0 to 164.",
         ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,

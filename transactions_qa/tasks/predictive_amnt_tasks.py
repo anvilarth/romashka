@@ -788,17 +788,28 @@ class PredNumericAmountTaskOpenEnded(NumericTaskAbstract):
         ]
 
         self.ending_prompts = [
-            ". What is the exact amount of the next transaction based on provided transactions history?",
-            ". What is the exact amount of the next transaction?",
-            ". Find out the exact exact value of the next transaction's amount.",
-            ". Identify the exact amount of the next transaction based on provided transactions history.",
-            ". Find out what is the exact amount of next transaction based on provided transactions history.",
-            ". Can you please answer the question: what is the exact amount of the next transaction?",
-            ". Determine what will be the exact amount of the next transaction based on given transactions history?",
-            ". Select the exact amount of the next transaction based on given history.",
-            ". Write the exact amount of the next transaction.",
-            ". Can you find out the exact amount that will occur in the next transaction?",
+            ". What is the exact amount of the next transaction based on provided transactions history?"
+            " Answer a number from the range from 0 to 1.",
+            ". What is the exact amount of the next transaction?"
+            " Answer a number from the range from 0 to 1.",
+            ". Find out the exact exact value of the next transaction's amount."
+            " Answer a number from the range from 0 to 1.",
+            ". Identify the exact amount of the next transaction based on provided transactions history."
+            " Answer a number from the range from 0 to 1.",
+            ". Find out what is the exact amount of next transaction based on provided transactions history."
+            " Answer a number from the range from 0 to 1.",
+            ". Can you please answer the question: what is the exact amount of the next transaction?"
+            " Answer a number from the range from 0 to 1.",
+            ". Determine what will be the exact amount of the next transaction based on given transactions history?"
+            " Answer a number from the range from 0 to 1.",
+            ". Select the exact amount of the next transaction based on given history."
+            " Answer a number from the range from 0 to 1.",
+            ". Write the exact amount of the next transaction."
+            " Answer a number from the range from 0 to 1.",
+            ". Can you find out the exact amount that will occur in the next transaction?"
+            " Answer a number from the range from 0 to 1.",
             ". Answer the question: what is the exact amount of the next transaction?"
+            " Answer a number from the range from 0 to 1.",
         ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,

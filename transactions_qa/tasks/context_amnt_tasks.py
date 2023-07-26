@@ -817,16 +817,26 @@ class MeanAmountNumericTaskOpenEnded(NumericTaskAbstract):
         ]
 
         self.ending_prompts = [
-            ". What is the mean amount of clients' transactions?",
-            ". Which is the mean amount of clients' transactions?",
-            ". Answer the question: what is the mean amount of clients' transactions?",
-            ". Answer the question: which is the mean amount of clients' transactions throughout the history?",
-            ". Can you please answer the question: what is the mean amount of clients' transactions?",
-            ". Identify what was the mean amount of clients' transactions over the whole history?",
-            ". Would you answer the question: what is the mean amount of clients' transactions?",
-            ". Find out what is the mean amount of clients' transactions?",
-            ". Calculate the mean amount of clients' transactions across the entire history?",
+            ". What is the mean amount of clients' transactions?"
+            " Answer a number from the range from 0 to 1.",
+            ". Which is the mean amount of clients' transactions?"
+            " Answer a number from the range from 0 to 1.",
+            ". Answer the question: what is the mean amount of clients' transactions?"
+            " Answer a number from the range from 0 to 1.",
+            ". Answer the question: which is the mean amount of clients' transactions throughout the history?"
+            " Answer a number from the range from 0 to 1.",
+            ". Can you please answer the question: what is the mean amount of clients' transactions?"
+            " Answer a number from the range from 0 to 1.",
+            ". Identify what was the mean amount of clients' transactions over the whole history?"
+            " Answer a number from the range from 0 to 1.",
+            ". Would you answer the question: what is the mean amount of clients' transactions?"
+            " Answer a number from the range from 0 to 1.",
+            ". Find out what is the mean amount of clients' transactions?"
+            " Answer a number from the range from 0 to 1.",
+            ". Calculate the mean amount of clients' transactions across the entire history?"
+            " Answer a number from the range from 0 to 1.",
             ". Can you calculate the mean amount of transactions of this client?"
+            " Answer a number from the range from 0 to 1.",
         ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,
@@ -1520,17 +1530,28 @@ class LastAmountNumericTaskOpenEnded(NumericTaskAbstract):
         ]
 
         self.ending_prompts = [
-            ". What is the amount of the last transaction that occurred in history?",
-            ". What is the amount of the very last transaction encountered in the transaction history?",
-            ". Choose the last transaction amount.",
-            ". Select the amount of the most recently occurred transaction.",
-            ". Find out what is the amount of last transaction that occurred in history.",
-            ". Can you please answer the question: what is the amount of the most recent transaction?",
-            ". Determine the amount of the last transaction in history?",
-            ". Select the amount of the last transaction that encountered in history.",
-            ". Choose the amount of the most recent transaction in the history",
-            ". Can you find out of which amount was the most recent transaction?",
+            ". What is the amount of the last transaction that occurred in history?"
+            " Answer a number from the range from 0 to 1.",
+            ". What is the amount of the very last transaction encountered in the transaction history?"
+            " Answer a number from the range from 0 to 1.",
+            ". Choose the last transaction amount."
+            " Answer a number from the range from 0 to 1.",
+            ". Select the amount of the most recently occurred transaction."
+            " Answer a number from the range from 0 to 1.",
+            ". Find out what is the amount of last transaction that occurred in history."
+            " Answer a number from the range from 0 to 1.",
+            ". Can you please answer the question: what is the amount of the most recent transaction?"
+            " Answer a number from the range from 0 to 1.",
+            ". Determine the amount of the last transaction in history?"
+            " Answer a number from the range from 0 to 1.",
+            ". Select the amount of the last transaction that encountered in history."
+            " Answer a number from the range from 0 to 1.",
+            ". Choose the amount of the most recent transaction in the history"
+            " Answer a number from the range from 0 to 1.",
+            ". Can you find out of which amount was the most recent transaction?"
+            " Answer a number from the range from 0 to 1.",
             ". Answer the question: what is the amount of the latest transaction?"
+            " Answer a number from the range from 0 to 1.",
         ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,

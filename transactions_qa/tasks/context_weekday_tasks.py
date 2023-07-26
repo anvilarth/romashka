@@ -389,20 +389,24 @@ class MostFrequentDayOfWeekTaskOpenEnded(CategoricalTaskAbstract):
             "You are given the client's transaction history:",
             "The client's transaction history is given as a context:"
         ]
-
         self.ending_prompts = [
-            ". On which day of the week did the client make the most transactions?",
-            ". Which day of the week was the most frequent one for the client's transactions?",
-            ". On which day of the week did the client make the maximum number of transactions?",
-            ". What was the most frequent day of the week for this client's transactions?",
-            ". Select the day of the week on which client made the largest amount of transactions?",
-            ". Which was the most frequent day of the week for making transactions by this client?",
-            ". Answer the question: which was the most frequent day of the week for making transactions by this client?",
-            ". Identify on which day of the week did the client make the most transactions?",
-            ". Answer the question: on which day of the week did the client make the most transactions?",
-            ". Answer the following question: on which day of the week did the client make the most transactions?",
-            ". Answer the following question: which day of the week was the most popular for this client for making transactions?"
+            ". What was the index of the most frequent day of week for this client's transactions?"
+            " Answer an index of a week of year starting from 0 to 6 inclusive."
         ]
+
+        # self.ending_prompts = [
+        #     ". On which day of the week did the client make the most transactions?",
+        #     ". Which day of the week was the most frequent one for the client's transactions?",
+        #     ". On which day of the week did the client make the maximum number of transactions?",
+        #     ". What was the most frequent day of the week for this client's transactions?",
+        #     ". Select the day of the week on which client made the largest amount of transactions?",
+        #     ". Which was the most frequent day of the week for making transactions by this client?",
+        #     ". Answer the question: which was the most frequent day of the week for making transactions by this client?",
+        #     ". Identify on which day of the week did the client make the most transactions?",
+        #     ". Answer the question: on which day of the week did the client make the most transactions?",
+        #     ". Answer the following question: on which day of the week did the client make the most transactions?",
+        #     ". Answer the following question: which day of the week was the most popular for this client for making transactions?"
+        # ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,
                                                                    self.ending_prompts)
@@ -601,19 +605,23 @@ class LeastFrequentDayOfWeekTaskOpenEnded(CategoricalTaskAbstract):
             "You are given the client's transaction history:",
             "The client's transaction history is given as a context:"
         ]
-
         self.ending_prompts = [
-            ". On which day of the week did the client make the least number of transactions?",
-            ". Choose the most infrequent day of the week for making transactions.",
-            ". What is the rarest day of the week to make transactions for this client?",
-            ". Answer the question: what is the rarest day of the week to make transactions for this client?",
-            ". Select the most infrequent day of the week to make transactions for this client.",
-            ". Answer the question: which day of the week is the least frequent within clients' transactions throughout the history?",
-            ". Find out which day of the week is the least frequent in history?",
-            ". Which day of the week is the most rare within clients' transactions throughout the history?"
-            ". Identify on which day of the week did the client make the least number of transactions?"
-            ". Can you find out which day of the week is the most rare?"
+            ". What was the index of the least frequent day of week for this client's transactions?"
+            " Answer an index of a week of year starting from 0 to 6 inclusive."
         ]
+
+        # self.ending_prompts = [
+        #     ". On which day of the week did the client make the least number of transactions?",
+        #     ". Choose the most infrequent day of the week for making transactions.",
+        #     ". What is the rarest day of the week to make transactions for this client?",
+        #     ". Answer the question: what is the rarest day of the week to make transactions for this client?",
+        #     ". Select the most infrequent day of the week to make transactions for this client.",
+        #     ". Answer the question: which day of the week is the least frequent within clients' transactions throughout the history?",
+        #     ". Find out which day of the week is the least frequent in history?",
+        #     ". Which day of the week is the most rare within clients' transactions throughout the history?"
+        #     ". Identify on which day of the week did the client make the least number of transactions?"
+        #     ". Can you find out which day of the week is the most rare?"
+        # ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,
                                                                    self.ending_prompts)
@@ -814,18 +822,23 @@ class LastDayOfWeekTaskOpenEnded(CategoricalTaskAbstract):
         ]
 
         self.ending_prompts = [
-            ". What is the day of week of the last transaction that occurred in history?",
-            ". What is the day of week of the very last transaction encountered in the transaction history?",
-            ". Choose the last transaction's day of week.",
-            ". Select the day of week of the most recently occurred transaction.",
-            ". Find out what is the day of week of last transaction that occurred in history.",
-            ". Can you please answer the question: what is the day of week of the most recent transaction?",
-            ". Determine the day of week of the last transaction in history?",
-            ". Select the day of week of the last transaction that encountered in history.",
-            ". Choose the day of week of the most recent transaction in the history",
-            ". Can you find out of which day of week was the most recent transaction?",
-            ". Answer the question: what is the day of week of the latest transaction?"
+            ". What was the index of the day of week for this client's last transaction?"
+            " Answer an index of a week of year starting from 0 to 6 inclusive."
         ]
+
+        # self.ending_prompts = [
+        #     ". What is the day of week of the last transaction that occurred in history?",
+        #     ". What is the day of week of the very last transaction encountered in the transaction history?",
+        #     ". Choose the last transaction's day of week.",
+        #     ". Select the day of week of the most recently occurred transaction.",
+        #     ". Find out what is the day of week of last transaction that occurred in history.",
+        #     ". Can you please answer the question: what is the day of week of the most recent transaction?",
+        #     ". Determine the day of week of the last transaction in history?",
+        #     ". Select the day of week of the last transaction that encountered in history.",
+        #     ". Choose the day of week of the most recent transaction in the history",
+        #     ". Can you find out of which day of week was the most recent transaction?",
+        #     ". Answer the question: what is the day of week of the latest transaction?"
+        # ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,
                                                                    self.ending_prompts)

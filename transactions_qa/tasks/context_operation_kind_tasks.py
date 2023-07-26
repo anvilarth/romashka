@@ -38,19 +38,30 @@ class MostFrequentOpKindTaskOpenEnded(CategoricalTaskAbstract):
         ]
 
         self.ending_prompts = [
-            ". Which operation kind is the most frequent?",
-            ". Answer the question: which operation kind is the most frequent?",
-            ". Choose the most frequent operation kind.",
-            ". Select the most frequent operation kind.",
+            ". Which operation kind is the most frequent?"
+            " Answer an index of an operation kind starting from 1 to 7 inclusive.",
+            ". Answer the question: which operation kind is the most frequent?"
+            " Answer an index of an operation kind starting from 1 to 7 inclusive.",
+            ". Choose the most frequent operation kind."
+            " Answer an index of an operation kind starting from 1 to 7 inclusive.",
+            ". Select the most frequent operation kind."
+            " Answer an index of an operation kind starting from 1 to 7 inclusive.",
             ". Answer the question: which operation kind is the most frequent within "
-            "clients' transactions throughout the history?",
-            ". Find out which operation kind is the most frequent in history?",
-            ". Which operation kind is the most frequent within clients' transactions throughout the history?",
-            ". Identify which operation kind is the most frequent within clients' transactions?",
-            ". Can you find out which operation kind is the most frequent?",
+            "clients' transactions throughout the history?"
+            " Answer an index of an operation kind starting from 1 to 7 inclusive.",
+            ". Find out which operation kind is the most frequent in history?"
+            " Answer an index of an operation kind starting from 1 to 7 inclusive.",
+            ". Which operation kind is the most frequent within clients' transactions throughout the history?"
+            " Answer an index of an operation kind starting from 1 to 7 inclusive.",
+            ". Identify which operation kind is the most frequent within clients' transactions?"
+            " Answer an index of an operation kind starting from 1 to 7 inclusive.",
             ". Can you find out which operation kind is the most frequent?"
+            " Answer an index of an operation kind starting from 1 to 7 inclusive.",
+            ". Can you find out which operation kind is the most frequent?"
+            " Answer an index of an operation kind starting from 1 to 7 inclusive.",
             ". Would you answer the question: which operation kind is the most frequent based "
             "on the client's transaction history?"
+            " Answer an index of an operation kind starting from 1 to 7 inclusive.",
         ]
         self.question_templates = self.generate_question_templates(self.starting_prompts,
                                                                    self.ending_prompts)
@@ -251,17 +262,28 @@ class LastOpKindTaskOpenEnded(CategoricalTaskAbstract):
         ]
 
         self.ending_prompts = [
-            ". What is the operation kind of the last transaction that occurred in history?",
-            ". What is the operation kind of the very last transaction encountered in the transaction history?",
-            ". Choose the last transaction operation kind.",
-            ". Select the operation kind of the most recently occurred transaction.",
-            ". Find out what is the operation kind of last transaction that occurred in history.",
-            ". Can you please answer the question: what is the operation kind of the most recent transaction?",
-            ". Determine the operation kind of the last transaction in history?",
-            ". Select the operation kind of the last transaction that encountered in history.",
-            ". Choose the operation kind of the most recent transaction in the history",
-            ". Can you find out of which operation kind was the most recent transaction?",
+            ". What is the operation kind of the last transaction that occurred in history?"
+            " Answer an index of an operation kind starting from 1 to 7 inclusive.",
+            ". What is the operation kind of the very last transaction encountered in the transaction history?"
+            " Answer an index of an operation kind starting from 1 to 7 inclusive.",
+            ". Choose the last transaction operation kind."
+            " Answer an index of an operation kind starting from 1 to 7 inclusive.",
+            ". Select the operation kind of the most recently occurred transaction."
+            " Answer an index of an operation kind starting from 1 to 7 inclusive.",
+            ". Find out what is the operation kind of last transaction that occurred in history."
+            " Answer an index of an operation kind starting from 1 to 7 inclusive.",
+            ". Can you please answer the question: what is the operation kind of the most recent transaction?"
+            " Answer an index of an operation kind starting from 1 to 7 inclusive.",
+            ". Determine the operation kind of the last transaction in history?"
+            " Answer an index of an operation kind starting from 1 to 7 inclusive.",
+            ". Select the operation kind of the last transaction that encountered in history."
+            " Answer an index of an operation kind starting from 1 to 7 inclusive.",
+            ". Choose the operation kind of the most recent transaction in the history"
+            " Answer an index of an operation kind starting from 1 to 7 inclusive.",
+            ". Can you find out of which operation kind was the most recent transaction?"
+            " Answer an index of an operation kind starting from 1 to 7 inclusive.",
             ". Answer the question: what is the operation kind of the latest transaction?"
+            " Answer an index of an operation kind starting from 1 to 7 inclusive.",
         ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,

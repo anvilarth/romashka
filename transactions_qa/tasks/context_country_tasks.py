@@ -38,19 +38,30 @@ class MostFrequentCountryTaskOpenEnded(CategoricalTaskAbstract):
         ]
 
         self.ending_prompts = [
-            ". Which country is the most frequent?",
-            ". Answer the question: which country is the most frequent?",
-            ". Choose the most frequent country.",
-            ". Select the most frequent country.",
+            ". Which country is the most frequent?"
+            " Answer an index of a country from 0 to 25.",
+            ". Answer the question: which country is the most frequent?"
+            " Answer an index of a country from 0 to 25.",
+            ". Choose the most frequent country."
+            " Answer an index of a country from 0 to 25.",
+            ". Select the most frequent country."
+            " Answer an index of a country from 0 to 25.",
             ". Answer the question: which country is the most frequent within "
-            "clients' transactions throughout the history?",
-            ". Find out which country is the most frequent in history?",
-            ". Which country is the most frequent within clients' transactions throughout the history?",
-            ". Identify which country is the most frequent within clients' transactions?",
-            ". Can you find out which country is the most frequent?",
+            "clients' transactions throughout the history?"
+            " Answer an index of a country from 0 to 25.",
+            ". Find out which country is the most frequent in history?"
+            " Answer an index of a country from 0 to 25.",
+            ". Which country is the most frequent within clients' transactions throughout the history?"
+            " Answer an index of a country from 0 to 25.",
+            ". Identify which country is the most frequent within clients' transactions?"
+            " Answer an index of a country from 0 to 25.",
             ". Can you find out which country is the most frequent?"
+            " Answer an index of a country from 0 to 25.",
+            ". Can you find out which country is the most frequent?"
+            " Answer an index of a country from 0 to 25.",
             ". Would you answer the question: which  country is the most frequent based "
             "on the client's transaction history?"
+            " Answer an index of a country from 0 to 25.",
         ]
         self.question_templates = self.generate_question_templates(self.starting_prompts,
                                                                    self.ending_prompts)
@@ -251,17 +262,28 @@ class LastCountryTaskOpenEnded(CategoricalTaskAbstract):
         ]
 
         self.ending_prompts = [
-            ". What is the country of the last transaction that occurred in history?",
-            ". What is the country of the very last transaction encountered in the transaction history?",
-            ". Choose the last transaction country.",
-            ". Select the country of the most recently occurred transaction.",
-            ". Find out what is the country of last transaction that occurred in history.",
-            ". Can you please answer the question: what is the country of the most recent transaction?",
-            ". Determine the country of the last transaction in history?",
-            ". Select the country of the last transaction that encountered in history.",
-            ". Choose the country of the most recent transaction in the history",
-            ". Can you find out of which country was the most recent transaction?",
+            ". What is the country of the last transaction that occurred in history?"
+            " Answer an index of a country from 0 to 25.",
+            ". What is the country of the very last transaction encountered in the transaction history?"
+            " Answer an index of a country from 0 to 25.",
+            ". Choose the last transaction country."
+            " Answer an index of a country from 0 to 25.",
+            ". Select the country of the most recently occurred transaction."
+            " Answer an index of a country from 0 to 25.",
+            ". Find out what is the country of last transaction that occurred in history."
+            " Answer an index of a country from 0 to 25.",
+            ". Can you please answer the question: what is the country of the most recent transaction?"
+            " Answer an index of a country from 0 to 25.",
+            ". Determine the country of the last transaction in history?"
+            " Answer an index of a country from 0 to 25.",
+            ". Select the country of the last transaction that encountered in history."
+            " Answer an index of a country from 0 to 25.",
+            ". Choose the country of the most recent transaction in the history"
+            " Answer an index of a country from 0 to 25.",
+            ". Can you find out of which country was the most recent transaction?"
+            " Answer an index of a country from 0 to 25.",
             ". Answer the question: what is the country of the latest transaction?"
+            " Answer an index of a country from 0 to 25.",
         ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,

@@ -346,17 +346,21 @@ class PredHourTaskOpenEnded(CategoricalTaskAbstract):
         ]
         self.ending_prompts = [
             ". On which hour will the client make the next transaction?"
-            ". What is the hour of the next transaction?",
-            ". What is the hour of the next transaction based on the provided transaction history?",
-            ". Choose the hour of upcoming transaction.",
-            ". Select the hour of the day on which client will make the next transaction?",
-            ". Find out what is the hour of upcoming transaction.",
-            ". Determine the hour of the next transaction.",
-            ". Choose the hour of the next transaction based on provided history.",
-            ". Can you find out on which hour will be the next transaction?",
-            ". Answer the question: on which hour will the client make the next transaction?",
-            ". Answer the following question: on which hour of the day will the client make the next transaction?",
+            " Answer an index of an hour starting from 0 to 23."
         ]
+        # self.ending_prompts = [
+        #     ". On which hour will the client make the next transaction?"
+        #     ". What is the hour of the next transaction?",
+        #     ". What is the hour of the next transaction based on the provided transaction history?",
+        #     ". Choose the hour of upcoming transaction.",
+        #     ". Select the hour of the day on which client will make the next transaction?",
+        #     ". Find out what is the hour of upcoming transaction.",
+        #     ". Determine the hour of the next transaction.",
+        #     ". Choose the hour of the next transaction based on provided history.",
+        #     ". Can you find out on which hour will be the next transaction?",
+        #     ". Answer the question: on which hour will the client make the next transaction?",
+        #     ". Answer the following question: on which hour of the day will the client make the next transaction?",
+        # ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,
                                                                    self.ending_prompts)

@@ -41,17 +41,28 @@ class PredCityTaskOpenEnded(CategoricalTaskAbstract):
             "The client's transaction history is given as a context:"
         ]
         self.ending_prompts = [
-            ". What is the city of the next transaction?",
-            ". What is the city of the next transaction based on the provided transaction history?",
-            ". Choose in which city the upcoming transaction will be made.",
-            ". Select the city of the next transaction.",
-            ". Find out what is the city of upcoming transaction.",
-            ". Can you please answer the question: in which city the next transaction will be made?",
-            ". Determine the city of the next transaction.",
-            ". Select the city of the upcoming transaction based on provided history.",
-            ". Choose the city of the next transaction.",
-            ". Can you find out in which city will be the next transaction?",
+            ". What is the city of the next transaction?"
+            " Answer an index of a city from 0 to 164.",
+            ". What is the city of the next transaction based on the provided transaction history?"
+            " Answer an index of a city from 0 to 164.",
+            ". Choose in which city the upcoming transaction will be made."
+            " Answer an index of a city from 0 to 164.",
+            ". Select the city of the next transaction."
+            " Answer an index of a city from 0 to 164.",
+            ". Find out what is the city of upcoming transaction."
+            " Answer an index of a city from 0 to 164.",
+            ". Can you please answer the question: in which city the next transaction will be made?"
+            " Answer an index of a city from 0 to 164.",
+            ". Determine the city of the next transaction."
+            " Answer an index of a city from 0 to 164.",
+            ". Select the city of the upcoming transaction based on provided history."
+            " Answer an index of a city from 0 to 164.",
+            ". Choose the city of the next transaction."
+            " Answer an index of a city from 0 to 164.",
+            ". Can you find out in which city will be the next transaction?"
+            " Answer an index of a city from 0 to 164.",
             ". Answer the question: what is the city of the upcoming transaction?"
+            " Answer an index of a city from 0 to 164.",
         ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,

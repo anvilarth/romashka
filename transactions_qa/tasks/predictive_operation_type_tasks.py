@@ -39,17 +39,28 @@ class PredOpTypeTaskOpenEnded(CategoricalTaskAbstract):
             "The client's transaction history is given as a context:"
         ]
         self.ending_prompts = [
-            ". What is the operation type of the next transaction?",
-            ". What is the operation type of the next transaction based on the provided transaction history?",
-            ". Choose in which operation type the upcoming transaction will be made.",
-            ". Select the operation type of the next transaction.",
-            ". Find out what is the operation type of upcoming transaction.",
-            ". Can you please answer the question: in which operation type the next transaction will be made?",
-            ". Determine the operation type of the next transaction.",
-            ". Select the operation type of the upcoming transaction based on provided history.",
-            ". Choose the operation type of the next transaction.",
-            ". Can you find out in which operation type will be the next transaction?",
+            ". What is the operation type of the next transaction?"
+            " Answer an index of an operation type starting from 1 to 22 inclusive.",
+            ". What is the operation type of the next transaction based on the provided transaction history?"
+            " Answer an index of an operation type starting from 1 to 22 inclusive.",
+            ". Choose in which operation type the upcoming transaction will be made."
+            " Answer an index of an operation type starting from 1 to 22 inclusive.",
+            ". Select the operation type of the next transaction."
+            " Answer an index of an operation type starting from 1 to 22 inclusive.",
+            ". Find out what is the operation type of upcoming transaction."
+            " Answer an index of an operation type starting from 1 to 22 inclusive.",
+            ". Can you please answer the question: in which operation type the next transaction will be made?"
+            " Answer an index of an operation type starting from 1 to 22 inclusive.",
+            ". Determine the operation type of the next transaction."
+            " Answer an index of an operation type starting from 1 to 22 inclusive.",
+            ". Select the operation type of the upcoming transaction based on provided history."
+            " Answer an index of an operation type starting from 1 to 22 inclusive.",
+            ". Choose the operation type of the next transaction."
+            " Answer an index of an operation type starting from 1 to 22 inclusive.",
+            ". Can you find out in which operation type will be the next transaction?"
+            " Answer an index of an operation type starting from 1 to 22 inclusive.",
             ". Answer the question: what is the operation type of the upcoming transaction?"
+            " Answer an index of an operation type starting from 1 to 22 inclusive.",
         ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,
@@ -316,17 +327,28 @@ class PredOpTypeGroupTaskOpenEnded(CategoricalTaskAbstract):
             "The client's transaction history is given as a context:"
         ]
         self.ending_prompts = [
-            ". What is the operation type group of the next transaction?",
-            ". What is the operation type group of the next transaction based on the provided transaction history?",
-            ". Choose in which operation type group the upcoming transaction will be made.",
-            ". Select the operation type group of the next transaction.",
-            ". Find out what is the operation type group of upcoming transaction.",
-            ". Can you please answer the question: in which operation type group the next transaction will be made?",
-            ". Determine the operation type group of the next transaction.",
-            ". Select the operation type group of the upcoming transaction based on provided history.",
-            ". Choose the operation type group of the next transaction.",
-            ". Can you find out in which operation type group will be the next transaction?",
+            ". What is the operation type group of the next transaction?"
+            " Answer an index of an operation type group starting from 1 to 4 inclusive.",
+            ". What is the operation type group of the next transaction based on the provided transaction history?"
+            " Answer an index of an operation type group starting from 1 to 4 inclusive.",
+            ". Choose in which operation type group the upcoming transaction will be made."
+            " Answer an index of an operation type group starting from 1 to 4 inclusive.",
+            ". Select the operation type group of the next transaction."
+            " Answer an index of an operation type group starting from 1 to 4 inclusive.",
+            ". Find out what is the operation type group of upcoming transaction."
+            " Answer an index of an operation type group starting from 1 to 4 inclusive.",
+            ". Can you please answer the question: in which operation type group the next transaction will be made?"
+            " Answer an index of an operation type group starting from 1 to 4 inclusive.",
+            ". Determine the operation type group of the next transaction."
+            " Answer an index of an operation type group starting from 1 to 4 inclusive.",
+            ". Select the operation type group of the upcoming transaction based on provided history."
+            " Answer an index of an operation type group starting from 1 to 4 inclusive.",
+            ". Choose the operation type group of the next transaction."
+            " Answer an index of an operation type group starting from 1 to 4 inclusive.",
+            ". Can you find out in which operation type group will be the next transaction?"
+            " Answer an index of an operation type group starting from 1 to 4 inclusive.",
             ". Answer the question: what is the operation type group of the upcoming transaction?"
+            " Answer an index of an operation type group starting from 1 to 4 inclusive.",
         ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,

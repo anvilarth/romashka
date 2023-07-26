@@ -352,18 +352,22 @@ class PredWeekOfYearTaskOpenEnded(CategoricalTaskAbstract):
             "The client's transaction history is given as a context:"
         ]
         self.ending_prompts = [
-            ". On which week of year will the client make the next transaction?"
-            ". What is the week of year in the next transaction?",
-            ". Choose the week of year in upcoming transaction.",
-            ". Select the week of year in the day on which client will make the next transaction?",
-            ". Find out what is the week of year in upcoming transaction.",
-            ". Determine the week of year in the next transaction.",
-            ". Choose the week of year in the next transaction.",
-            ". Can you find out on which week of year will be the next transaction?",
-            ". Answer the question: on which week of year will the client make the next transaction?",
-            ". Answer the following question: on which week of year will the client make the"
-            " next transaction?",
+            ". What is the index of week of year of the clients' next transaction?"
+            " Answer an index of a week of year starting from 0 to 52 inclusive."
         ]
+        # self.ending_prompts = [
+        #     ". On which week of year will the client make the next transaction?"
+        #     ". What is the week of year in the next transaction?",
+        #     ". Choose the week of year in upcoming transaction.",
+        #     ". Select the week of year in the day on which client will make the next transaction?",
+        #     ". Find out what is the week of year in upcoming transaction.",
+        #     ". Determine the week of year in the next transaction.",
+        #     ". Choose the week of year in the next transaction.",
+        #     ". Can you find out on which week of year will be the next transaction?",
+        #     ". Answer the question: on which week of year will the client make the next transaction?",
+        #     ". Answer the following question: on which week of year will the client make the"
+        #     " next transaction?",
+        # ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,
                                                                    self.ending_prompts)

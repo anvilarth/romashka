@@ -365,7 +365,6 @@ class PredDayOfWeekTaskOpenEnded(CategoricalTaskAbstract):
         self.is_binary_task = False
         self.is_open_ended_task = True
         self.metrics = torch.nn.ModuleDict({
-            "rouge": ROUGEScore(),
             'accuracy': Accuracy(task='multiclass',
                                  threshold=self.decision_threshold,
                                  average='weighted',
@@ -380,19 +379,24 @@ class PredDayOfWeekTaskOpenEnded(CategoricalTaskAbstract):
             "The client's transaction history is given as a context:"
         ]
         self.ending_prompts = [
-            ". On which weekday will the client make the next transaction?"
-            ". What is the weekday of the next transaction?",
-            # ". What is the weekday of the next transaction based on the provided transaction history?",
-            ". Choose the weekday of upcoming transaction.",
-            ". Select the weekday of the day on which client will make the next transaction?",
-            ". Find out what is the weekday of upcoming transaction.",
-            ". Determine the weekday of the next transaction.",
-            ". Choose the weekday of the next transaction.",
-            ". Can you find out on which weekday will be the next transaction?",
-            ". Answer the question: on which weekday will the client make the next transaction?",
-            ". Answer the following question: on which weekday of the day will the client make the"
-            " next transaction?",
+            ". What is the index of day of week of the next transaction?"
+            " Answer an index of a week of year starting from 0 to 6 inclusive."
         ]
+
+        # self.ending_prompts = [
+        #     ". On which weekday will the client make the next transaction?"
+        #     ". What is the weekday of the next transaction?",
+        #     # ". What is the weekday of the next transaction based on the provided transaction history?",
+        #     ". Choose the weekday of upcoming transaction.",
+        #     ". Select the weekday of the day on which client will make the next transaction?",
+        #     ". Find out what is the weekday of upcoming transaction.",
+        #     ". Determine the weekday of the next transaction.",
+        #     ". Choose the weekday of the next transaction.",
+        #     ". Can you find out on which weekday will be the next transaction?",
+        #     ". Answer the question: on which weekday will the client make the next transaction?",
+        #     ". Answer the following question: on which weekday of the day will the client make the"
+        #     " next transaction?",
+        # ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,
                                                                    self.ending_prompts)

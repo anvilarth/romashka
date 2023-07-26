@@ -345,17 +345,28 @@ class PredMCCCodeTaskOpenEnded(CategoricalTaskAbstract):
             "The client's transaction history is given as a context:"
         ]
         self.ending_prompts = [
-            ". What is the MCC code of the next transaction?",
-            ". What is the MCC code of the next transaction based on the provided transaction history?",
-            ". Choose the upcoming transaction MCC code.",
-            ". Select the MCC code of the next transaction.",
-            ". Find out what is the MCC code of upcoming transaction.",
-            ". Can you please answer the question: what is the MCC code of the next transaction?",
-            ". Determine the MCC code of the next transaction.",
-            ". Select the MCC code of the upcoming transaction based on provided history.",
-            ". Choose the MCC code of the next transaction based on provided history.",
-            ". Can you find out which MCC code will be in next transaction?",
+            ". What is the MCC code of the next transaction?"
+            " Answer a number from the range from 0 to 108 inclusive.",
+            ". What is the MCC code of the next transaction based on the provided transaction history?"
+            " Answer a number from the range from 0 to 108 inclusive.",
+            ". Choose the upcoming transaction MCC code."
+            " Answer a number from the range from 0 to 108 inclusive.",
+            ". Select the MCC code of the next transaction."
+            " Answer a number from the range from 0 to 108 inclusive.",
+            ". Find out what is the MCC code of upcoming transaction."
+            " Answer a number from the range from 0 to 108 inclusive.",
+            ". Can you please answer the question: what is the MCC code of the next transaction?"
+            " Answer a number from the range from 0 to 108 inclusive.",
+            ". Determine the MCC code of the next transaction."
+            " Answer a number from the range from 0 to 108 inclusive.",
+            ". Select the MCC code of the upcoming transaction based on provided history."
+            " Answer a number from the range from 0 to 108 inclusive.",
+            ". Choose the MCC code of the next transaction based on provided history."
+            " Answer a number from the range from 0 to 108 inclusive.",
+            ". Can you find out which MCC code will be in next transaction?"
+            " Answer a number from the range from 0 to 108 inclusive.",
             ". Answer the question: what is the MCC code of the upcoming transaction?"
+            " Answer a number from the range from 0 to 108 inclusive.",
         ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,
