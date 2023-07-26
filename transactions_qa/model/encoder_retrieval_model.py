@@ -399,11 +399,19 @@ class EncoderRetrievalModel(EncoderSimpleModel):
                 )
             else:
                 if question_end_attention_mask.size(0) != question_start_attention_mask.size(0):
-                    question_end_attention_mask = question_end_attention_mask.repeat(question_start_attention_mask.size(0), 1)
-
+                    question_end_attention_mask = question_end_attention_mask.repeat(
+                        question_start_attention_mask.size(0), 1)
+                    transactions_embeddings_mask = torch.ones(transactions_embeddings.size()[:2],
+                                                              dtype=batch['mask'].dtype,
+                                                              device=device).repeat(
+                        question_start_attention_mask.size(0), 1)
+                else:
+                    transactions_embeddings_mask = torch.ones(transactions_embeddings.size()[:2],
+                                                              dtype=batch['mask'].dtype,
+                                                              device=device)
                 encoder_input_mask = torch.cat(
                     [question_start_attention_mask,
-                     torch.ones(transactions_embeddings.size()[:2], dtype=batch['mask'].dtype, device=device).repeat(question_start_attention_mask.size(0), 1),
+                     transactions_embeddings_mask,
                      question_end_attention_mask], dim=1
                 )
 
