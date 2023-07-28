@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 import transformers
 
+from romashka.transactions_qa.utils import maybe_autocast
 from romashka.transactions_qa.model.generation_utils import isin
 from romashka.transactions_qa.model.encoder_model import EncoderSimpleModel
 from romashka.transactions_qa.tasks.task_abstract import AbstractTask
@@ -34,6 +35,7 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
                  embeddings_dropout_p: Optional[float] = 0.1,
                  retrieval_loss_scale: Optional[float] = 1.0,
                  text_loss_scale: Optional[float] = 1.0,
+                 add_temporal_embeddings: Optional[bool] = False,
                  transactions_embeddings_start_token: Optional[str] = r"[trx]",
                  transactions_embeddings_end_token: Optional[str] = r"[/trx]",
                  generation_config: Optional[Dict[str, Any]] = None,
@@ -52,6 +54,8 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
 
         self._retrieval_loss_scale = retrieval_loss_scale
         self._text_loss_scale = text_loss_scale
+
+        self._add_temporal_embeddings = add_temporal_embeddings
 
         super().__init__(language_model=language_model,
                          transaction_model=transaction_model,
@@ -118,6 +122,10 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
         # Create projection layers from LM output hidden states to shared dim for loss calculation
         self._create_projection_layers()
 
+        # Creates position embeddings layers (optionally)
+        if self._add_temporal_embeddings:
+            self._create_position_parameters()
+
     def _create_surrounding_parameters(self):
         """
         Creates trainable parameters for:
@@ -134,7 +142,6 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
             new_tokens=[self._transactions_embeddings_start_token,
                         self._transactions_embeddings_end_token],
             tokenizer=self.tokenizer,
-            # model=self.language_model,  # -> optionally
             return_ids=True,
             special=True
         )
@@ -197,6 +204,14 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
         self.transactions_ret_ids2tokens_mapping = {token_id: token for token, token_id
                                                     in self.transactions_ret_tokens2ids_mapping.items()}
 
+    def _create_position_parameters(self):
+        """
+        Creates position embeddings layers as the indicator of temporal information
+        to the representations from different events in sequence.
+        """
+        self.temp_position_embedding = nn.Embedding(self.max_ret_tokens, 384)
+        self._logger.info(f"Created position embeddings layers for maximum {self.max_ret_tokens} positions.")
+
     def _create_trainable_task_special_tokens(self):
         """
         Creates trainable parameters for task special tokens.
@@ -227,7 +242,7 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
     def _create_projection_layers(self):
         """
         Creates a linear mappings from language model hidden dimensionality
-        to shared embeddings dimensionality for rET tokens loss calculation.
+        to shared embeddings dimensionality for RET tokens loss calculation.
         """
         # List of indexes of hidden states to take for information extraction
         if self._n_retrieval_layers is None:
@@ -253,12 +268,12 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
                 else:  # for GPT-like
                     in_dim = self.language_model.config.hidden_size
                 # Maps from LM hidden_size -> shared dim
-                text_fc = [nn.Linear(in_dim, shared_dim),
+                text_fc = [nn.Linear(in_dim, shared_dim),  # , dtype=torch.float16
                            nn.Dropout(self._embeddings_dropout_p)]
                 self.projection_layers.append(nn.Sequential(*text_fc))
             # Take representation from any middle layer
             elif layer_idx < self.language_model.config.num_hidden_layers:
-                text_fc = [nn.Linear(self.language_model.config.hidden_size, shared_dim),
+                text_fc = [nn.Linear(self.language_model.config.hidden_size, shared_dim),  # , dtype=torch.float16
                            nn.Dropout(self._embeddings_dropout_p)]
                 self.projection_layers.append(nn.Sequential(*text_fc))
             else:
@@ -287,7 +302,7 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
         Replace transactions injection start tokens' embedding with trainable parameter.
         """
         mask = input_tokens_ids == self.transactions_start_token_id
-        input_embeddings[mask] = self.transactions_start_embedding
+        input_embeddings[mask] = self.transactions_start_embedding.to(input_embeddings.dtype)
 
     def has_end_token(self, input_tokens_ids: Union[List[int], torch.Tensor]) -> bool:
         """
@@ -301,7 +316,7 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
         Replace transactions injection end tokens' embedding with trainable parameter.
         """
         mask = input_tokens_ids == self.transactions_end_token_id
-        input_embeddings[mask] = self.transactions_end_embedding
+        input_embeddings[mask] = self.transactions_end_embedding.to(input_embeddings.dtype)
 
     def has_task_tokens(self, input_tokens_ids: Union[List[int], torch.Tensor]) -> bool:
         """
@@ -348,6 +363,15 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
         device = transaction_mask.device
 
         transactions_embeddings, transactions_embeddings_mask = self.transaction_model.get_embs(batch)
+
+        # 1.2) If created position embeddings, apply them first
+        if hasattr(self, "temp_position_embedding"):
+            batch_size, seq_len = transactions_embeddings.size()[:2]
+            position_ids = torch.arange(seq_len, dtype=torch.long, device=device)
+            position_ids = position_ids.unsqueeze(0).expand(batch_size, -1)
+
+            transactions_position_embeddings = self.temp_position_embedding(position_ids)
+            transactions_embeddings = transactions_embeddings + transactions_position_embeddings
 
         # 2) Next pass them to connector == linear mapping -> to LM inner dim
         # Checks whether a connector requires mask argument
@@ -407,18 +431,20 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
 
         # 4) Get general LM's encoder input as:
         # Q_start_tokens + TRNS_embeddings + Q_end_tokens
-        encoder_input = torch.cat([question_start_embeddings_batch,
-                                   transactions_embeddings,
-                                   question_end_embeddings_batch], dim=1)
+        if question_start_embeddings_batch.size(0) != batch['answer_tokens'].size(0):
+            encoder_input = torch.cat([question_start_embeddings_batch,
+                                       transactions_embeddings,
+                                       question_end_embeddings_batch], dim=1).repeat(batch['answer_tokens'].size(0), 1, 1)
+        else:
+            encoder_input = torch.cat([question_start_embeddings_batch,
+                                       transactions_embeddings,
+                                       question_end_embeddings_batch], dim=1)
         if ('encoder_input_mask' in batch) \
                 and (batch['encoder_input_mask'].size(1) == encoder_input.size(1)):
             encoder_input_mask = batch['encoder_input_mask']
 
         else:
             # Check if transactions history embedding size was reduced, then we cannot mask it
-            # print(f"transactions_embeddings: {transactions_embeddings.size()}")
-            # print(f"transactions_embeddings_mask: {transactions_embeddings_mask.size()}")
-            # print(f"batch['mask']: {batch['mask'].size()}")
             if transactions_embeddings.size(1) == transactions_embeddings_mask.size(-1):
                 encoder_input_mask = torch.cat(
                     [question_start_attention_mask,
@@ -426,9 +452,20 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
                      question_end_attention_mask], dim=1
                 )
             else:
+                if question_end_attention_mask.size(0) != question_start_attention_mask.size(0):
+                    question_end_attention_mask = question_end_attention_mask.repeat(
+                        question_start_attention_mask.size(0), 1)
+                    transactions_embeddings_mask = torch.ones(transactions_embeddings.size()[:2],
+                                                              dtype=batch['mask'].dtype,
+                                                              device=device).repeat(
+                        question_start_attention_mask.size(0), 1)
+                else:
+                    transactions_embeddings_mask = torch.ones(transactions_embeddings.size()[:2],
+                                                              dtype=batch['mask'].dtype,
+                                                              device=device)
                 encoder_input_mask = torch.cat(
                     [question_start_attention_mask,
-                     torch.ones(transactions_embeddings.size()[:2], dtype=batch['mask'].dtype, device=device),
+                     transactions_embeddings_mask,
                      question_end_attention_mask], dim=1
                 )
 
@@ -469,11 +506,15 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
         lm_outputs['answer_tokens'] = batch_answers
 
         # 7) Calculate retrival loss
-        ret_loss_outputs = self._compute_retrieval_loss_fromage(lm_outputs,
-                                                                ret_start_i=transactions_start_i,
-                                                                ret_end_i=transactions_end_i,
-                                                                ret_embeddings=transactions_embeddings,
-                                                                output_hidden_states=True)
+        try:
+            ret_loss_outputs = self._compute_retrieval_loss_fromage(lm_outputs,
+                                                                    ret_start_i=transactions_start_i,
+                                                                    ret_end_i=transactions_end_i,
+                                                                    ret_embeddings=transactions_embeddings,
+                                                                    output_hidden_states=True)
+        except Exception as e:
+            self._logger.error(f"Contrastive loss error: {e}")
+            ret_loss_outputs = {'loss': torch.Tensor([0.0]).to(lm_outputs.loss.device)}
 
         # Re-scale losses
         total_loss = lm_outputs.loss * self._text_loss_scale + \
@@ -481,7 +522,7 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
 
         # join two output dicts
         outputs = dict()
-        outputs["logits"] = lm_outputs.logits
+        outputs["logits"] = lm_outputs.logits.contiguous().float()
 
         outputs["text_loss"] = lm_outputs.loss * self._text_loss_scale
         ret_loss = ret_loss_outputs.pop('loss')
@@ -499,7 +540,7 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
             outputs[key] = val
 
         if is_train:
-            outputs['labels'] = batch_answers
+            outputs['labels'] = batch_answers.contiguous().long()
         if self._is_debug:
             outputs['input_embeddings'] = encoder_input  # for debug purposes
             question_start_tokens_batch = batch['question_start_tokens'].repeat(batch_size, 1)
@@ -540,7 +581,6 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
 
         # As a projection_layers can be used: projection_layers or lm_connector
         for idx, projection_layer in zip(self._n_retrieval_layers, self.projection_layers):  # [lm_connector]
-            # print(f"outputs.decoder_hidden_states[-1]: {outputs.decoder_hidden_states[-1].size()}")
             ret_hidden_states.append(
                 projection_layer(outputs.encoder_hidden_states[idx][..., ret_start_i:ret_end_i, :])
             )  # (bs, trns_history_seq_len, 768)
@@ -562,15 +602,20 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
         collected_end_hidden_states = torch.stack(end_hidden_states, dim=-1).sum(dim=-1)
 
         # 4) Calculate Contrastive loss
-        ret_loss_accumulated = []
-        for trx_i in range(collected_last_hidden_state.size(1)):
-            ret_token_loss = self.ret_NCE_loss_fn(ret_embeddings[:, trx_i, :],
-                                                  collected_last_hidden_state[:, trx_i, :])
-            ret_loss_accumulated.append(ret_token_loss)
+        loss_outputs = dict()
+        try:
+            ret_loss_accumulated = []
+            for trx_i in range(collected_last_hidden_state.size(1)):
+                ret_token_loss = self.ret_NCE_loss_fn(ret_embeddings[:, trx_i, :],
+                                                      collected_last_hidden_state[:, trx_i, :])
+                ret_loss_accumulated.append(ret_token_loss)
 
-        ret_loss_accumulated = torch.stack(ret_loss_accumulated).sum()
+            ret_loss_accumulated = torch.stack(ret_loss_accumulated).sum()
+            loss_outputs['loss'] = ret_loss_accumulated
+        except Exception as e:
+            self._logger.error(f"!!! Exceptiom occurred during retrieval loss calculation:\n{e}")
+            loss_outputs['loss'] = torch.zeros((1,), dtype=torch.float32).to(collected_last_hidden_state.device)
 
-        loss_outputs = dict(loss=ret_loss_accumulated)
         if output_hidden_states:
             loss_outputs['last_hidden_state'] = collected_last_hidden_state
         return loss_outputs
@@ -613,7 +658,7 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
                                              :].unsqueeze(0))
             batch_ret_hidd_states = torch.cat(batch_ret_hidd_states, dim=0)
             ret_hidden_states.append(
-                projection_layer(batch_ret_hidd_states)
+                projection_layer(maybe_autocast(batch_ret_hidd_states, projection_layer[0].weight.dtype))
             )  # (bs, trns_history_seq_len, 768)
 
         # 2) Add hidden states together

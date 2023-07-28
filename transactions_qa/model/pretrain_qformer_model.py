@@ -125,10 +125,19 @@ class PretrainQFormerModel(pl.LightningModule):
                                       betas=(self.adam_beta1, self.adam_beta2),
                                       lr=self.base_learning_rate)
         # Select scheduler
-        scheduler = transformers.get_scheduler(name=self.scheduler_type,
-                                               optimizer=optimizer,
-                                               num_warmup_steps=self.warmup_steps,
-                                               num_training_steps=self.training_steps)
+        if self.scheduler_type == "linear_schedule_with_warmup":
+            scheduler = transformers.get_linear_schedule_with_warmup(optimizer,
+                                                                     num_warmup_steps=self.warmup_steps,
+                                                                     num_training_steps=self.training_steps)
+        elif self.scheduler_type == "cosine_schedule_with_warmup":
+            scheduler = transformers.get_cosine_schedule_with_warmup(optimizer,
+                                                                     num_warmup_steps=self.warmup_steps,
+                                                                     num_training_steps=self.training_steps)
+        else:
+            scheduler = transformers.get_scheduler(name=self.scheduler_type,
+                                                   optimizer=optimizer,
+                                                   num_warmup_steps=self.warmup_steps,
+                                                   num_training_steps=self.training_steps)
         return {
             "optimizer": optimizer,
             "lr_scheduler": scheduler,

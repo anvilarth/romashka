@@ -5,6 +5,7 @@ import numpy as np
 from abc import ABC
 
 # DTO
+import copy
 from dataclasses import dataclass
 from typing import Optional, Union, List, Any
 
@@ -24,6 +25,7 @@ class CategoricalTaskAbstract(AbstractTask, ABC):
     num_classes: Optional[int] = None
     ignore_class_index: Optional[int] = None
     decision_threshold: Optional[float] = 0.5
+    max_options: Optional[int] = 100
 
     def __post_init__(self):
         super().__post_init__()
@@ -48,6 +50,21 @@ class CategoricalTaskAbstract(AbstractTask, ABC):
 
         rand_target = torch.as_tensor([int(rand_target)], dtype=output_dtype)
         return rand_target
+
+    @classmethod
+    def sample_random_negatives(cls,
+                                true_target: Union[torch.Tensor, str],
+                                answers_options: List[str],
+                                k: int) -> List[str]:
+        if isinstance(true_target, torch.Tensor):
+            if len(true_target.size()) != 0:  # not a scalar
+                raise AttributeError(f"True target is not a scalar: {true_target}")
+            true_target = str(true_target.long().item())  # as an integer number string
+
+        if true_target in answers_options:
+            _ = answers_options.pop(answers_options.index(true_target))
+        rand_targets = random.choices(answers_options, k=k)
+        return rand_targets
 
     def process_input_multichoice(self, sample: Any, **kwargs) -> Any:
         """
@@ -78,6 +95,14 @@ class CategoricalTaskAbstract(AbstractTask, ABC):
         true_target_idx = self.answers_options.index(target_batch[0])
         all_targets_options = self.answers_options
         batch_size = len(all_targets_options)
+        if batch_size > self.max_options:
+            all_targets_options = self.sample_random_negatives(true_target=target_batch[0],
+                                                               answers_options=copy.deepcopy(self.answers_options),
+                                                               k=self.max_options-1)
+            all_targets_options.append(target_batch[0])
+            random.shuffle(all_targets_options)
+            batch_size = len(all_targets_options)
+            print(f"batch size reduced -> {batch_size}")
 
         # Encode
         # question_start  -> '[task_special_token] + start str [trx]'

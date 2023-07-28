@@ -1,4 +1,6 @@
 import random
+import traceback
+import sys
 import numpy as np
 import collections
 from typing import List, Optional, Tuple, Any, Dict, Union
@@ -142,10 +144,19 @@ class TransactionQAModel(pl.LightningModule):
                                           betas=(self.adam_beta1, self.adam_beta2),
                                           lr=self.base_learning_rate)
         # Select scheduler
-        scheduler = transformers.get_scheduler(name=self.scheduler_type,
-                                               optimizer=optimizer,
-                                               num_warmup_steps=self.warmup_steps,
-                                               num_training_steps=self.training_steps)
+        if self.scheduler_type == "linear_schedule_with_warmup":
+            scheduler = transformers.get_linear_schedule_with_warmup(optimizer,
+                                                                     num_warmup_steps=self.warmup_steps,
+                                                                     num_training_steps=self.training_steps)
+        elif self.scheduler_type == "cosine_schedule_with_warmup":
+            scheduler = transformers.get_cosine_schedule_with_warmup(optimizer,
+                                                                     num_warmup_steps=self.warmup_steps,
+                                                                     num_training_steps=self.training_steps)
+        else:
+            scheduler = transformers.get_scheduler(name=self.scheduler_type,
+                                                   optimizer=optimizer,
+                                                   num_warmup_steps=self.warmup_steps,
+                                                   num_training_steps=self.training_steps)
 
         return {
             "optimizer": optimizer,
@@ -439,13 +450,13 @@ class TransactionQAModel(pl.LightningModule):
         for task_idx, task in enumerate(self.tasks):
             try:
                 # For encoder-decoder models make a step with a model and get answers from outputs
-                if self._is_encoder_decoder:
+                if self._is_encoder_decoder and not (multiple_choice_grade or self._multiple_choice_grade):
                     predictions = self._predict_step_task(batch,
                                                           batch_idx=batch_idx,
                                                           task_idx=task_idx,
                                                           verbose=verbose,
                                                           calculate_metrics=False)
-                elif multiple_choice_grade or self._multiple_choice_grade:
+                elif self._is_encoder_decoder and (multiple_choice_grade or self._multiple_choice_grade):
                     predictions = self._predict_step_multichoice(batch,
                                                                  batch_idx=batch_idx,
                                                                  task_idx=task_idx,
@@ -464,6 +475,7 @@ class TransactionQAModel(pl.LightningModule):
                 tasks_predictions[task.task_name] = predictions
             except Exception as e:
                 self._logger.error(f"Error occurred during task `{task.task_name}` evaluation:\n{e}")
+                self._logger.error(f"{traceback.format_exc()}")
 
         return tasks_predictions
 
@@ -494,24 +506,26 @@ class TransactionQAModel(pl.LightningModule):
         # Decode selected variant and GT answer
         selected_var_idx = outputs.get('selected_var_idx', None)
         true_target_idx = outputs.get('true_target_idx', None)
-        predicted_label = outputs.get('predicted_label', None)
-        true_label = outputs.get('true_label', None)
+        predicted_label = outputs.get('predicted_label', self.model.tokenizer.pad_token_id)
+        true_label = outputs.get('true_label', self.model.tokenizer.pad_token_id)
         ppl_per_var = outputs.get('ppl_per_var', None)
 
         # Decode predicted
-        predicted_label_decoded = self.model.tokenizer.decode(
-            predicted_label if predicted_label is not None else self.model.tokenizer.pad_token_id,
+        predicted_label[predicted_label == -100] = self.model.tokenizer.pad_token_id
+        predicted_label_decoded = self.model.tokenizer.decode(predicted_label,
             skip_special_tokens=True)  # as a single string
         # Decode true answer
-        true_label_decoded = self.model.tokenizer.decode(
-            true_label if true_label is not None else self.model.tokenizer.pad_token_id,
+        true_label[true_label == -100] = self.model.tokenizer.pad_token_id
+        true_label_decoded = self.model.tokenizer.decode(true_label,
             skip_special_tokens=True)  # as a single string
         # Decode all variants
+        batch_answers[batch_answers == -100] = self.model.tokenizer.pad_token_id
         all_answers_vars_decoded = self.model.tokenizer.batch_decode(batch_answers,
                                                                      skip_special_tokens=True)
         # Decode question
+        question_encoded = outputs['question_encoded'][0].squeeze().detach().cpu()
         question_decoded = self.model.tokenizer.decode(
-            outputs['question_encoded'][0].squeeze().detach().cpu(),
+            question_encoded,
             skip_special_tokens=True)
 
         if verbose:

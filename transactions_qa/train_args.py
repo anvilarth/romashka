@@ -516,7 +516,7 @@ class TrainingArguments:
     )
     lr_scheduler_type: str = field(
         default="linear",
-        metadata={"help": "The scheduler type to use. Can be one from: `linear`, `cosine`, "
+        metadata={"help": "The scheduler type to use. Can be one from: 'cosine_schedule_with_warmup', `linear`, `cosine`, "
                           "`cosine_with_restarts`, `polynomial`, `constant`, `constant_with_warmup`"},
     )
     warmup_ratio: float = field(
