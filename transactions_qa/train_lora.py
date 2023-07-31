@@ -49,6 +49,7 @@ from romashka.transactions_qa.transactions_model.model import TransactionsModel
 from romashka.transactions_qa.model import (EncoderRetrievalModel,
                                             EncoderSingleRetrievalModel,
                                             DecoderRetrievalModel,
+                                            EncoderRetrievalSpecTokensModel,
                                             DecoderSingleRetrievalModel)
 
 from romashka.transactions_qa.model.tqa_model import TransactionQAModel
@@ -231,11 +232,10 @@ def main():
     #     model_loading_kwargs['load_in_8bit'] = training_args.do_8bit
     #     model_loading_kwargs['device_map'] = "auto"
     if model_args.language_model_type == "encoder-decoder":
-        lm_model = AutoModelForSeq2SeqLM.from_pretrained(**model_loading_kwargs)
+        lm_model = AutoModelForSeq2SeqLM.from_pretrained(**model_loading_kwargs).half()
     else:
-        # Otherwise try to cerate decoder-only model for CLM
-        lm_model = AutoModelForCausalLM.from_pretrained(**model_loading_kwargs
-        )
+        # Otherwise try to create decoder-only model for CLM
+        lm_model = AutoModelForCausalLM.from_pretrained(**model_loading_kwargs).half()
 
     # Create tasks
     tasks = []
@@ -376,9 +376,10 @@ def main():
             "transactions_embeddings_end_token": r"[/trx]",
         }
         # EncoderRetrievalModel
-        model_ = EncoderRetrievalModel(
+        model_ = EncoderRetrievalSpecTokensModel(
             language_model=lm_model,
             transaction_model=transactions_model,
+            tasks=tasks,
             tokenizer=tokenizer,
             connector=connector,
             is_debug=True,
@@ -556,7 +557,7 @@ def main():
         # strategy="ddp",
         log_every_n_steps=10,
         reload_dataloaders_every_n_epochs=1,
-        precision=training_args.precision,
+        precision=training_args.precision,  # bf16 - ?
         gradient_clip_val=training_args.gradient_clip_val,
         gradient_clip_algorithm=training_args.gradient_clip_algorithm,
         accumulate_grad_batches=training_args.gradient_accumulation_steps,

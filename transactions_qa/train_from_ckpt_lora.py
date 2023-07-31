@@ -49,6 +49,7 @@ from romashka.transactions_qa.transactions_model.model import TransactionsModel
 
 from romashka.transactions_qa.model import (EncoderRetrievalModel,
                                             EncoderSingleRetrievalModel,
+                                            EncoderRetrievalSpecTokensModel,
                                             DecoderRetrievalModel,
                                             DecoderSingleRetrievalModel)
 
@@ -408,13 +409,14 @@ def main():
             "retrieval_loss_scale": training_args.retrieval_loss_scale,
             "text_loss_scale": training_args.text_loss_scale,
             "embeddings_dropout_p": 0.1,
-            "add_temporal_embeddings": model_args.add_temporal_embeddings,
+            # "add_temporal_embeddings": model_args.add_temporal_embeddings,
             "transactions_embeddings_start_token": r"[trx]",
             "transactions_embeddings_end_token": r"[/trx]",
         }
         # EncoderRetrievalModel
-        model_ = EncoderRetrievalModel(
+        model_ = EncoderRetrievalSpecTokensModel(
             language_model=lm_model,
+            tasks=tasks,
             transaction_model=transactions_model,
             tokenizer=tokenizer,
             connector=connector,

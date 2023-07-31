@@ -166,9 +166,11 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
 
         # Transactions embeddings start/end
         self.transactions_start_embedding = nn.Parameter(
-            torch.normal(mean=torch.zeros(params_dim), std=torch.ones(params_dim)), requires_grad=True)
+            torch.normal(mean=torch.zeros(params_dim), std=torch.ones(params_dim)),
+            requires_grad=True).to(self.params_precision)
         self.transactions_end_embedding = nn.Parameter(
-            torch.normal(mean=torch.zeros(params_dim), std=torch.ones(params_dim)), requires_grad=True)
+            torch.normal(mean=torch.zeros(params_dim), std=torch.ones(params_dim)),
+            requires_grad=True).to(self.params_precision)
 
         init_parameter_with_tensor(self.transactions_start_embedding, self.lm_mean_embedding)
         init_parameter_with_tensor(self.transactions_end_embedding, self.lm_mean_embedding)
@@ -209,7 +211,7 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
         Creates position embeddings layers as the indicator of temporal information
         to the representations from different events in sequence.
         """
-        self.temp_position_embedding = nn.Embedding(self.max_ret_tokens, 384)
+        self.temp_position_embedding = nn.Embedding(self.max_ret_tokens, 384).to(self.params_precision)
         self._logger.info(f"Created position embeddings layers for maximum {self.max_ret_tokens} positions.")
 
     def _create_trainable_task_special_tokens(self):
@@ -236,7 +238,7 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
 
         # Embeddings for special tokens
         self.task_special_tokens_embeddings = nn.Embedding(num_embeddings=self.task_special_tokens_ids.size(0),
-                                                           embedding_dim=params_dim)
+                                                           embedding_dim=params_dim).to(self.params_precision)
         init_embeddings_with_tensor(self.task_special_tokens_embeddings, self.lm_mean_embedding)
 
     def _create_projection_layers(self):
@@ -268,12 +270,13 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
                 else:  # for GPT-like
                     in_dim = self.language_model.config.hidden_size
                 # Maps from LM hidden_size -> shared dim
-                text_fc = [nn.Linear(in_dim, shared_dim),  # , dtype=torch.float16
+                text_fc = [nn.Linear(in_dim, shared_dim).to(self.params_precision),  # , dtype=torch.float16
                            nn.Dropout(self._embeddings_dropout_p)]
                 self.projection_layers.append(nn.Sequential(*text_fc))
             # Take representation from any middle layer
             elif layer_idx < self.language_model.config.num_hidden_layers:
-                text_fc = [nn.Linear(self.language_model.config.hidden_size, shared_dim),  # , dtype=torch.float16
+                # , dtype=torch.float16
+                text_fc = [nn.Linear(self.language_model.config.hidden_size, shared_dim).to(self.params_precision),
                            nn.Dropout(self._embeddings_dropout_p)]
                 self.projection_layers.append(nn.Sequential(*text_fc))
             else:
