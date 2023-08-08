@@ -136,6 +136,12 @@ class EncoderSimpleModel(nn.Module):
             for param in self.connector.parameters():
                 param.requires_grad = False
 
+        self.params_precision = 32
+        if self.language_model.dtype == torch.float16:
+            self.params_precision = 16
+        self.params_precision = eval(f"torch.float{self.params_precision}")
+        self._logger.info(f"Language model weights loaded in { self.params_precision} precision.")
+
     def _resize_text_embeddings(self):
         # For encoder-decoder-based models
         init_embeddings = self.language_model.encoder.get_input_embeddings()

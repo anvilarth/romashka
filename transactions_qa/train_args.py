@@ -516,7 +516,7 @@ class TrainingArguments:
     )
     lr_scheduler_type: str = field(
         default="linear",
-        metadata={"help": "The scheduler type to use. Can be one from: 'cosine_schedule_with_warmup', `linear`, `cosine`, "
+        metadata={"help": "The scheduler type to use. Can be one from: `linear`, `cosine`, "
                           "`cosine_with_restarts`, `polynomial`, `constant`, `constant_with_warmup`"},
     )
     warmup_ratio: float = field(
@@ -555,7 +555,7 @@ class TrainingArguments:
         metadata={"help": "The checkpoint save strategy to use: max or min"},
     )
     save_filename_format: Optional[str] = field(
-        default='checkpoint-{epoch:02d}-{loss:.2f}',
+        default='checkpoint-{epoch:02d}-{loss:.4f}',
         metadata={"help": "The checkpoint save filename template."},
     )
     save_epochs: Optional[int] = field(default=1, metadata={"help": "Save checkpoint every X epochs."})
