@@ -360,7 +360,7 @@ class PredDayOfWeekTaskOpenEnded(CategoricalTaskAbstract):
         self.task_special_token = None
         self.task_specific_special_token = "[pred_day_of_week_openended]"
 
-        self.num_classes = 8
+        self.num_classes = 7
         self.is_text_task = False
         self.is_binary_task = False
         self.is_open_ended_task = True
@@ -380,7 +380,7 @@ class PredDayOfWeekTaskOpenEnded(CategoricalTaskAbstract):
         ]
         self.ending_prompts = [
             ". What is the index of day of week of the next transaction?"
-            " Answer an index of a week of year starting from 0 to 6 inclusive."
+            " Answer an index of a day of week starting from 1 to 7 inclusive, where 1 is Monday and 7 is Sunday."
         ]
 
         # self.ending_prompts = [
@@ -403,7 +403,7 @@ class PredDayOfWeekTaskOpenEnded(CategoricalTaskAbstract):
 
         # all options for a target feature - it is not actually required here, but still
         if not self.is_text_task:
-            self.answers_options = [str(i) for i in range(1, self.num_classes)]
+            self.answers_options = [str(i) for i in range(1, self.num_classes + 1)]
         else:
             self.answers_options = [weekday_mapping.get(str(i)) for i in range(1, self.num_classes)]
         self.binary_answer_options: Dict[str, str] = {"positive": "Yes", "negative": "No"}

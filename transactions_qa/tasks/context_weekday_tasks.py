@@ -63,7 +63,7 @@ class MostFrequentDayOfWeekTaskMulti(CategoricalTaskAbstract):
         self.question_templates = self.generate_question_templates(self.starting_prompts,
                                                                    self.ending_prompts)
         # all options, for a sample can be reduced to [true_mcc_code + 4 other codes]
-        self.answers_options = [str(i) for i in range(self.num_classes)]
+        self.answers_options = [str(i) for i in range(1, self.num_classes + 1)]
         self.answer_template = ""  # left empty for a first time
         self.add_tokens_to_tokenizer = True
         self.num_options = 7  # ground truth + 6 additional options -> all week
@@ -243,7 +243,7 @@ class MostFrequentDayOfWeekTaskBinary(CategoricalTaskAbstract):
                                                                    self.ending_prompts)
 
         # all options for a target feature
-        self.answers_options: List[str] = [str(i) for i in range(self.num_classes)]
+        self.answers_options: List[str] = [str(i) for i in range(1, self.num_classes + 1)]
         self.binary_answer_options: Dict[str, str] = {"positive": "Yes", "negative": "No"}
         self.answer_template: str = " "  # left empty for a first time
         self.add_tokens_to_tokenizer = True
@@ -391,7 +391,7 @@ class MostFrequentDayOfWeekTaskOpenEnded(CategoricalTaskAbstract):
         ]
         self.ending_prompts = [
             ". What was the index of the most frequent day of week for this client's transactions?"
-            " Answer an index of a week of year starting from 0 to 6 inclusive."
+            " Answer an index of a week of year starting from 1 to 7 inclusive."
         ]
 
         # self.ending_prompts = [
@@ -412,7 +412,7 @@ class MostFrequentDayOfWeekTaskOpenEnded(CategoricalTaskAbstract):
                                                                    self.ending_prompts)
 
         # all options for a target feature - it is not actually required here, but still
-        self.answers_options = [str(i) for i in range(self.num_classes)]
+        self.answers_options = [str(i) for i in range(1, self.num_classes + 1)]
         self.answer_template = ""  # left empty for a first time
         self.add_tokens_to_tokenizer = True
 
@@ -607,7 +607,7 @@ class LeastFrequentDayOfWeekTaskOpenEnded(CategoricalTaskAbstract):
         ]
         self.ending_prompts = [
             ". What was the index of the least frequent day of week for this client's transactions?"
-            " Answer an index of a week of year starting from 0 to 6 inclusive."
+            " Answer an index of a day of week starting from 1 to 7 inclusive, where 1 is Monday and 7 is Sunday."
         ]
 
         # self.ending_prompts = [
@@ -627,7 +627,7 @@ class LeastFrequentDayOfWeekTaskOpenEnded(CategoricalTaskAbstract):
                                                                    self.ending_prompts)
 
         # all options for a target feature - it is not actually required here, but still
-        self.answers_options = [str(i) for i in range(self.num_classes)]
+        self.answers_options = [str(i) for i in range(1, self.num_classes + 1)]
         self.answer_template = ""  # left empty for a first time
         self.add_tokens_to_tokenizer = True
 
@@ -823,7 +823,7 @@ class LastDayOfWeekTaskOpenEnded(CategoricalTaskAbstract):
 
         self.ending_prompts = [
             ". What was the index of the day of week for this client's last transaction?"
-            " Answer an index of a week of year starting from 0 to 6 inclusive."
+            " Answer an index of a day of week starting from 1 to 7 inclusive, where 1 is Monday and 7 is Sunday."
         ]
 
         # self.ending_prompts = [
@@ -844,7 +844,7 @@ class LastDayOfWeekTaskOpenEnded(CategoricalTaskAbstract):
                                                                    self.ending_prompts)
 
         # all options for a target feature - it is not actually required here, but still
-        self.answers_options = [str(i) for i in range(self.num_classes)]
+        self.answers_options = [str(i) for i in range(1, self.num_classes + 1)]
         self.answer_template = ""  # left empty for a first time
         self.add_tokens_to_tokenizer = True
 

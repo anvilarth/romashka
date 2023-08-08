@@ -8,7 +8,7 @@ from typing import (Dict, Tuple, List,
                     Any, Optional, Union)
 
 import transformers
-from torchmetrics.classification import (BinaryAccuracy, BinaryF1Score, F1Score, Accuracy)
+from torchmetrics.classification import F1Score, Accuracy
 
 from .categorical_task_abstract import CategoricalTaskAbstract
 from romashka.transactions_qa.evaluation.eval_processings_utils import transform_labels
@@ -19,16 +19,16 @@ from romashka.transactions_qa.evaluation.eval_processings_utils import (map_pred
 
 
 @dataclass
-class MostFrequentWeekOfYearTaskOpenEnded(CategoricalTaskAbstract):
+class MostFrequentDateTaskOpenEnded(CategoricalTaskAbstract):
 
     def __post_init__(self):
-        self.task_name = "most_frequent_week_of_year_open-ended"
-        self.target_feature_name = 'weekofyear'  # 53 unique values
+        self.task_name = "most_frequent_date_open-ended"
+        self.target_feature_name = 'date'  # 53 unique values
 
         self.task_special_token = None
-        self.task_specific_special_token = "[most_week_of_year_openended]"
+        self.task_specific_special_token = "[most_date_openended]"
 
-        self.num_classes = 53
+        self.num_classes = 365  # as days in a year
         self.is_text_task = False
         self.is_binary_task = False
         self.is_open_ended_task = True
@@ -46,23 +46,10 @@ class MostFrequentWeekOfYearTaskOpenEnded(CategoricalTaskAbstract):
             "The client's transaction history is given as a context:"
         ]
         self.ending_prompts = [
-            ". On which week of year did the client make the most transactions?"
-            " Answer an index of a week of year starting from 0 to 52 inclusive."
+            ". On which date did the client make the most transactions?"
+            " Answer a date in DD/MM format, where DD - is a day and MM - is a month."
+            " For example 31 April is a 31/04."
         ]
-
-        # self.ending_prompts = [
-        #     ". On which week of year did the client make the most transactions?",
-        #     ". Which week of year was the most frequent one for the client's transactions?",
-        #     ". On which week of year did the client make the maximum number of transactions?",
-        #     ". What was the most frequent week of year for this client's transactions?",
-        #     ". Select the week of year on which client made the largest amount of transactions?",
-        #     ". Which was the most frequent week of year for making transactions by this client?",
-        #     ". Answer the question: which was the most frequent week of year for making transactions by this client?",
-        #     ". Identify on which week of year did the client make the most transactions?",
-        #     ". Answer the question: on which week of year did the client make the most transactions?",
-        #     ". Answer the following question: on which week of year did the client make the most transactions?",
-        #     ". Answer the following question: which week of year was the most popular for this client for making transactions?"
-        # ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,
                                                                    self.ending_prompts)
@@ -93,6 +80,8 @@ class MostFrequentWeekOfYearTaskOpenEnded(CategoricalTaskAbstract):
         batch_size = batch['mask'].shape[0]
 
         mask_batch = batch['mask']  # bool Tensor [batch_size, seq_len]
+
+        # TODO
         target_feature_batch = batch['cat_features'][self.target_feature_index]  # Tensor [batch_size, seq_len]
 
         # Construct target values
@@ -167,73 +156,3 @@ class MostFrequentWeekOfYearTaskOpenEnded(CategoricalTaskAbstract):
             answer_mask=batch_answer_mask,
             encoder_input_mask=encoder_input_mask
         )
-
-    def process_outputs(self, outputs: Any, answers: torch.Tensor, as_strings: Optional[bool] = False) -> Any:
-        """
-        Processing target text and output text to get the predictions
-        """
-        # Get predictions as list of strings
-        default_value = 0
-        predictions_decoded = self.tokenizer.batch_decode(outputs['logits'].argmax(2),
-                                                          skip_special_tokens=True)
-        batch_answers_decoded = self.tokenizer.batch_decode(outputs['labels'],
-                                                            skip_special_tokens=True)
-        # Clean predicted texts and map them to categorical labels
-        predictions_clean = [transform_labels(pred,
-                                              do_make_numeric=True,
-                                              do_clean_text=False,
-                                              default_value=default_value)
-                             for pred in predictions_decoded]
-
-        batch_answers_decoded = [transform_labels(answer,
-                                                  do_make_numeric=True,
-                                                  do_clean_text=False,
-                                                  default_value=default_value)
-                                 for answer in batch_answers_decoded]
-
-        # Map to available labels
-        classes = [int(answer) for answer in self.answers_options]
-        predictions_clean = [pred if pred in classes else default_value
-                             for pred in predictions_clean]
-
-        # To Tensors
-        targets = torch.LongTensor(batch_answers_decoded)
-        predictions = torch.LongTensor(predictions_clean)
-
-        return targets, predictions
-
-    def calculate_metrics(self, outputs: Any, answers: torch.Tensor,
-                          task_metrics: Union[torch.nn.ModuleDict, Dict[str, Any]],
-                          **kwargs) -> dict:
-        """
-        Calculate task metrics for a task.
-        Args:
-            outputs: an output from model, can be a tuple of Tensors,
-                    a dict with key-value pairs of a single Tensor;
-            answers: a Tensor with target values;
-            task_metrics: a dictionary (or a torch.nn.ModuleDict) with:
-                key - metric name,
-                value - a class/function for metric score calculation;
-
-        Returns:
-            a dict with:
-                key - metric name,
-                value - metric score.
-        """
-        metrics = {}
-        try:
-            targets, preds = self.process_outputs(outputs, answers)
-
-            if 'accuracy' in task_metrics:
-                acc = task_metrics['accuracy'](preds, targets)
-                metrics['accuracy'] = task_metrics['accuracy']
-
-            if 'f1' in task_metrics:
-                f1 = task_metrics['f1'](preds, targets)
-                metrics['f1'] = task_metrics['f1']
-
-        except Exception as e:
-            print(f"Error during metrics calculation: {e}")
-
-        return metrics
-

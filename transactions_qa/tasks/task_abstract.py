@@ -154,6 +154,10 @@ class AbstractTask(ABC):
         elif self.target_feature_name == "label":
             self.target_feature_type = "label"
             self.target_feature_index = 0  # as the only feature of default prediction
+
+        elif self.target_feature_name in ["date", 'time']:
+            self.target_feature_type = "cat_features"
+            self.target_feature_index = 0  # as the combination of features
         else:
             raise AttributeError(f"Provided feature name not in available"
                                  f"transactions feature names:\n{transaction_features}")

@@ -410,7 +410,7 @@ class MostFrequentHourTaskOpenEnded(CategoricalTaskAbstract):
         ]
         self.ending_prompts = [
             ". What was the index of the most frequent hour for this client for making transactions?"
-            " Answer an index of an hour starting from 0 to 23 inclusive."
+            " Answer as an index of an hour in 24-hour format, starting from 0 to 23 inclusive."
         ]
 
         # self.ending_prompts = [
@@ -627,7 +627,7 @@ class LeastFrequentHourTaskOpenEnded(CategoricalTaskAbstract):
 
         self.ending_prompts = [
             ". What was the index of the least frequent hour for this client for making transactions?"
-            " Answer an index of an hour starting from 0 to 23 inclusive."
+            " Answer as an index of an hour in 24-hour format, starting from 0 to 23 inclusive."
         ]
 
         # self.ending_prompts = [
@@ -843,7 +843,7 @@ class LastHourTaskOpenEnded(CategoricalTaskAbstract):
 
         self.ending_prompts = [
             ". What is the index of the hour of the last clients' transaction?"
-            " Answer an index of an hour starting from 0 to 23 inclusive."
+            " Answer as an index of an hour in 24-hour format, starting from 0 to 23 inclusive."
         ]
 
         # self.ending_prompts = [

@@ -346,7 +346,7 @@ class PredHourTaskOpenEnded(CategoricalTaskAbstract):
         ]
         self.ending_prompts = [
             ". On which hour will the client make the next transaction?"
-            " Answer an index of an hour starting from 0 to 23."
+            " Answer as an index of an hour in 24-hour format, starting from 0 to 23 inclusive."
         ]
         # self.ending_prompts = [
         #     ". On which hour will the client make the next transaction?"
