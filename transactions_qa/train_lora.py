@@ -232,10 +232,10 @@ def main():
     #     model_loading_kwargs['load_in_8bit'] = training_args.do_8bit
     #     model_loading_kwargs['device_map'] = "auto"
     if model_args.language_model_type == "encoder-decoder":
-        lm_model = AutoModelForSeq2SeqLM.from_pretrained(**model_loading_kwargs).half()
+        lm_model = AutoModelForSeq2SeqLM.from_pretrained(**model_loading_kwargs)  #.half()
     else:
         # Otherwise try to create decoder-only model for CLM
-        lm_model = AutoModelForCausalLM.from_pretrained(**model_loading_kwargs).half()
+        lm_model = AutoModelForCausalLM.from_pretrained(**model_loading_kwargs)  #.half()
 
     # Create tasks
     tasks = []
