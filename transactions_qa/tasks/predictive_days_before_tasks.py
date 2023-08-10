@@ -15,24 +15,20 @@ from romashka.transactions_qa.utils import get_buckets_info
 from romashka.transactions_qa.evaluation.eval_processings_utils import (float_splitter,
                                                                         make_float,
                                                                         transform_labels)
-from romashka.transactions_qa.dataset.data_generator import (
-    transaction_features,
-    num_features_names
-)
 
 @dataclass
-class PredHourDiffTaskOpenEnded(NumericTaskAbstract):
+class PredDaysBeforeTaskOpenEnded(NumericTaskAbstract):
     """
-    A task for predictive exact Open-ended QA task: given a discrete or continuous numeric target - hour_diff,
+    A task for predictive exact Open-ended QA task: given a discrete or continuous numeric target - days_before,
     answer question with exact numeric answer.
     """
 
     def __post_init__(self):
-        self.task_name = "pred_hour_diff_open-ended"
-        self.target_feature_name = 'hour_diff'  # [0, 8000+] range of values, but crop to [0, 95]
+        self.task_name = "pred_days_before_open-ended"
+        self.target_feature_name = 'days_before'  # [0, 365+] range of values, but crop to [0, 23]
 
         self.task_special_token = None
-        self.task_specific_special_token = "[pred_numeric_hour_diff_openended]"
+        self.task_specific_special_token = "[pred_days_before_openended]"
 
         self.is_text_task = False
         self.is_binary_task = False
@@ -55,9 +51,9 @@ class PredHourDiffTaskOpenEnded(NumericTaskAbstract):
         ]
 
         self.ending_prompts = [
-            ". What is the difference in hours from the current to the next customer's transaction?"
-            " Answer a number from the range from 0 to 95."
-            " In case the answer is larger then 95, answer 95 as maximum significant difference."
+            ". How many days are left from the client's next transaction until the credit is issued to him?"
+            " Answer the index of the range in which this date falls, from 0 to 23 inclusive."
+            " In case the answer is larger then 23, answer 23 as maximum significant date range index."
         ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,
@@ -66,9 +62,9 @@ class PredHourDiffTaskOpenEnded(NumericTaskAbstract):
         self.answer_template: str = ""  # left empty for a first time
         self.add_tokens_to_tokenizer = True
 
-        # Required to specify available fetaure value range
-        self.feature_min = 0.0
-        self.feature_max = 95.0
+        # Required to specify available feature value range
+        self.feature_min = 1.0
+        self.feature_max = 23.0
 
         # If buckets are not provided externally
         if self.buckets is None:

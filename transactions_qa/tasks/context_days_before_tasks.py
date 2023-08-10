@@ -8,7 +8,7 @@ from typing import (Dict, Tuple, List,
                     Any, Optional, Union)
 
 import transformers
-from torchmetrics import Accuracy, MeanAbsoluteError, MeanSquaredError, Perplexity
+from torchmetrics import Accuracy, MeanAbsoluteError, MeanSquaredError
 
 from .numeric_task_abstract import NumericTaskAbstract
 from romashka.transactions_qa.utils import get_buckets_info
@@ -20,34 +20,30 @@ from romashka.transactions_qa.dataset.data_generator import (
     num_features_names
 )
 
+
 @dataclass
-class PredHourDiffTaskOpenEnded(NumericTaskAbstract):
+class LastDaysBeforeTaskOpenEnded(NumericTaskAbstract):
     """
-    A task for predictive exact Open-ended QA task: given a discrete or continuous numeric target - hour_diff,
-    answer question with exact numeric answer.
+    A task for floating-point Open-Ended QA task: given a continuous numeric target - days_before,
+    answer question with a numeric answer.
     """
 
     def __post_init__(self):
-        self.task_name = "pred_hour_diff_open-ended"
-        self.target_feature_name = 'hour_diff'  # [0, 8000+] range of values, but crop to [0, 95]
+        self.task_name = "last_days_before_open-ended"
+        self.target_feature_name = 'days_before'  # [0, 365+] range of values, but crop to [0, 23]
 
         self.task_special_token = None
-        self.task_specific_special_token = "[pred_numeric_hour_diff_openended]"
+        self.task_specific_special_token = "[last_days_before_openended]"
 
+        self.target_feature_index = num_features_names.index(self.target_feature_name)
         self.is_text_task = False
         self.is_binary_task = False
         self.is_open_ended_task = True
-
-        # Select to not to convert integer range to floating point number
-        # (with required processing of output predictions & answers)
-        self.numeric_inputs: Optional[bool] = False
-        self.numeric_outputs: Optional[bool] = True
-
         self.metrics = {
             "mae": MeanAbsoluteError(),
-            "mse": MeanSquaredError(),
-            "ppl": Perplexity(ignore_index=-100)
+            "mse": MeanSquaredError()
         }
+
         self.starting_prompts = [
             "This is the client's transaction history:",
             "You are given the client's transaction history:",
@@ -55,20 +51,21 @@ class PredHourDiffTaskOpenEnded(NumericTaskAbstract):
         ]
 
         self.ending_prompts = [
-            ". What is the difference in hours from the current to the next customer's transaction?"
-            " Answer a number from the range from 0 to 95."
-            " In case the answer is larger then 95, answer 95 as maximum significant difference."
+            ". How many days are left from the client's last transaction until the credit is issued to him?"
+            " Answer the index of the range in which this date falls, from 0 to 23 inclusive."
+            " In case the answer is larger then 23, answer 23 as maximum significant date range index."
         ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,
                                                                    self.ending_prompts)
 
+        # all options for a target feature
         self.answer_template: str = ""  # left empty for a first time
         self.add_tokens_to_tokenizer = True
 
-        # Required to specify available fetaure value range
-        self.feature_min = 0.0
-        self.feature_max = 95.0
+        # Required to specify available feature value range
+        self.feature_min = 1.0
+        self.feature_max = 23.0
 
         # If buckets are not provided externally
         if self.buckets is None:
@@ -85,6 +82,11 @@ class PredHourDiffTaskOpenEnded(NumericTaskAbstract):
         # Note: in this case are not str values!
         self.answers_options = [str(i) for i in range(1, len(self.buckets) + 1)]
 
+        # Or create random options list
+        # self.answers_options = self._get_random_options(self.num_answers_options,
+        #                                                 self.feature_min,
+        #                                                 self.feature_max,
+        #                                                 as_strings=True)
         super().__post_init__()
 
         if self.tokenizer is None:
@@ -114,7 +116,8 @@ class PredHourDiffTaskOpenEnded(NumericTaskAbstract):
         device = batch['mask'].device
         batch_size = batch['mask'].shape[0]
 
-        # Create question targets
+        # Create question targets as concatenation of "question end + target (true/random) + ?"
+        # and targets as string targets representation, for binary task: Yes/No options
         question_target_batch, target_batch = self.generate_target(batch, question_end=question_end)
 
         # Encode
@@ -148,7 +151,9 @@ class PredHourDiffTaskOpenEnded(NumericTaskAbstract):
 
         # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
         # add [:, :-1] for no EOS tokens - ?
-        # Answer template encoding + strip </s> (EOS) token
+        # target_encoded_batch = self.tokenizer.batch_encode_plus(target_batch,
+        #                                                         padding=True,
+        #                                                         return_tensors='pt').to(device)
         target_encoded_batch = self.custom_tokenize(target_batch,
                                                     return_tensors='pt',
                                                     padding=True,
@@ -157,7 +162,6 @@ class PredHourDiffTaskOpenEnded(NumericTaskAbstract):
         answer_template_encoded = self.custom_tokenize(self.answer_template,
                                                        return_tensors='pt',
                                                        return_attention_mask=False)['input_ids'][:, :-1].to(device)
-
         batch_answer_template_encoded = answer_template_encoded.repeat(batch_size, 1)
         # Answer template encoding + target tokens + EOS token
         batch_answer_encoded = torch.cat([batch_answer_template_encoded,
@@ -194,9 +198,10 @@ class PredHourDiffTaskOpenEnded(NumericTaskAbstract):
         """
         device = batch['mask'].device
         mask_batch = batch['mask']  # bool Tensor [batch_size, seq_len]
-        # Use a default formatted question end template
-        question_end = kwargs.get("question_end", "%s")
         batch_size = batch['mask'].shape[0]
+
+        # Use a default formatted question end template
+        question_end = kwargs.get("question_end", "")
 
         target_feature_batch = batch[self.target_feature_type][
             self.target_feature_index]  # Tensor [batch_size, seq_len]
@@ -204,39 +209,25 @@ class PredHourDiffTaskOpenEnded(NumericTaskAbstract):
         # Construct target values
         target_feature_value_batch = []
         for i, (feature_, mask_) in enumerate(zip(target_feature_batch, mask_batch)):
-            last_feature_index = mask_.sum() - 1
             feature_masked = torch.masked_select(feature_.to("cpu"),
-                                                 mask=mask_.to("cpu"))  # get bucket feature without padding
-            if self.is_real:
-                # Construct target values from REAL-VALUED input data
-                float_feature_ = feature_masked[-1]  # get a single Tensor value of a feature
-            else:
-                # Construct target values from DISCRETIZED input data
-                feature_masked = feature_masked.long()
-                last_feature = feature_masked[-1]  # get a single Tensor value of a feature
-                float_feature_ = self.buckets_means[last_feature.item()]  # take a mean bucket value of the last feature
-
-            target_feature_value_batch.append(float_feature_)
-            # Mask last feature to predict it!
-            batch['mask'][i, last_feature_index] = 0
+                                                 mask=mask_.to("cpu")).long()  # get feature without padding
+            # Calc direct value as float number
+            float_feature_ = self.buckets_means[feature_masked[-1]]
+            target_feature_value_batch.append(round(float_feature_, 3))  # get a single Tensor value of a feature
 
         # Convert to corresponding bucket id
-        if self.is_real:
-            target_feature_value_batch = torch.tensor(target_feature_value_batch).to(device)
-        else:
-            # If needed binned answer
-            target_feature_value_bucket_batch = torch.tensor(np.digitize(
-                np.asarray(target_feature_value_batch), bins=self.buckets)
-            ).to(device)
+        # target_feature_value_bucket_batch = torch.tensor(np.digitize(
+        #     np.asarray(target_feature_value_batch), bins=self.buckets)
+        # ).to(device)
 
         # Map to strings
-        target_feature_value_batch = list(map(lambda x: str(round(x.item() if isinstance(x, torch.Tensor) else x, 3)),
-                                              target_feature_value_batch))
+        target_batch = list(map(lambda x: str(round(x, 2)), target_feature_value_batch))
 
-        # Construct target sequences
+        # for binary task randomly sample True and False examples from batch
+        # and construct target sequences
         question_target_batch = [question_end for _ in range(batch_size)]  # as strings
 
-        return question_target_batch, target_feature_value_batch
+        return question_target_batch, target_batch
 
     def process_outputs(self, outputs: Any, answers: torch.Tensor,
                         return_logits: Optional[bool] = True,
@@ -256,15 +247,15 @@ class PredHourDiffTaskOpenEnded(NumericTaskAbstract):
 
         # Clean predicted texts and map them to categorical labels
         predictions = [float(transform_labels(pred,
-                                        do_make_numeric=True,
-                                        do_clean_text=False,
-                                        default_value=default_value))
+                                              do_make_numeric=True,
+                                              do_clean_text=False,
+                                              default_value=default_value))
                        for pred in predictions]
 
         targets = [float(transform_labels(answer,
-                                    do_make_numeric=True,
-                                    do_clean_text=False,
-                                    default_value=default_value))
+                                          do_make_numeric=True,
+                                          do_clean_text=False,
+                                          default_value=default_value))
                    for answer in targets]
 
         # Assumed, that floating point features are in provided values range

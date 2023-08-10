@@ -365,7 +365,7 @@ class LastHourDiffTaskOpenEnded(NumericTaskAbstract):
 
         # Required to specify available fetaure value range
         self.feature_min = 0.0
-        self.feature_max = 1.0
+        self.feature_max = 95.0
 
         # If buckets are not provided externally
         if self.buckets is None:
