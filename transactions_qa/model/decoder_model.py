@@ -64,6 +64,8 @@ class DecoderSimpleModel(nn.Module):
                 self.language_model_arch_type = "GPTNeoX"  # has a .model.gpt_neox attribute
             elif "GPT" in self.language_model.config.architectures[0]:  # other GPT-like models
                 self.language_model_arch_type = "GPT"  # has a .transformer attribute
+            elif "Llama" in self.language_model.config.architectures[0]:  # other Llama 1/2 models
+                self.language_model_arch_type = "Llama"  # has a .transformer attribute
             else:
                 raise AttributeError(f"Provided language model architecture is not currently supported "
                                      f"`{self.language_model.config.architectures[0]}`. "
@@ -84,6 +86,8 @@ class DecoderSimpleModel(nn.Module):
             self.language_model_tokens_embedding_func = self.language_model.gpt_neox.embed_in
         elif self.language_model_arch_type == "GPT":  # has a .transformer.wte(...) Embedding layer
             self.language_model_tokens_embedding_func = self.language_model.transformer.wte
+        elif self.language_model_arch_type == "Llama":
+            self.language_model_tokens_embedding_func = self.language_model.model.embed_tokens
         else:
             raise AttributeError(f"Provided language model architecture is not currently supported "
                                  f"`{self.language_model_arch_type}`. "
@@ -131,11 +135,15 @@ class DecoderSimpleModel(nn.Module):
             for param in self.connector.parameters():
                 param.requires_grad = False
 
+        self.params_precision = 32
+        if self.language_model.dtype == torch.float16:
+            self.params_precision = 16
+        self.params_precision = eval(f"torch.float{self.params_precision}")
+        self._logger.info(f"Language model weights loaded in {self.params_precision} precision.")
+
     def _resize_text_embeddings(self):
-        # For OPT and GPT-NeoX -based models
-        if self.language_model_arch_type == "OPT":
-            init_embeddings = self.language_model.get_input_embeddings()
-        elif self.language_model_arch_type == "GPTNeoX":
+        # For OPT, GPT-NeoX, Llama -based models
+        if self.language_model_arch_type in ["OPT", "GPTNeoX", "Llama"]:
             init_embeddings = self.language_model.get_input_embeddings()
         # For GPT-based: GPT-J and GPT2
         else:
@@ -146,11 +154,9 @@ class DecoderSimpleModel(nn.Module):
 
         self.language_model.resize_token_embeddings(len(self.tokenizer))
 
-        # For OPT and GPT-NeoX -based models
-        if self.language_model_arch_type == "OPT":
-            resized_embedds = self.language_model.model.decoder.get_input_embeddings()
-        elif self.language_model_arch_type == "GPTNeoX":
-            resized_embedds = self.language_model.get_input_embeddings()
+        # For OPT, GPT-NeoX, Llama -based models
+        if self.language_model_arch_type in ["OPT", "GPTNeoX", "Llama"]:
+            init_embeddings = self.language_model.get_input_embeddings()
         # For GPT-based
         else:
             resized_embedds = self.language_model.transformer.get_input_embeddings()
@@ -200,6 +206,29 @@ class DecoderSimpleModel(nn.Module):
 
         self.register_buffer("eos_token_id", torch.Tensor([self.tokenizer.eos_token_id, ]).long())
         # self.eos_token_id = torch.Tensor([self.tokenizer.eos_token_id, ]).long()
+
+    def _create_mean_lm_embedding(self) -> torch.Tensor:
+        """
+        Creates an embedding vector based on all LLM input embeddings
+        averaged across vocabulary.
+        Returns: an embedding tensor, with size (embedd_dim,)
+        """
+        embedds = None
+        if self.language_model_arch_type == "OPT":  # has a .model.decoder.embed_tokens(...) Embedding layer
+            embedds = self.language_model.model.decoder.embed_tokens.weight.cpu()
+        elif self.language_model_arch_type == "GPTNeoX":  # has a .gpt_neox.embed_in(...) Embedding layer
+            embedds = self.language_model.gpt_neox.embed_in.weight.cpu()
+        elif self.language_model_arch_type == "GPT":  # has a .transformer.wte(...) Embedding layer
+            embedds = self.language_model.transformer.wte.weight.cpu()
+        elif self.language_model_arch_type == "Llama":
+            embedds = self.language_model.model.embed_tokens.weight.cpu()
+        else:
+            raise AttributeError(f"Provided language model architecture is not currently supported "
+                                 f"`{self.language_model_arch_type}`. "
+                                 "Try again with different language model.")
+
+        embedds_mean = torch.mean(embedds, dim=0).detach()
+        return embedds_mean
 
     def _set_generation_config(self):
         """

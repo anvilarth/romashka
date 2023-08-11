@@ -1,3 +1,4 @@
+import numpy as np
 from typing import (List, Optional,
                     Tuple, Any,
                     Dict, Union)
@@ -11,7 +12,9 @@ from romashka.transactions_qa.model.decoder_model import DecoderSimpleModel
 from romashka.transactions_qa.tasks.task_abstract import AbstractTask
 
 from romashka.transactions_qa.losses.infonce_loss import InfoNCE
-from romashka.transactions_qa.utils import (mask_padding, mask_lm_labels_padding)
+from romashka.transactions_qa.utils import (maybe_autocast, mask_lm_labels_padding)
+from romashka.transactions_qa.layers.initialization import (init_embeddings_with_tensor,
+                                                            init_parameter_with_tensor)
 
 
 class DecoderRetrievalModel(DecoderSimpleModel):
@@ -186,7 +189,6 @@ class DecoderRetrievalModel(DecoderSimpleModel):
         self.transactions_ret_tokens2ids_mapping = AbstractTask.extend_vocabulary(
             new_tokens=self.ret_tokens,
             tokenizer=self.tokenizer,
-            # model=self.language_model,  # -> optionally
             return_ids=True,
             special=True
         )
@@ -335,13 +337,20 @@ class DecoderRetrievalModel(DecoderSimpleModel):
             batch['question_start_tokens'])  # call for (embed_tokens): Embedding(vocab_size, model_hidden_dim)
 
         # if it already ends with [trx]
+        question_start_attention_mask = batch['question_start_tokens_mask']
+
+        # if it already ends with [trx]
         if self.has_start_token(batch['question_start_tokens']):
             self.replace_start_token(batch['question_start_tokens'], question_start_embeddings)
         # otherwise append it to the end of starting sequence
         else:
-            # todo: add one more sample to attention_mask also !!!
             question_start_embeddings = torch.cat([question_start_embeddings,
                                                    self.transactions_start_embedding[None, None]], dim=1)
+            # add one more sample to attentions also
+            question_start_attention_mask = torch.cat([
+                torch.ones((1,)).long().repeat(batch_size, 1).to(batch['question_start_tokens_mask'].device),
+                batch['question_start_tokens_mask']
+            ], dim=1)
 
         question_start_embeddings_batch = question_start_embeddings.repeat(batch_size, 1, 1)
 
@@ -357,7 +366,10 @@ class DecoderRetrievalModel(DecoderSimpleModel):
             full_question_end_tokens_ = torch.cat([question_end_tokens_,
                                                    self.whitespace_token_id.to(device),
                                                    # check to not to insert <eos> before answer tokens!!!
-                                                   answer_], dim=0)
+                                                   answer_,
+                                                   # add EOS token to train model to finish generation
+                                                   self.eos_token_id.to(device)
+                                                   ], dim=0)
             question_end_tokens_full.append(full_question_end_tokens_)
 
         # 3.2) Pad to max q+a length
@@ -419,7 +431,7 @@ class DecoderRetrievalModel(DecoderSimpleModel):
 
         #  5.4) Label = [<pad> * (question_start_tokens_len - 1)
         #             <trns>,
-        #             transactions_tokens, <pad> * num_trns_history_paddings,
+        #             transactions_tokens, <pad> * num_trns_history_paddings,  ===> BAD for QFormer!!!
         #             </trns>,
         #             <pad> * (question_end_tokens_len - 1)]
 
@@ -434,7 +446,7 @@ class DecoderRetrievalModel(DecoderSimpleModel):
                 device),  # --> empty
             # <trns> token
             batch['question_start_tokens'][:, -1].repeat(batch_size, 1),
-            # transactions_tokens, < pad > * num_trns_history_paddings,
+            # transactions_tokens
             transactions_tokens.to(device),
             question_end_tokens_full[:, 0].unsqueeze(-1),  # </trns> to [batch_size, 1]
             # <pad> * (question_end_tokens_len - 1)
@@ -454,12 +466,15 @@ class DecoderRetrievalModel(DecoderSimpleModel):
                                          output_hidden_states=output_hidden_states)
 
         # 7) Calculate retrival loss
-        ret_loss_outputs = self._compute_retrieval_loss(lm_outputs,
-                                                        ret_start_i=transactions_start_i,
-                                                        ret_end_i=transactions_end_i,
-                                                        ret_embeddings=transactions_embeddings,
-                                                        output_hidden_states=True,
-                                                        output_logits=True)
+        try:
+            ret_loss_outputs = self._compute_retrieval_loss_fromage(lm_outputs,
+                                                                    ret_start_i=transactions_start_i,
+                                                                    ret_end_i=transactions_end_i,
+                                                                    ret_embeddings=transactions_embeddings,
+                                                                    output_hidden_states=True)
+        except Exception as e:
+            self._logger.error(f"Contrastive loss error: {e}")
+            ret_loss_outputs = {'loss': torch.Tensor([0.0]).to(lm_outputs.loss.device)}
 
         # Re-scale losses
         total_loss = lm_outputs.loss * self._text_loss_scale + \
@@ -505,8 +520,7 @@ class DecoderRetrievalModel(DecoderSimpleModel):
                                 outputs: Dict[str, torch.Tensor],
                                 ret_start_i: int, ret_end_i: int,
                                 ret_embeddings: torch.Tensor,
-                                output_hidden_states: Optional[bool] = False,
-                                output_logits: Optional[bool] = False) -> Dict[str, torch.Tensor]:
+                                output_hidden_states: Optional[bool] = False) -> Dict[str, torch.Tensor]:
         """
         Calculate contrastive retrieval loss based on InfoNCE loss implementation.
         Args:
@@ -547,25 +561,97 @@ class DecoderRetrievalModel(DecoderSimpleModel):
         collected_start_hidden_states = torch.stack(start_hidden_states, dim=-1).sum(dim=-1)
         collected_end_hidden_states = torch.stack(end_hidden_states, dim=-1).sum(dim=-1)
 
-        # 3) Collect also logits for start/end and retrieval tokens
-        trx_start_token_logits = outputs.logits[:, ret_start_i - 1, :].to(torch.float32)
-        trx_end_token_logits = outputs.logits[:, ret_end_i, :].to(torch.float32)
-        ret_tokens_logits = outputs.logits[:, ret_start_i:ret_end_i, :].to(torch.float32)
-
         # 4) Calculate Contrastive loss
-        ret_loss_accumulated = []
-        for trx_i in range(collected_last_hidden_state.size(1)):
-            ret_token_loss = self.ret_NCE_loss_fn(ret_embeddings[:, trx_i, :],
-                                                  collected_last_hidden_state[:, trx_i, :])
-            ret_loss_accumulated.append(ret_token_loss)
+        loss_outputs = dict()
+        try:
+            ret_loss_accumulated = []
+            for trx_i in range(collected_last_hidden_state.size(1)):
+                ret_token_loss = self.ret_NCE_loss_fn(ret_embeddings[:, trx_i, :],
+                                                      collected_last_hidden_state[:, trx_i, :])
+                ret_loss_accumulated.append(ret_token_loss)
 
-        ret_loss_accumulated = torch.stack(ret_loss_accumulated).sum()
+            ret_loss_accumulated = torch.stack(ret_loss_accumulated).sum()
+            loss_outputs['loss'] = ret_loss_accumulated
+        except Exception as e:
+            self._logger.error(f"!!! Exceptiom occurred during retrieval loss calculation:\n{e}")
+            loss_outputs['loss'] = torch.zeros((1,), dtype=torch.float32).to(collected_last_hidden_state.device)
 
-        loss_outputs = dict(loss=ret_loss_accumulated)
         if output_hidden_states:
             loss_outputs['last_hidden_state'] = collected_last_hidden_state
-        if output_logits:
-            loss_outputs['ret_tokens_logits'] = ret_tokens_logits
+        return loss_outputs
+
+
+    def _compute_retrieval_loss_fromage(self,
+                                        outputs: Dict[str, torch.Tensor],
+                                        ret_start_i: int, ret_end_i: int,
+                                        ret_embeddings: torch.Tensor,
+                                        output_hidden_states: Optional[bool] = False) -> Dict[str, torch.Tensor]:
+        """
+        Calculate contrastive retrieval loss based on InfoNCE loss implementation.
+        Args:
+            outputs: a LLM out
+        Calculate contrastive retrieval loss based on InfoNCE loss implementation.
+        Args:
+            outputs: a LLM outputs, containing: 'logits', 'hidden_states', etc.
+            ret_start_i: a starting indexes of retrieval tokens sequence;
+            ret_end_i: an ending indexes of retrieval tokens sequence (non-inclusive);
+            ret_embeddings: a reference embeddings (i.e. target embeddings);
+            output_hidden_states: whether to output hidden_states for retrieval tokens;
+            output_logits: whether to output logits for retrieval tokens;
+
+        Returns:
+            a dict, containing 'loss' and,  optionally, 'last_hidden_state' and 'ret_tokens_logits'.
+        puts, containing: 'logits', 'hidden_states', etc.
+
+        Returns:
+            a dict, containing 'loss' and,  optionally, 'last_hidden_state' and 'ret_tokens_logits'.
+        """
+        # 1) Extract hidden states and pass them through projection layers
+        ret_hidden_states = []
+
+        # As a projection_layers can be used: projection_layers or lm_connector
+        for idx, projection_layer in zip(self._n_retrieval_layers, self.projection_layers):  # [lm_connector]
+            hidd_state = outputs.hidden_states[idx]  # size: [bs, seq_len, hidd_size]
+            batch_ret_hidd_states = []
+            for ret_i in range(hidd_state.size(0)):
+                batch_ret_hidd_states.append(hidd_state[ret_i,
+                                             ret_start_i:ret_end_i,
+                                             :].unsqueeze(0))
+            batch_ret_hidd_states = torch.cat(batch_ret_hidd_states, dim=0)
+            ret_hidden_states.append(
+                projection_layer(maybe_autocast(batch_ret_hidd_states, projection_layer[0].weight.dtype))
+            )  # (bs, trns_history_seq_len, 768)
+
+        # 2) Add hidden states together
+        collected_last_hidden_state = torch.stack(ret_hidden_states, dim=-1).sum(dim=-1)
+
+        # 3) Normalize embeddings
+        ret_embeddings_norm = (ret_embeddings / ret_embeddings.norm(dim=-1, keepdim=True))
+        collected_last_hidden_state_norm = (
+                collected_last_hidden_state / collected_last_hidden_state.norm(dim=-1, keepdim=True))
+
+        # 4) cosine similarity as logits
+        logit_scale = self.logit_scale.exp()
+        ret_embeddings_norm = logit_scale * ret_embeddings_norm
+
+        logits_per_sample = ret_embeddings_norm @ collected_last_hidden_state.permute(0, 2, 1)
+        logits_per_query = logits_per_sample.permute(0, 2, 1)
+
+        targets = torch.linspace(0, ret_embeddings.size(1), ret_embeddings.size(1), dtype=int)
+        targets = targets.unsqueeze(0).repeat(ret_embeddings.size(0), 1).to(
+            ret_embeddings.device)  # as size: [bs, n_queries]
+
+        # Contrastive loss: 32 queries vs. 32 queries
+        # as mean of:
+        #  1) similarities RET tokens last hidden states <-> queries
+        #  2) similarities queries <-> RET tokens last hidden states
+        loss_contrastive = (torch.nn.functional.cross_entropy(logits_per_sample, targets)  # label_smoothing=0.1
+                            + torch.nn.functional.cross_entropy(logits_per_query, targets)  # label_smoothing=0.1
+                            ) / 2
+
+        loss_outputs = dict(loss=loss_contrastive)
+        if output_hidden_states:
+            loss_outputs['last_hidden_state'] = collected_last_hidden_state
         return loss_outputs
 
     def generate(self,
