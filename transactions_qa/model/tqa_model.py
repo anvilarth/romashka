@@ -292,52 +292,38 @@ class TransactionQAModel(pl.LightningModule):
         if outputs is None:
             return None
 
-        loss = outputs['loss']
+        loss = outputs['loss'].detach().cpu()
         logging_dict = {
             'train_loss': loss,
             f'{task_name}_train_loss': loss,
         }
+        self.log(name='train_loss', value=loss,
+                 sync_dist=True,
+                 on_step=True, on_epoch=True,
+                 prog_bar=True, logger=True)
+        self.log(name=f'{task_name}_train_loss', value=loss,
+                 sync_dist=True,
+                 on_step=True, on_epoch=True,
+                 prog_bar=True, logger=True)
+
         # Log additional loss values
         for k in outputs:
             if k.endswith("loss"):
                 logging_dict[f"train_{k}"] = outputs[k]
-        if self._verbose_for_debug:
-            additional_logging_dict = self._collect_additional_info(outputs)
-            if additional_logging_dict is not None and len(additional_logging_dict):
-                logging_dict = dict(list(logging_dict.items()) + list(additional_logging_dict.items()))
+                self.log(name=f"train_{k}", value=outputs[k],
+                         sync_dist=True,
+                         on_step=True, on_epoch=True,
+                         prog_bar=True, logger=True)
 
-        self.log_dict(logging_dict)
+        # self.log_dict(
+        #     logging_dict,
+        #     sync_dist=True,
+        #     on_step=False, on_epoch=True,
+        #     prog_bar=True, logger=True
+        # )
+
         return loss
 
-    def _collect_additional_info(self, outputs: Any) -> Dict[str, Any]:
-        """
-        Collect additional information from model's outputs for debugging.
-        Calling this function is optional - it can be removed without ane troubles.
-        Args:
-            outputs: model's step outputs;
-        Returns:
-            a collected dictionary with information about a step.
-        """
-        logging_dict = {}
-        if 'question_start_input_size' in outputs:
-            logging_dict['question_start_input_size'] = outputs['question_start_input_size']
-
-        if 'question_end_input_size' in outputs:
-            logging_dict['question_end_input_size'] = outputs['question_end_input_size']
-
-        if 'transactions_input_size' in outputs:
-            logging_dict['transactions_input_size'] = outputs['transactions_input_size']
-
-        if 'total_input_size' in outputs:
-            logging_dict['total_input_size'] = outputs['total_input_size']
-
-        # if 'transactions_history_lengths' in outputs:
-        #     logging_dict['transactions_history_lengths'] = outputs['transactions_history_lengths'].detach()
-
-        if self._verbose_for_debug:
-            print(f"Additional info from a step:")
-            print(logging_dict)
-        return logging_dict
 
     def validation_step(self, batch,
                         batch_idx: Optional[int],
@@ -362,7 +348,7 @@ class TransactionQAModel(pl.LightningModule):
         if outputs is None:
             return None
 
-        loss = outputs['loss']
+        loss = outputs['loss'].detach().cpu()
 
         # Calc metrics
         metrics_scores = {}
@@ -377,54 +363,38 @@ class TransactionQAModel(pl.LightningModule):
             'val_loss': loss,
             f'{task.task_name}_val_loss': loss
         }
+        self.log(name='val_loss', value=loss,
+                 sync_dist=True,
+                 on_step=True, on_epoch=True,
+                 prog_bar=True, logger=True)
+        self.log(name=f'{task.task_name}_val_loss', value=loss,
+                 sync_dist=True,
+                 on_step=True, on_epoch=True,
+                 prog_bar=True, logger=True)
+
         # Log additional loss values
         for k in outputs:
             if k.endswith("loss"):
                 logging_dict[f"val_{k}"] = outputs[k]
+                self.log(name=f"val_{k}", value=outputs[k],
+                         sync_dist=True,
+                         on_step=True, on_epoch=True,
+                         prog_bar=True, logger=True)
 
-        if self._verbose_for_debug:
-            additional_logging_dict = self._collect_additional_info(outputs)
-            if additional_logging_dict is not None and len(additional_logging_dict):
-                logging_dict = dict(list(logging_dict.items()) + list(additional_logging_dict.items()))
+        for metric_name, score in metrics_scores.items():
+            self.log(name=f"{task.task_name}_{metric_name}",
+                     value=score, sync_dist=True,
+                     on_step=True, on_epoch=True,
+                     prog_bar=True, logger=True)
 
-        logging_dict = dict(list(logging_dict.items()) + list(metrics_scores.items()))
-
-        self.log_dict(
-            logging_dict,
-            batch_size=batch_answers.size(0),
-            sync_dist=True,
-            on_step=False, on_epoch=True,
-            prog_bar=True, logger=True
-        )
-
-        # Log predictions on validation set
-        # if self.num_eval_batches_to_log == -1:  # log all validation data
-        #     questions = outputs['question_encoded'].detach().cpu() if hasattr(outputs, "question_encoded") \
-        #     or ("question_encoded" in outputs.keys()) else ""
-        #     transactions_history_lengths = outputs['transactions_history_lengths'].detach().cpu() \
-        #         if hasattr(outputs, "transactions_history_lengths") else [0]
-        #     self.log_predictions(logits=outputs['logits'].detach().cpu(),
-        #                          answers=batch_answers.detach().cpu(),
-        #                          questions=questions,
-        #                          transactions_history_lengths=transactions_history_lengths,
-        #                          predictions_table=self.log_eval_predictions_table,
-        #                          log_counter=self.log_eval_steps_counter,
-        #                          task_name=task.task_name)
-        #     self.log_eval_steps_counter += 1
-        # elif self.log_eval_steps_counter < self.num_eval_batches_to_log:
-        #     questions = outputs['question_encoded'].detach().cpu() if hasattr(outputs, "question_encoded") \
-        #     or ("question_encoded" in outputs.keys()) else ""
-        #     transactions_history_lengths = outputs['transactions_history_lengths'].detach().cpu() \
-        #         if hasattr(outputs, "transactions_history_lengths") else [0]
-        #     self.log_predictions(logits=outputs['logits'].detach().cpu(),
-        #                          answers=batch_answers.detach().cpu(),
-        #                          questions=questions,
-        #                          transactions_history_lengths=transactions_history_lengths,
-        #                          predictions_table=self.log_eval_predictions_table,
-        #                          log_counter=self.log_eval_steps_counter,
-        #                          task_name=task.task_name)
-        #     self.log_eval_steps_counter += 1
-
+        # logging_dict = dict(list(logging_dict.items()) + list(metrics_scores.items()))
+        # self.log_dict(
+        #     logging_dict,
+        #     batch_size=batch_answers.size(0),
+        #     sync_dist=True,
+        #     on_step=False, on_epoch=True,
+        #     prog_bar=True, logger=True
+        # )
         return loss
 
     def predict_step(self,
