@@ -47,10 +47,9 @@ from romashka.transactions_qa.dataset.dataloader import (TransactionQADataset, T
 from romashka.transactions_qa.transactions_model.model import TransactionsModel
 
 from romashka.transactions_qa.model import (EncoderRetrievalModel,
-                                            EncoderSingleRetrievalModel,
                                             DecoderRetrievalModel,
                                             EncoderRetrievalSpecTokensModel,
-                                            DecoderSingleRetrievalModel)
+                                            DecoderRetrievalSpecTokensModel)
 
 from romashka.transactions_qa.model.tqa_model import TransactionQAModel
 from romashka.transactions_qa.layers.connector import (CONNECTOR_TYPES,
@@ -400,9 +399,10 @@ def main():
             "transactions_embeddings_start_token": r"[trx]",
             "transactions_embeddings_end_token": r"[/trx]",
         }
-        model_ = DecoderRetrievalModel(
+        model_ = DecoderRetrievalSpecTokensModel(
             language_model=lm_model,
             transaction_model=transactions_model,
+            taks=tasks,
             tokenizer=tokenizer,
             connector=connector,
             is_debug=True,
@@ -413,7 +413,7 @@ def main():
     transactionsQA_model_config = {
         "learning_rate": training_args.learning_rate,
         "scheduler_type": training_args.lr_scheduler_type,
-        "optimizer_type": "AdamW", # training_args.optimizer_type,
+        "optimizer_type": "AdamW",  # training_args.optimizer_type,
         "adam_beta1": training_args.adam_beta1,
         "adam_beta2": training_args.adam_beta2,
         "adam_epsilon": training_args.adam_epsilon,
@@ -430,19 +430,30 @@ def main():
                                **lm_model_config,  # as additional kwargs -> to save hyperparameters to checkpoint
                                **connector_args)
     # PEFT
-
-    # Define LoRA Config
-    lora_config = LoraConfig(
-        r=16,
-        lora_alpha=32,
-        target_modules=["q", "v"],
-        lora_dropout=0.05,
-        bias="none",
-        task_type=TaskType.SEQ_2_SEQ_LM
-    )
+    # Create general LLM model
+    if model_args.language_model_type == "encoder-decoder":
+        # Define LoRA Config for Encoder-Decoder
+        lora_config = LoraConfig(
+            r=16,
+            lora_alpha=32,
+            target_modules=["q", "v"],
+            lora_dropout=0.05,
+            bias="none",
+            task_type=TaskType.SEQ_2_SEQ_LM
+        )
+    else:
+        # Define LoRA Config for Decoder-only
+        lora_config = LoraConfig(
+            r=16,
+            lora_alpha=32,
+            target_modules=["q_proj", "v_proj"],
+            lora_dropout=0.05,
+            bias="none",
+            task_type=TaskType.CAUSAL_LM
+        )
     if training_args.do_8bit:
         # prepare int-8 model for training
-        lm_model = prepare_model_for_int8_training(lm_model, output_embedding_layer_name="lm_headddd")
+        lm_model = prepare_model_for_int8_training(lm_model)
 
     # add LoRA adaptor
     lm_model = get_peft_model(lm_model, lora_config)
@@ -496,10 +507,6 @@ def main():
 
     # log gradients and model topology
     wb_logger.watch(model, log_graph=False)
-
-    tb_logger = TensorBoardLogger(name=training_args.run_name,
-                                  save_dir="./tb_logs",
-                                  default_hp_metric=False)
     lr_monitor_callback = LearningRateMonitor(logging_interval='step')
 
     # Create separate checkpoints directory for each run
@@ -517,7 +524,7 @@ def main():
         save_weights_only=training_args.save_only_weights,  # default: 'True'
         every_n_epochs=training_args.save_epochs,  # default: '1'
         save_last=training_args.save_last_checkpoint,  # default: 'True'
-        save_top_k=5,  #training_args.save_top_k,  # default: 1
+        save_top_k=1,  #training_args.save_top_k,  # default: 1
         mode=training_args.save_strategy_mode,  # default: 'min' for monitor='val_loss'
     )
 
