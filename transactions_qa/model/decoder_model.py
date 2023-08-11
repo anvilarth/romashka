@@ -53,6 +53,7 @@ class DecoderSimpleModel(nn.Module):
         self.generation_config = generation_config
 
         self._is_debug: bool = is_debug
+        self._device_type = self.language_model.device.type  # 'cuda' or 'cpu'
         self._prepare_model()
 
     def _set_language_model_arch_type(self):

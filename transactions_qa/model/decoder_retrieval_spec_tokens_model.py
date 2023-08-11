@@ -10,18 +10,20 @@ import transformers
 from romashka.transactions_qa.utils import seed_everything
 from romashka.transactions_qa.model.decoder_model import DecoderSimpleModel
 from romashka.transactions_qa.tasks.task_abstract import AbstractTask
-
+from romashka.transactions_qa.tasks.task_token_updater import collect_task_specific_tokens
+from romashka.transactions_qa.model.generation_utils import isin
 from romashka.transactions_qa.losses.infonce_loss import InfoNCE
 from romashka.transactions_qa.utils import (maybe_autocast, mask_lm_labels_padding)
 from romashka.transactions_qa.layers.initialization import (init_embeddings_with_tensor,
                                                             init_parameter_with_tensor)
 
 
-class DecoderRetrievalModel(DecoderSimpleModel):
+class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
     def __init__(self,
                  language_model: nn.Module,
                  transaction_model: nn.Module,
                  tokenizer: transformers.PreTrainedTokenizerBase,
+                 tasks: Optional[List[AbstractTask]] = None,
                  connector: Optional[nn.Module] = None,
                  connector_input_size: Optional[int] = None,
                  connector_output_size: Optional[int] = None,
@@ -47,6 +49,7 @@ class DecoderRetrievalModel(DecoderSimpleModel):
         self.min_ret_tokens = min_ret_tokens
         self.max_ret_tokens = max_ret_tokens
         self._ret_tokens_template = "[RET_%s]"
+        self.tasks = tasks if tasks is not None else []
 
         # self.projection_layers = nn.ModuleList([])
         self._n_retrieval_layers = n_retrieval_layers
@@ -108,8 +111,12 @@ class DecoderRetrievalModel(DecoderSimpleModel):
         """
         # Create transactions embeddings start/end tokens: [trx] / [/trx] and trainable parameters for them
         self._create_surrounding_parameters()
+
         # Create retrieval tokens: RET_0 ... RET_N in tokenizers vocabulary and mappings token <-> id
         self._create_retrieval_parameters()
+
+        # Create trainable task-specific tokens
+        self._create_trainable_task_special_tokens()
 
         # Additionally call to re-init embedding function reference to resized (maybe) embeddings
         self._resize_text_embeddings()
@@ -200,6 +207,33 @@ class DecoderRetrievalModel(DecoderSimpleModel):
         self.transactions_ret_ids2tokens_mapping = {token_id: token for token, token_id
                                                     in self.transactions_ret_tokens2ids_mapping.items()}
 
+    def _create_trainable_task_special_tokens(self):
+        """
+        Creates trainable parameters for task special tokens.
+        """
+        self.task_special_tokens = collect_task_specific_tokens(self.tasks)
+        self.register_buffer("task_special_tokens_ids",
+                             self.tokenizer(self.task_special_tokens,
+                                            add_special_tokens=False,
+                                            padding=False,
+                                            return_tensors='pt')['input_ids'].flatten())
+        self._logger.info(f"Collected {len(self.task_special_tokens)} task special tokens: {self.task_special_tokens} "
+                          f"with corresponding ids: {self.task_special_tokens_ids}")
+        params_dim = None
+        if hasattr(self.language_model.config, "hidden_size"):
+            params_dim = self.language_model.config.hidden_size
+        elif hasattr(self.language_model.config, "d_model"):  # may occur in encoder-decoder models (like T5)
+            params_dim = self.language_model.config.d_model
+        else:
+            raise AttributeError(f"The default setting, where parameters embeddings dimensionality "
+                                 "equals to LLM hidden dimensionality can not be run because "
+                                 "model do not have required attribute: `hidden_size` or `d_model` in config.")
+
+        # Embeddings for special tokens
+        self.task_special_tokens_embeddings = nn.Embedding(num_embeddings=self.task_special_tokens_ids.size(0),
+                                                           embedding_dim=params_dim).to(self.params_precision)
+        init_embeddings_with_tensor(self.task_special_tokens_embeddings, self.lm_mean_embedding)
+
     def _create_position_parameters(self):
         """
         Creates position embeddings layers as the indicator of temporal information
@@ -287,6 +321,22 @@ class DecoderRetrievalModel(DecoderSimpleModel):
         mask = input_tokens_ids == self.transactions_end_token_id
         input_embeddings[mask] = self.transactions_end_embedding.to(input_embeddings.dtype)
 
+    def has_task_tokens(self, input_tokens_ids: Union[List[int], torch.Tensor]) -> bool:
+        """
+        Checks whether any task special token id already contained in given ids.
+        """
+        return isin(input_tokens_ids, self.task_special_tokens_ids).sum() > 0
+
+    def replace_task_tokens(self,
+                            input_tokens_ids: Union[List[int], torch.Tensor],
+                            input_embeddings: torch.Tensor):
+        """
+        Replace task special tokens' embedding with trainable parameters.
+        """
+        mask = isin(input_tokens_ids, self.task_special_tokens_ids)
+        embs = self.task_special_tokens_embeddings(input_tokens_ids[mask] - min(self.task_special_tokens_ids))
+        input_embeddings[mask] = embs
+
     def forward(self, batch: Union[Dict[str, torch.Tensor], Any],
                 output_attentions: Optional[bool] = True,
                 output_hidden_states: Optional[bool] = True,
@@ -354,7 +404,12 @@ class DecoderRetrievalModel(DecoderSimpleModel):
                 batch['question_start_tokens_mask']
             ], dim=1)
 
+        question_start_tokens_batch = batch['question_start_tokens'].repeat(batch_size, 1)
         question_start_embeddings_batch = question_start_embeddings.repeat(batch_size, 1, 1)
+
+        # Replace task special tokens embeddings with trainable parameters
+        if self.has_task_tokens(question_start_tokens_batch):
+            self.replace_task_tokens(question_start_tokens_batch, question_start_embeddings_batch)
 
         # Question ends: to embedding of LM
         # 3.1) Strip paddings from questions endings!!!
@@ -423,7 +478,7 @@ class DecoderRetrievalModel(DecoderSimpleModel):
         # Check if transactions history embedding size was reduced, then we cannot mask it
         if transactions_tokens.size(-1) == transactions_embeddings_mask.size(-1):
             transactions_tokens.masked_fill_(transactions_embeddings_mask == 0,
-                                         self.tokenizer.pad_token_id)
+                                             self.tokenizer.pad_token_id)
         # 5) Labels
         #  5.3) Label = [-100 * (question_start_tokens_len - 1)
         #             <trns>,
@@ -583,7 +638,6 @@ class DecoderRetrievalModel(DecoderSimpleModel):
             loss_outputs['last_hidden_state'] = collected_last_hidden_state
         return loss_outputs
 
-
     def _compute_retrieval_loss_fromage(self,
                                         outputs: Dict[str, torch.Tensor],
                                         ret_start_i: int, ret_end_i: int,
@@ -726,7 +780,7 @@ class DecoderRetrievalModel(DecoderSimpleModel):
         # Checks whether a connector requires mask argument
         if self.inspect_forward_signature("mask", self.connector):
             transactions_history_embeddings = self.connector(transactions_history_embeddings,
-                                                     mask=transactions_embeddings_mask)
+                                                             mask=transactions_embeddings_mask)
         else:
             transactions_history_embeddings = self.connector(transactions_history_embeddings)
 
