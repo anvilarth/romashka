@@ -9,8 +9,7 @@ from typing import (Dict, Tuple, List,
 
 import transformers
 from torchmetrics import Accuracy, MeanAbsoluteError, MeanSquaredError, Perplexity
-
-from .numeric_task_abstract import NumericTaskAbstract
+from romashka.transactions_qa.tasks.numeric_task_abstract import NumericTaskAbstract
 from romashka.transactions_qa.utils import get_buckets_info
 from romashka.transactions_qa.evaluation.eval_processings_utils import (float_splitter,
                                                                         make_float,
@@ -241,33 +240,29 @@ class PredDaysBeforeTaskOpenEnded(NumericTaskAbstract):
         Processing target text and output text to get the predictions
         """
         # Get predictions as list of strings
-        default_value = 0.0
+        default_value = 0
         predictions_decoded = self.tokenizer.batch_decode(outputs['logits'].argmax(2),
                                                           skip_special_tokens=True)
-        targets = self.tokenizer.batch_decode(outputs['labels'],
-                                              skip_special_tokens=True)
-
-        # In case multiple floating points in numeric answers -> take last one: 0.0.9 => 0.9
-        predictions = [make_float(float_splitter(pred)) for pred in predictions_decoded]
-
+        batch_answers_decoded = self.tokenizer.batch_decode(outputs['labels'],
+                                                            skip_special_tokens=True)
         # Clean predicted texts and map them to categorical labels
-        predictions = [float(transform_labels(pred,
-                                        do_make_numeric=True,
-                                        do_clean_text=False,
-                                        default_value=default_value))
-                       for pred in predictions]
+        predictions_clean = [transform_labels(pred,
+                                              do_make_numeric=True,
+                                              do_clean_text=False,
+                                              default_value=default_value)
+                             for pred in predictions_decoded]
 
-        targets = [float(transform_labels(answer,
-                                    do_make_numeric=True,
-                                    do_clean_text=False,
-                                    default_value=default_value))
-                   for answer in targets]
+        batch_answers_decoded = [transform_labels(answer,
+                                                  do_make_numeric=True,
+                                                  do_clean_text=False,
+                                                  default_value=default_value)
+                                 for answer in batch_answers_decoded]
 
         # Assumed, that floating point features are in provided values range
-        predictions = [pred if pred <= self.feature_max else self.feature_max for pred in predictions]
+        predictions = [pred if pred <= self.feature_max else self.feature_max for pred in predictions_clean]
         predictions = [pred if pred >= self.feature_min else self.feature_min for pred in predictions]
 
-        processed_outputs = dict(targets=torch.FloatTensor(targets),
+        processed_outputs = dict(targets=torch.FloatTensor(batch_answers_decoded),
                                  predictions=torch.FloatTensor(predictions))
         if return_logits:
             processed_outputs['predictions_logits'] = outputs['logits']
