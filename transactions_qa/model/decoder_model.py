@@ -157,7 +157,7 @@ class DecoderSimpleModel(nn.Module):
 
         # For OPT, GPT-NeoX, Llama -based models
         if self.language_model_arch_type in ["OPT", "GPTNeoX", "Llama"]:
-            init_embeddings = self.language_model.get_input_embeddings()
+            resized_embedds = self.language_model.get_input_embeddings()
         # For GPT-based
         else:
             resized_embedds = self.language_model.transformer.get_input_embeddings()

@@ -271,7 +271,8 @@ class DecoderRetrievalModel(DecoderSimpleModel):
         Replace transactions injection start tokens' embedding with trainable parameter.
         """
         mask = input_tokens_ids == self.transactions_start_token_id
-        input_embeddings[mask] = self.transactions_start_embedding.to(input_embeddings.dtype)
+        input_embeddings[mask] = self.transactions_start_embedding.to(
+            input_embeddings.device).to(input_embeddings.dtype)
 
     def has_end_token(self, input_tokens_ids: Union[List[int], torch.Tensor]) -> bool:
         """
@@ -285,7 +286,8 @@ class DecoderRetrievalModel(DecoderSimpleModel):
         Replace transactions injection end tokens' embedding with trainable parameter.
         """
         mask = input_tokens_ids == self.transactions_end_token_id
-        input_embeddings[mask] = self.transactions_end_embedding.to(input_embeddings.dtype)
+        input_embeddings[mask] = self.transactions_end_embedding.to(
+            input_embeddings.device).to(input_embeddings.dtype)
 
     def forward(self, batch: Union[Dict[str, torch.Tensor], Any],
                 output_attentions: Optional[bool] = True,

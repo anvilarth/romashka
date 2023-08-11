@@ -305,7 +305,8 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
         Replace transactions injection start tokens' embedding with trainable parameter.
         """
         mask = input_tokens_ids == self.transactions_start_token_id
-        input_embeddings[mask] = self.transactions_start_embedding.to(input_embeddings.dtype)
+        input_embeddings[mask] = self.transactions_start_embedding.to(
+            input_embeddings.device).to(input_embeddings.dtype)
 
     def has_end_token(self, input_tokens_ids: Union[List[int], torch.Tensor]) -> bool:
         """
@@ -319,13 +320,14 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
         Replace transactions injection end tokens' embedding with trainable parameter.
         """
         mask = input_tokens_ids == self.transactions_end_token_id
-        input_embeddings[mask] = self.transactions_end_embedding.to(input_embeddings.dtype)
+        input_embeddings[mask] = self.transactions_end_embedding.to(
+            input_embeddings.device).to(input_embeddings.dtype)
 
     def has_task_tokens(self, input_tokens_ids: Union[List[int], torch.Tensor]) -> bool:
         """
         Checks whether any task special token id already contained in given ids.
         """
-        return isin(input_tokens_ids, self.task_special_tokens_ids).sum() > 0
+        return isin(input_tokens_ids, self.task_special_tokens_ids.to(input_tokens_ids.device)).sum() > 0
 
     def replace_task_tokens(self,
                             input_tokens_ids: Union[List[int], torch.Tensor],
@@ -333,8 +335,9 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
         """
         Replace task special tokens' embedding with trainable parameters.
         """
-        mask = isin(input_tokens_ids, self.task_special_tokens_ids)
-        embs = self.task_special_tokens_embeddings(input_tokens_ids[mask] - min(self.task_special_tokens_ids))
+        mask = isin(input_tokens_ids, self.task_special_tokens_ids.to(input_tokens_ids.device))
+        embs = self.task_special_tokens_embeddings(input_tokens_ids[mask] -
+                                                   min(self.task_special_tokens_ids.to(input_tokens_ids.device)))
         input_embeddings[mask] = embs
 
     def forward(self, batch: Union[Dict[str, torch.Tensor], Any],
