@@ -518,6 +518,7 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
                                                mask_value=-100)
 
         # 6) Pass through LM
+        self._device_type = self.language_model.device.type  # 'cuda' or 'cpu'
         with torch.autocast(device_type=self._device_type):
             # contains: ['loss', 'logits', 'past_key_values', 'last_hidden_state']
             # `logits` of size: [batch_size, max_pred_len, vocab_size]

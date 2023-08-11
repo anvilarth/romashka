@@ -462,7 +462,8 @@ class DecoderRetrievalModel(DecoderSimpleModel):
                                                mask_value=-100)
 
         # 6) Pass through LM
-        with torch.autocast(device_type=self._device_type):
+        self._device_type = self.language_model.device.type  # 'cuda' or 'cpu'
+        with torch.autocast(device_type=self._device_type, dtype=self.language_model.dtype):
             # contains: ['loss', 'logits', 'past_key_values', 'last_hidden_state']
             # `logits` of size: [batch_size, max_pred_len, vocab_size]
             lm_outputs = self.language_model(inputs_embeds=input_embedds,

@@ -499,6 +499,7 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
         # torch.cat([qa_batch['answer_mask'], qa_batch['target_attention_mask']], dim=1)
 
         # Pass through LM
+        self._device_type = self.language_model.device.type  # 'cuda' or 'cpu'
         with torch.autocast(device_type=self._device_type):
             # contains: ['loss', 'logits', 'past_key_values', 'encoder_last_hidden_state']
             # `logits` of size: [batch_size, max_pred_len, vocab_size]
