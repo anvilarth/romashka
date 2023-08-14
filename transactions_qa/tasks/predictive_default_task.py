@@ -79,7 +79,7 @@ class PredDefaultTaskBinary(CategoricalTaskAbstract):
 
         self.answer_template: str = " "  # left empty for a first time
         self.add_tokens_to_tokenizer = True
-        self.answers_options = [str(i) for i in range(2)]
+        self.answers_options = list(self.binary_answer_options.values())
 
         super().__post_init__()
 

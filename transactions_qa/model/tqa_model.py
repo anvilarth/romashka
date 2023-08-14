@@ -292,38 +292,37 @@ class TransactionQAModel(pl.LightningModule):
         if outputs is None:
             return None
 
-        loss = outputs['loss'].detach().cpu()
+        loss = outputs['loss']
         logging_dict = {
             'train_loss': loss,
             f'{task_name}_train_loss': loss,
         }
-        self.log(name='train_loss', value=loss,
-                 sync_dist=True,
-                 on_step=True, on_epoch=True,
-                 prog_bar=True, logger=True)
-        self.log(name=f'{task_name}_train_loss', value=loss,
-                 sync_dist=True,
-                 on_step=True, on_epoch=True,
-                 prog_bar=True, logger=True)
+        # self.log(name='train_loss', value=loss,
+        #          sync_dist=True,
+        #          on_step=True, on_epoch=True,
+        #          prog_bar=True, logger=True)
+        # self.log(name=f'{task_name}_train_loss', value=loss,
+        #          sync_dist=True,
+        #          on_step=True, on_epoch=True,
+        #          prog_bar=True, logger=True)
 
         # Log additional loss values
         for k in outputs:
             if k.endswith("loss"):
                 logging_dict[f"train_{k}"] = outputs[k]
-                self.log(name=f"train_{k}", value=outputs[k],
-                         sync_dist=True,
-                         on_step=True, on_epoch=True,
-                         prog_bar=True, logger=True)
+                # self.log(name=f"train_{k}", value=outputs[k],
+                #          sync_dist=True,
+                #          on_step=True, on_epoch=True,
+                #          prog_bar=True, logger=True)
 
-        # self.log_dict(
-        #     logging_dict,
-        #     sync_dist=True,
-        #     on_step=False, on_epoch=True,
-        #     prog_bar=True, logger=True
-        # )
+        self.log_dict(
+            logging_dict,
+            sync_dist=True,
+            on_step=False, on_epoch=True,
+            prog_bar=True, logger=True
+        )
 
         return loss
-
 
     def validation_step(self, batch,
                         batch_idx: Optional[int],
@@ -348,7 +347,7 @@ class TransactionQAModel(pl.LightningModule):
         if outputs is None:
             return None
 
-        loss = outputs['loss'].detach().cpu()
+        loss = outputs['loss']
 
         # Calc metrics
         metrics_scores = {}
@@ -363,38 +362,38 @@ class TransactionQAModel(pl.LightningModule):
             'val_loss': loss,
             f'{task.task_name}_val_loss': loss
         }
-        self.log(name='val_loss', value=loss,
-                 sync_dist=True,
-                 on_step=True, on_epoch=True,
-                 prog_bar=True, logger=True)
-        self.log(name=f'{task.task_name}_val_loss', value=loss,
-                 sync_dist=True,
-                 on_step=True, on_epoch=True,
-                 prog_bar=True, logger=True)
+        # self.log(name='val_loss', value=loss,
+        #          sync_dist=True,
+        #          on_step=True, on_epoch=True,
+        #          prog_bar=True, logger=True)
+        # self.log(name=f'{task.task_name}_val_loss', value=loss,
+        #          sync_dist=True,
+        #          on_step=True, on_epoch=True,
+        #          prog_bar=True, logger=True)
 
         # Log additional loss values
         for k in outputs:
             if k.endswith("loss"):
                 logging_dict[f"val_{k}"] = outputs[k]
-                self.log(name=f"val_{k}", value=outputs[k],
-                         sync_dist=True,
-                         on_step=True, on_epoch=True,
-                         prog_bar=True, logger=True)
+                # self.log(name=f"val_{k}", value=outputs[k],
+                #          sync_dist=True,
+                #          on_step=True, on_epoch=True,
+                #          prog_bar=True, logger=True)
 
-        for metric_name, score in metrics_scores.items():
-            self.log(name=f"{task.task_name}_{metric_name}",
-                     value=score, sync_dist=True,
-                     on_step=True, on_epoch=True,
-                     prog_bar=True, logger=True)
+        # for metric_name, score in metrics_scores.items():
+            # self.log(name=f"{task.task_name}_{metric_name}",
+            #          value=score, sync_dist=True,
+            #          on_step=True, on_epoch=True,
+            #          prog_bar=True, logger=True)
 
-        # logging_dict = dict(list(logging_dict.items()) + list(metrics_scores.items()))
-        # self.log_dict(
-        #     logging_dict,
-        #     batch_size=batch_answers.size(0),
-        #     sync_dist=True,
-        #     on_step=False, on_epoch=True,
-        #     prog_bar=True, logger=True
-        # )
+        logging_dict = dict(list(logging_dict.items()) + list(metrics_scores.items()))
+        self.log_dict(
+            logging_dict,
+            batch_size=batch_answers.size(0),
+            sync_dist=True,
+            on_step=False, on_epoch=True,
+            prog_bar=True, logger=True
+        )
         return loss
 
     def predict_step(self,
