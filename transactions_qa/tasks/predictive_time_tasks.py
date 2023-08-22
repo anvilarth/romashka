@@ -128,6 +128,7 @@ class PredDateTaskOpenEnded(CategoricalTaskAbstract):
 
         # single tensor without </s> (EOS), but only for encoder-decoder !!!
         question_start_tokens = self.tokenizer.encode(question_start,
+                                                      add_special_tokens=True,
                                                       return_tensors='pt')
         if question_start_tokens[:, -1] == self.tokenizer.eos_token_id:
             question_start_tokens = question_start_tokens[:, :-1]
@@ -137,6 +138,8 @@ class PredDateTaskOpenEnded(CategoricalTaskAbstract):
         question_target_encoded_batch = self.tokenizer(question_target_batch,
                                                        padding=True,
                                                        truncation=True,
+                                                       add_special_tokens=False,
+                                                       return_attention_mask=True,
                                                        return_tensors='pt').to(device)
         # Attention masks
         # already for full batch
@@ -154,18 +157,28 @@ class PredDateTaskOpenEnded(CategoricalTaskAbstract):
         # add [:, :-1] for no EOS tokens - ?
         target_encoded_batch = self.tokenizer.batch_encode_plus(target_batch,
                                                                 padding=True,
+                                                                add_special_tokens=False,
                                                                 return_tensors='pt').to(device)
+        batch_answer_mask = target_encoded_batch['attention_mask']
+
         # Answer template encoding + strip </s> (EOS) token
         answer_template_encoded = self.tokenizer.encode(self.answer_template,
-                                                        return_tensors='pt')[:, :-1].to(device)
+                                                        add_special_tokens=False,
+                                                        return_attention_mask=True,
+                                                        return_tensors='pt')
+        answer_template_mask = answer_template_encoded['attention_mask'].to(device)
+        answer_template_encoded = answer_template_encoded['input_ids'].to(device)
+
         batch_answer_template_encoded = answer_template_encoded.repeat(batch_size, 1)
+        batch_answer_template_mask = answer_template_mask.repeat(batch_size, 1)
+
         # Answer template encoding + target tokens + EOS token
         batch_answer_encoded = torch.cat([batch_answer_template_encoded,
                                           target_encoded_batch['input_ids']], dim=1).to(device)
         # Answer masks
         batch_answer_template_mask = torch.ones(batch_size, answer_template_encoded.shape[1]).to(device)
         batch_answer_mask = torch.cat([batch_answer_template_mask,
-                                       target_encoded_batch['attention_mask']], dim=1)
+                                       batch_answer_mask], dim=1)
 
         return dict(
             question_start_tokens=question_start_tokens,
