@@ -17,6 +17,8 @@ from romashka.transactions_qa.utils import (maybe_autocast, mask_lm_labels_paddi
 from romashka.transactions_qa.layers.initialization import (init_embeddings_with_tensor,
                                                             init_parameter_with_tensor)
 
+from romashka.transactions_qa.model.generation_utils import USE_HF_GENERATE
+
 
 class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
     def __init__(self,
@@ -397,15 +399,6 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
         # if it already ends with [trx]
         if self.has_start_token(batch['question_start_tokens']):
             self.replace_start_token(batch['question_start_tokens'], question_start_embeddings)
-        # otherwise append it to the end of starting sequence
-        else:
-            question_start_embeddings = torch.cat([question_start_embeddings,
-                                                   self.transactions_start_embedding[None, None]], dim=1)
-            # add one more sample to attentions also
-            question_start_attention_mask = torch.cat([
-                torch.ones((1,)).long().repeat(batch_size, 1).to(batch['question_start_tokens_mask'].device),
-                batch['question_start_tokens_mask']
-            ], dim=1)
 
         question_start_tokens_batch = batch['question_start_tokens'].repeat(batch_size, 1)
         question_start_embeddings_batch = question_start_embeddings.repeat(batch_size, 1, 1)
@@ -417,14 +410,16 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
         # Question ends: to embedding of LM
         # 3.1) Strip paddings from questions endings!!!
         question_end_tokens_mask = batch['question_end_attention_mask'].bool()  # 1 - token, 0 == pad
+        answer_tokens_mask = batch['answer_mask'].bool()
 
         question_end_tokens_full = []
         for i in range(question_end_tokens_mask.size(0)):
             # question without padding
             question_end_tokens_ = batch['question_end_tokens'][i][question_end_tokens_mask[i]]
-            answer_ = batch['answer_tokens'][i]
+            # answers without padding
+            answer_ = batch['answer_tokens'][i][answer_tokens_mask[i]]
             full_question_end_tokens_ = torch.cat([question_end_tokens_,
-                                                   self.whitespace_token_id.to(device),
+                                                   # self.whitespace_token_id.to(device),
                                                    # check to not to insert <eos> before answer tokens!!!
                                                    answer_,
                                                    # add EOS token to train model to finish generation
@@ -433,16 +428,24 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
             question_end_tokens_full.append(full_question_end_tokens_)
 
         # 3.2) Pad to max q+a length
+        question_end_tokens_full_mask = []
         max_question_answer_len = max([len(qa) for qa in question_end_tokens_full])
         for i in range(question_end_tokens_mask.size(0)):
             n_padds = max_question_answer_len - question_end_tokens_full[i].size(0)
+
+            question_end_mask = torch.full((max_question_answer_len,), 1).to(device)  # 1 for all tokens, [seq_len]
+            question_end_mask[question_end_tokens_full[i].size(0):] = 0  # 0 for paddings
+            question_end_tokens_full_mask.append(question_end_mask)
+
             question_end_tokens_full[i] = torch.cat(
-                [torch.full((n_padds,), self.tokenizer.pad_token_id).to(device),
-                 question_end_tokens_full[i],
-                 ], dim=0)
+                [
+                    question_end_tokens_full[i],
+                    torch.full((n_padds,), self.tokenizer.pad_token_id).to(device)
+                ], dim=0)
 
         # 3.3) Cat back into batch
         question_end_tokens_full = torch.stack(question_end_tokens_full).long()
+        question_end_tokens_full_mask = torch.stack(question_end_tokens_full_mask).long()
 
         # Get LLM embeddings
         question_end_embeddings_batch = self.language_model_tokens_embedding_func(question_end_tokens_full)
@@ -464,6 +467,14 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
         input_embedds = torch.cat([question_start_embeddings_batch,
                                    transactions_embeddings,
                                    question_end_embeddings_batch], dim=1)
+        input_mask = torch.cat([
+            # Q start mask -> all 1
+            torch.full(question_start_embeddings_batch.size()[:2], 1).long().to(device),
+            # Transactions mask  -> all 1
+            torch.full(transactions_embeddings.size()[:2], 1).long().to(device),
+            # Q end + Answers mask (some are masked with 0)
+            question_end_tokens_full_mask
+        ], dim=1)
 
         # First transactions token
         transactions_start_i = question_start_embeddings_batch.size(1)
@@ -483,39 +494,28 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
             transactions_tokens.masked_fill_(transactions_embeddings_mask == 0,
                                              self.tokenizer.pad_token_id)
         # 5) Labels
-        #  5.3) Label = [-100 * (question_start_tokens_len - 1)
+        #  Label = [-100 * (question_start_tokens_len - 1)
         #             <trns>,
         #             -100 * transactions_tokens_len
         #             </trns>,
         #             -100 * (question_end_tokens_len - 1)]
 
-        #  5.4) Label = [<pad> * (question_start_tokens_len - 1)
-        #             <trns>,
-        #             transactions_tokens, <pad> * num_trns_history_paddings,  ===> BAD for QFormer!!!
-        #             </trns>,
-        #             <pad> * (question_end_tokens_len - 1)]
-
         question_end_labels = question_end_tokens_full.clone()
         for i in range(batch_size):
-            answer_tokens_len = batch['answer_tokens'][i].size(0)  # + 1  # + 1 for whitespace token
+            answer_tokens_len = batch['answer_tokens'][i].size(0) + 1  # + 1 for whitespace token
             question_end_labels[i, 1:-answer_tokens_len] = -100
 
         text_labels = torch.cat([
-            # <pad> * (question_start_tokens_len - 1)
-            torch.full((batch_size, batch['question_start_tokens'].size(1) - 1), self.tokenizer.pad_token_id).to(
-                device),  # --> empty
+            # -100 * (question_start_tokens_len - 1)
+            torch.full((batch_size, batch['question_start_tokens'].size(1) - 1), -100).to(device),  # --> empty
             # <trns> token
             batch['question_start_tokens'][:, -1].repeat(batch_size, 1),
             # transactions_tokens
             transactions_tokens.to(device),
             question_end_tokens_full[:, 0].unsqueeze(-1),  # </trns> to [batch_size, 1]
-            # <pad> * (question_end_tokens_len - 1)
+            # -100 * (question_end_tokens_len - 1)
             question_end_labels[:, 1:]
         ], dim=1)
-
-        labels_masked = mask_lm_labels_padding(text_labels,
-                                               pad_token_id=self.tokenizer.pad_token_id,
-                                               mask_value=-100)
 
         # 6) Pass through LM
         self._device_type = self.language_model.device.type  # 'cuda' or 'cpu'
@@ -523,7 +523,8 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
             # contains: ['loss', 'logits', 'past_key_values', 'last_hidden_state']
             # `logits` of size: [batch_size, max_pred_len, vocab_size]
             lm_outputs = self.language_model(inputs_embeds=input_embedds,
-                                             labels=labels_masked if is_train else None,
+                                             attention_mask=input_mask,
+                                             labels=text_labels if is_train else None,
                                              output_attentions=output_attentions,
                                              output_hidden_states=output_hidden_states)
 
@@ -562,20 +563,7 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
             outputs[key] = val
 
         if is_train:
-            outputs['labels'] = labels_masked
-        if self._is_debug:
-            outputs['input_embeddings'] = input_embedds  # for debug purposes
-            question_start_tokens_batch = batch['question_start_tokens'].repeat(batch_size, 1)
-            outputs['question_encoded'] = torch.cat([question_start_tokens_batch,
-                                                     batch['question_end_tokens']], dim=1)
-            # Experimental !
-            transactions_history_lengths = transaction_mask.sum(1)
-            outputs['transactions_history_lengths'] = transactions_history_lengths
-
-            outputs['question_start_input_size'] = question_start_embeddings_batch.size(1)
-            outputs['question_end_input_size'] = question_end_embeddings_batch.size(1)
-            outputs['transactions_input_size'] = transactions_embeddings.size(1)
-            outputs['total_input_size'] = input_embedds.size(1)
+            outputs['labels'] = text_labels
         return outputs
 
     def _compute_retrieval_loss(self,
@@ -810,6 +798,7 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
 
         prefix_prompt_embeddings = self.language_model_tokens_embedding_func(prefix_prompt_tokens)
         prefix_prompt_embeddings_batch = prefix_prompt_embeddings.repeat(batch_size, 1, 1)
+        prefix_prompt_mask_batch = torch.full(prefix_prompt_embeddings_batch.size()[:2], 1).long().to(device)
 
         # Question
         # In case single question in string form
@@ -817,11 +806,13 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
             question_tokens = self.tokenizer.encode(questions,
                                                     add_special_tokens=False,
                                                     return_tensors='pt').long().to(device)
+            question_mask = torch.full(question_tokens.size(), 1).long().to(device)
             question_embeddings = self.language_model_tokens_embedding_func(question_tokens)
             question_embeddings_batch = question_embeddings.repeat(batch_size, 1, 1)
 
         # In case questions in tokenized form of tensors
         elif isinstance(questions, torch.Tensor):
+            question_mask = torch.full(questions.size(), 1).long().to(device)
             question_embeddings = self.language_model_tokens_embedding_func(questions)
             if question_embeddings.size(0) != batch_size:
                 # If it was a single question
@@ -835,6 +826,7 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
                                                     padding=True,
                                                     add_special_tokens=False,
                                                     return_tensors='pt').long().to(device)
+            question_mask = torch.full(question_tokens.size(), 1).long().to(device)
             question_embeddings = self.language_model_tokens_embedding_func(question_tokens)
             question_embeddings_batch = question_embeddings
         else:
@@ -857,23 +849,103 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
                                    transactions_history_embeddings,
                                    question_embeddings_batch,
                                    answer_template_embeddings_batch], dim=1).to(device)
+        input_mask = torch.cat([prefix_prompt_mask_batch,
+                                torch.full(transactions_history_embeddings.size()[:2], 1).long().to(device),
+                                question_mask,
+                                torch.full(answer_template_embeddings_batch.size()[:2], 1).long().to(device)
+                                ], dim=1).to(device)
 
-        # if any([model_type in self.language_model.config.architectures[0] for model_type in USE_HF_GENERATE]):
-        #     pass
-        # else:
-        return self._custom_generate(input_embedds=input_embedds,
+        if self.language_model.config.architectures[0] in USE_HF_GENERATE:
+            return self._hf_generate(input_embedds=input_embedds,
+                                     input_mask=input_mask,
                                      temperature=temperature,
                                      min_new_tokens=min_new_tokens,
                                      max_new_tokens=max_new_tokens,
                                      top_p=top_p,
-                                     suggestions=suggestions,
-                                     diversity_penalty=diversity_penalty,
                                      hidden_dims_indexes=hidden_dims_indexes,
                                      allowed_token_ids=allowed_token_ids,
                                      stopping_criteria=stopping_criteria,
                                      filter_value=filter_value,
                                      seed=seed,
                                      device=device)
+        else:
+            return self._custom_generate(input_embedds=input_embedds,
+                                         temperature=temperature,
+                                         min_new_tokens=min_new_tokens,
+                                         max_new_tokens=max_new_tokens,
+                                         top_p=top_p,
+                                         suggestions=suggestions,
+                                         diversity_penalty=diversity_penalty,
+                                         hidden_dims_indexes=hidden_dims_indexes,
+                                         allowed_token_ids=allowed_token_ids,
+                                         stopping_criteria=stopping_criteria,
+                                         filter_value=filter_value,
+                                         seed=seed,
+                                         device=device)
+
+    def _hf_generate(self, input_embedds: torch.Tensor,
+                     input_mask: torch.Tensor,
+                     max_new_tokens: Optional[int] = None,
+                     min_new_tokens: Optional[int] = None,
+                     top_p: Optional[float] = 1.0,
+                     temperature: Optional[float] = 0.0,
+                     repetition_penalty: Optional[float] = 1.0,
+                     length_penalty: Optional[float] = 1.0,
+                     filter_value: Optional[float] = -float('Inf'),
+                     allowed_token_ids: Optional[List[int]] = None,
+                     hidden_dims_indexes: Optional[List[int]] = None,
+                     stopping_criteria: Optional[Any] = None,
+                     seed: Optional[int] = 11,
+                     device: Union[torch.device, str] = "cpu"):
+        """
+        Generate with HF utilities.
+        Args:
+            input_embedds: input embeddings for LLM;
+            input_mask: attention mask for input embeddings;
+            max_new_tokens: int - the maximum number of tokens to generate,
+                                    ignoring the number of tokens in the question;
+            min_new_tokens: int - the minimum number of tokens to generate,
+                                    ignoring the number of tokens in the question;
+            top_p: float - If set to float < 1, only the most probable tokens with probabilities
+                            that add up to top_p or higher are kept for generation;
+            temperature: float - The value used to module the next token probabilities;
+            repetition_penalty: float - a penalty for tokens sequences repetition;
+                                The parameter for repetition penalty. 1.0 means no penalty.
+            length_penalty: float -  Exponential penalty to the length that is used with beam-based generation.
+                It is applied as an exponent to the sequence length, which in turn is used to divide the score
+                of the sequence. Since the score is the log likelihood of the sequence (i.e. negative),
+                length_penalty > 0.0 promotes longer sequences, while length_penalty < 0.0 encourages shorter sequences.
+            filter_value: float - a value to assign to tokens that should never be generated;
+            allowed_token_ids: List[int] - a list of token ids that must be generated;
+            hidden_dims_indexes: List[int] - a list of hidden layers' indexes from
+                                        which to take hidden states for embedding creation.
+                                        Default set to -1 - so only last layer's hidden states would be used;
+            stopping_criteria: a class instance / callable that can be used to change
+                                when to stop generation (other than EOS token).
+                                It should return a boolean flag when all batch samples are successfully finished;
+            seed: int - a seed for generation;
+            device: a device to generate on.
+
+        Returns:
+            torch.Tensor - generated token ids.
+        """
+        generation_config = transformers.GenerationConfig(max_new_tokens=max_new_tokens,
+                                                          min_new_tokens=min_new_tokens,
+                                                          do_sample=False,  # use greedy decoding
+                                                          num_beams=1,
+                                                          temperature=temperature,
+                                                          top_p=top_p,
+                                                          repetition_penalty=repetition_penalty,
+                                                          length_penalty=length_penalty,
+                                                          eos_token_id=self.tokenizer.eos_token_id,
+                                                          bos_token_id=self.tokenizer.bos_token_id)
+        with torch.no_grad():  # no tracking history
+            generated_tokens_ids = self.language_model.generate(
+                inputs_embeds=input_embedds,
+                attention_mask=input_mask,
+                generation_config=generation_config
+            )
+        return generated_tokens_ids
 
     def _custom_generate(self, input_embedds: torch.Tensor,
                          max_new_tokens: Optional[int] = None,

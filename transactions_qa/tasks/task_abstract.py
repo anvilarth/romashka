@@ -244,7 +244,7 @@ class AbstractTask(ABC):
 
         # get new tokens ids in tokenizers' vocabulary
         if return_ids:
-            return {token: tokenizer(token)['input_ids'][0] for token in new_tokens}
+            return {token: tokenizer(token, add_special_tokens=False)['input_ids'][0] for token in new_tokens}
 
     def custom_tokenize(self, sequence: Union[str, List[str]],
                         **kwargs) -> Dict[str, Union[List[int], torch.Tensor]]:
