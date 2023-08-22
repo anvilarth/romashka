@@ -402,7 +402,7 @@ def main():
         model_ = DecoderRetrievalSpecTokensModel(
             language_model=lm_model,
             transaction_model=transactions_model,
-            taks=tasks,
+            tasks=tasks,
             tokenizer=tokenizer,
             connector=connector,
             is_debug=True,
