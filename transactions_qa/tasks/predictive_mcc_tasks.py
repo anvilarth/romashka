@@ -375,7 +375,7 @@ class PredMCCCodeTaskOpenEnded(CategoricalTaskAbstract):
         # all options for a target feature - it is not actually required here, but still
         self.answers_options = [str(i) for i in range(self.num_classes)]
         self.binary_answer_options: Dict[str, str] = {"positive": "Yes", "negative": "No"}
-        self.answer_template = "Answer is"  # left empty for a first time
+        self.answer_template = "Answer is"
         self.add_tokens_to_tokenizer = True
 
         super().__post_init__()
