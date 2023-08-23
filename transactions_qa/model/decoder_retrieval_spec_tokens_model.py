@@ -395,7 +395,7 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
                                                      mask=transactions_embeddings_mask)
         elif self.inspect_forward_signature("input_text_ids", self.connector) and \
              self.inspect_forward_signature("input_text_attention_mask", self.connector):
-            # using InstructQFormer model
+            # using Instruct QFormer model
             transactions_embeddings = self.connector(
                 embeds=transactions_embeddings,
                 # strip 2 tokens from the start of Q, as "[/trx]" + "."
