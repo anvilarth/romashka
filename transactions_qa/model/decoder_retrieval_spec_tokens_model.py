@@ -111,6 +111,14 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
                 list(projection.parameters())
                 + [trns_start_embedding, trns_end_embedding], lr=1e-2, relative_step=False)
         """
+        if self.tokenizer.padding_side != 'right':
+            self._logger.error("Tokenizer padding size should be set to `right`!")
+            self.tokenizer.padding_side = 'right'
+
+        if not self.tokenizer.add_eos_token:
+            self._logger.error("Tokenizer `add_eos_token` should be set to `True`!")
+            self.tokenizer.add_eos_token = True
+
         # Create transactions embeddings start/end tokens: [trx] / [/trx] and trainable parameters for them
         self._create_surrounding_parameters()
 

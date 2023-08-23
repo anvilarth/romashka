@@ -84,8 +84,9 @@ class TransactionQAModel(pl.LightningModule):
         #                 "question", "prediction", "truth",
         #                 "transactions_history_lengths"]
         # self.log_eval_predictions_table = wandb.Table(columns=self.columns)
-        # self.log_eval_steps_counter = 0
-        # self.num_eval_batches_to_log = -1
+
+        self.log_eval_steps_counter = 0
+        self.log_eval_max_steps = 10
 
     def configure_optimizers(self):
         """
@@ -312,7 +313,6 @@ class TransactionQAModel(pl.LightningModule):
 
         return loss
 
-
     def validation_step(self, batch,
                         batch_idx: Optional[int],
                         dataloader_idx: Optional[int] = None, **kwargs) -> Optional[Any]:
@@ -365,6 +365,22 @@ class TransactionQAModel(pl.LightningModule):
             on_step=False, on_epoch=True,
             prog_bar=True, logger=True
         )
+
+        if self.log_eval_steps_counter < self.log_eval_max_steps:
+            self._logger.info(f"--- Validation step #{self.log_eval_steps_counter} ---")
+
+            labels = outputs['labels']
+            self._logger.info(f"Labels:")
+            for lab_i, label in enumerate(labels):
+                label_dec = self.model.tokenizer.decode([l for l in label if l != -100])
+                self._logger.info(f"#{lab_i}: {label_dec}")
+
+            self._logger.info(f"\nAnswer tokens:")
+            batch_answers_dec = self.model.tokenizer.batch_decode(batch_answers, skip_special_tokens=False)
+            for answ_i, answ in enumerate(batch_answers_dec):
+                self._logger.info(f"#{answ_i}: {answ}")
+
+        self.log_eval_steps_counter += 1
         return loss
 
     def predict_step(self,
@@ -654,8 +670,8 @@ class TransactionQAModel(pl.LightningModule):
     def on_validation_epoch_start(self) -> None:
         print(f"\n----------- Validation start ----------\n")
 
-    #     # Reset log counter
-    #     self.log_eval_steps_counter = 0
+        # Reset log counter
+        self.log_eval_steps_counter = 0
 
     def on_validation_epoch_end(self) -> None:
         # ✨ W&B: Log predictions table to wandb
