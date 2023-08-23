@@ -146,7 +146,7 @@ class InstructQFormerConnector(nn.Module):
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
         )
-        query_output = query_outputs[0]
+        query_output = query_outputs[0][:, : query_tokens.size(1), :]
 
         # step 3: use the language model, conditioned on the query outputs and the prompt
         language_model_inputs = self.lm_projection_layer(query_output)
