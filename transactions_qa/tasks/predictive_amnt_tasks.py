@@ -815,7 +815,7 @@ class PredNumericAmountTaskOpenEnded(NumericTaskAbstract):
         self.question_templates = self.generate_question_templates(self.starting_prompts,
                                                                    self.ending_prompts)
 
-        self.answer_template: str = ""  # left empty for a first time
+        self.answer_template: str = "Answer is"
         self.add_tokens_to_tokenizer = True
 
         # If buckets are not provided externally
@@ -900,9 +900,13 @@ class PredNumericAmountTaskOpenEnded(NumericTaskAbstract):
         target_encoded_batch = self.custom_tokenize(target_batch,
                                                     return_tensors='pt',
                                                     padding=True,
-                                                    add_special_tokens=False,
-                                                    truncation=True).to(device)
-        batch_answer_mask = target_encoded_batch['attention_mask']
+                                                    add_special_tokens=True,
+                                                    truncation=True)
+        target_encoded_ids = target_encoded_batch['input_ids'].to(device)
+        batch_answer_mask = target_encoded_batch['attention_mask'].to(device)
+        if target_encoded_batch['input_ids'][0, 0] == self.tokenizer.bos_token_id:
+            target_encoded_ids = target_encoded_ids[:, 1:]   # strip EOS from beginnings, but keep EOS
+            batch_answer_mask = batch_answer_mask[:, 1:]
 
         # Answer template encoding + strip </s> (EOS) token
         answer_template_encoded = self.custom_tokenize(self.answer_template,
@@ -917,7 +921,7 @@ class PredNumericAmountTaskOpenEnded(NumericTaskAbstract):
 
         # Answer template encoding + target tokens + EOS token
         batch_answer_encoded = torch.cat([batch_answer_template_encoded,
-                                          target_encoded_batch['input_ids']], dim=1).long().to(device)
+                                          target_encoded_ids], dim=1).long().to(device)
         # Answer mask
         batch_answer_mask = torch.cat([batch_answer_template_mask,
                                        batch_answer_mask], dim=1).long().to(device)
@@ -927,8 +931,8 @@ class PredNumericAmountTaskOpenEnded(NumericTaskAbstract):
             question_start_tokens_mask=question_start_tokens_mask,
             question_end_tokens=question_target_encoded_batch['input_ids'],
             question_end_attention_mask=question_target_encoded_batch['attention_mask'],
-            target_tokens=target_encoded_batch['input_ids'],
-            target_attention_mask=target_encoded_batch['attention_mask'],
+            target_tokens=target_encoded_ids,
+            target_attention_mask=batch_answer_mask,
             answer_tokens=batch_answer_encoded,  # template + targets
             answer_mask=batch_answer_mask,
             encoder_input_mask=encoder_input_mask,
@@ -1132,7 +1136,7 @@ class PredBinnedAmountTaskOpenEnded(NumericTaskAbstract):
         self.question_templates = self.generate_question_templates(self.starting_prompts,
                                                                    self.ending_prompts)
 
-        self.answer_template: str = ""  # left empty for a first time
+        self.answer_template: str = "Answer is"
         self.add_tokens_to_tokenizer = True
 
         # If buckets are not provided externally
@@ -1222,9 +1226,13 @@ class PredBinnedAmountTaskOpenEnded(NumericTaskAbstract):
         target_encoded_batch = self.custom_tokenize(target_batch,
                                                     return_tensors='pt',
                                                     padding=True,
-                                                    add_special_tokens=False,
-                                                    truncation=True).to(device)
-        batch_answer_mask = target_encoded_batch['attention_mask']
+                                                    add_special_tokens=True,
+                                                    truncation=True)
+        target_encoded_ids = target_encoded_batch['input_ids'].to(device)
+        batch_answer_mask = target_encoded_batch['attention_mask'].to(device)
+        if target_encoded_batch['input_ids'][0, 0] == self.tokenizer.bos_token_id:
+            target_encoded_ids = target_encoded_ids[:, 1:]  # strip EOS from beginnings, but keep EOS
+            batch_answer_mask = batch_answer_mask[:, 1:]
 
         # Answer template encoding + strip </s> (EOS) token
         answer_template_encoded = self.custom_tokenize(self.answer_template,
@@ -1239,7 +1247,7 @@ class PredBinnedAmountTaskOpenEnded(NumericTaskAbstract):
 
         # Answer template encoding + target tokens + EOS token
         batch_answer_encoded = torch.cat([batch_answer_template_encoded,
-                                          target_encoded_batch['input_ids']], dim=1).long().to(device)
+                                          target_encoded_ids], dim=1).long().to(device)
         # Answer mask
         batch_answer_mask = torch.cat([batch_answer_template_mask,
                                        batch_answer_mask], dim=1).long().to(device)
@@ -1249,8 +1257,8 @@ class PredBinnedAmountTaskOpenEnded(NumericTaskAbstract):
             question_start_tokens_mask=question_start_tokens_mask,
             question_end_tokens=question_target_encoded_batch['input_ids'],
             question_end_attention_mask=question_target_encoded_batch['attention_mask'],
-            target_tokens=target_encoded_batch['input_ids'],
-            target_attention_mask=target_encoded_batch['attention_mask'],
+            target_tokens=target_encoded_ids,
+            target_attention_mask=batch_answer_mask,
             answer_tokens=batch_answer_encoded,  # template + targets
             answer_mask=batch_answer_mask,
             encoder_input_mask=encoder_input_mask,

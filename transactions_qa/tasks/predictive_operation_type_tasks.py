@@ -69,7 +69,7 @@ class PredOpTypeTaskOpenEnded(CategoricalTaskAbstract):
         # all options for a target feature - it is not actually required here, but still
         self.answers_options = [str(i) for i in range(1, self.num_classes)]
         self.binary_answer_options: Dict[str, str] = {"positive": "Yes", "negative": "No"}
-        self.answer_template = ""  # left empty for a first time
+        self.answer_template = "Answer is"
         self.add_tokens_to_tokenizer = True
 
         super().__post_init__()
@@ -139,9 +139,13 @@ class PredOpTypeTaskOpenEnded(CategoricalTaskAbstract):
         target_encoded_batch = self.custom_tokenize(target_batch,
                                                     return_tensors='pt',
                                                     padding=True,
-                                                    add_special_tokens=False,
-                                                    truncation=True).to(device)
-        batch_answer_mask = target_encoded_batch['attention_mask']
+                                                    add_special_tokens=True,
+                                                    truncation=True)
+        target_encoded_ids = target_encoded_batch['input_ids'].to(device)
+        batch_answer_mask = target_encoded_batch['attention_mask'].to(device)
+        if target_encoded_batch['input_ids'][0, 0] == self.tokenizer.bos_token_id:
+            target_encoded_ids = target_encoded_ids[:, 1:]  # strip BOS from beginnings, but keep EOS
+            batch_answer_mask = batch_answer_mask[:, 1:]
 
         # Answer template encoding + strip </s> (EOS) token
         answer_template_encoded = self.custom_tokenize(self.answer_template,
@@ -156,7 +160,7 @@ class PredOpTypeTaskOpenEnded(CategoricalTaskAbstract):
 
         # Answer template encoding + target tokens + EOS token
         batch_answer_encoded = torch.cat([batch_answer_template_encoded,
-                                          target_encoded_batch['input_ids']], dim=1).long().to(device)
+                                          target_encoded_ids], dim=1).long().to(device)
         # Answer mask
         batch_answer_mask = torch.cat([batch_answer_template_mask,
                                        batch_answer_mask], dim=1).long().to(device)
@@ -166,8 +170,8 @@ class PredOpTypeTaskOpenEnded(CategoricalTaskAbstract):
             question_start_tokens_mask=question_start_tokens_mask,
             question_end_tokens=question_target_encoded_batch['input_ids'],
             question_end_attention_mask=question_target_encoded_batch['attention_mask'],
-            target_tokens=target_encoded_batch['input_ids'],
-            target_attention_mask=target_encoded_batch['attention_mask'],
+            target_tokens=target_encoded_ids,
+            target_attention_mask=batch_answer_mask,
             answer_tokens=batch_answer_encoded,  # template + targets
             answer_mask=batch_answer_mask,
             encoder_input_mask=encoder_input_mask,
@@ -363,7 +367,7 @@ class PredOpTypeGroupTaskOpenEnded(CategoricalTaskAbstract):
         # all options for a target feature - it is not actually required here, but still
         self.answers_options = [str(i) for i in range(1, self.num_classes)]
         self.binary_answer_options: Dict[str, str] = {"positive": "Yes", "negative": "No"}
-        self.answer_template = ""  # left empty for a first time
+        self.answer_template = "Answer is"
         self.add_tokens_to_tokenizer = True
 
         super().__post_init__()
@@ -433,9 +437,13 @@ class PredOpTypeGroupTaskOpenEnded(CategoricalTaskAbstract):
         target_encoded_batch = self.custom_tokenize(target_batch,
                                                     return_tensors='pt',
                                                     padding=True,
-                                                    add_special_tokens=False,
-                                                    truncation=True).to(device)
-        batch_answer_mask = target_encoded_batch['attention_mask']
+                                                    add_special_tokens=True,
+                                                    truncation=True)
+        target_encoded_ids = target_encoded_batch['input_ids'].to(device)
+        batch_answer_mask = target_encoded_batch['attention_mask'].to(device)
+        if target_encoded_batch['input_ids'][0, 0] == self.tokenizer.bos_token_id:
+            target_encoded_ids = target_encoded_ids[:, 1:]  # strip BOS from beginnings, but keep EOS
+            batch_answer_mask = batch_answer_mask[:, 1:]
 
         # Answer template encoding + strip </s> (EOS) token
         answer_template_encoded = self.custom_tokenize(self.answer_template,
@@ -450,7 +458,7 @@ class PredOpTypeGroupTaskOpenEnded(CategoricalTaskAbstract):
 
         # Answer template encoding + target tokens + EOS token
         batch_answer_encoded = torch.cat([batch_answer_template_encoded,
-                                          target_encoded_batch['input_ids']], dim=1).long().to(device)
+                                          target_encoded_ids], dim=1).long().to(device)
         # Answer mask
         batch_answer_mask = torch.cat([batch_answer_template_mask,
                                        batch_answer_mask], dim=1).long().to(device)
@@ -460,8 +468,8 @@ class PredOpTypeGroupTaskOpenEnded(CategoricalTaskAbstract):
             question_start_tokens_mask=question_start_tokens_mask,
             question_end_tokens=question_target_encoded_batch['input_ids'],
             question_end_attention_mask=question_target_encoded_batch['attention_mask'],
-            target_tokens=target_encoded_batch['input_ids'],
-            target_attention_mask=target_encoded_batch['attention_mask'],
+            target_tokens=target_encoded_ids,
+            target_attention_mask=batch_answer_mask,
             answer_tokens=batch_answer_encoded,  # template + targets
             answer_mask=batch_answer_mask,
             encoder_input_mask=encoder_input_mask,

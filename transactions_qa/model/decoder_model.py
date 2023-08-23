@@ -194,6 +194,7 @@ class DecoderSimpleModel(nn.Module):
             self.tokenizer.unk_token_id = 3
         elif self.language_model_arch_type == "Llama":
             self.tokenizer.padding_side = "right"
+            self.tokenizer.add_eos_token = True
 
             if self.tokenizer.eos_token_id is None:
                 self.tokenizer.eos_token_id = self.language_model.config.eos_token_id
