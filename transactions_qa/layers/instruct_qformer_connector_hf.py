@@ -3,7 +3,7 @@ import torch
 from torch import nn
 from typing import Optional, Union,  Dict, Any
 
-from transformers import InstructBlipQFormerConfig, InstructBlipQFormerModel
+from romashka.transactions_qa.layers.instruct_qformer import InstructBlipQFormerConfig, InstructBlipQFormerModel
 
 from romashka.logging_handler import get_logger
 
