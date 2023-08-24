@@ -243,22 +243,54 @@ class TransactionQAModel(pl.LightningModule):
                 qa_batch[key] = val
 
             true_target_idx = qa_batch.get('true_target_idx')
-            outputs = self.model(qa_batch, output_attentions=output_attentions)
-            preds_outputs = evaluate_ppl_variants(model_outputs=outputs,
-                                                  true_target_idx=true_target_idx,
-                                                  input_prompt_length=0,
-                                                  ignore_index=-100,
-                                                  reduction='none')
-            selected_var_idx, pred_label, ppl_per_var = preds_outputs
-            batch_answers = outputs.get("labels")
 
-            outputs['selected_var_idx'] = selected_var_idx
-            outputs['true_target_idx'] = true_target_idx
-            outputs['predicted_label'] = pred_label
-            outputs['true_label'] = batch_answers[true_target_idx]
-            outputs['ppl_per_var'] = ppl_per_var
+            predicted_logits = []
+            true_target_tokens = []
+            loss_based_ppls = []
 
-            return outputs, batch_answers
+            for sample_i in range(qa_batch['target_tokens'].size(0)):
+                sample = {
+                    'question_start_tokens': qa_batch['question_start_tokens'],
+                    'question_start_tokens_mask': qa_batch['question_start_tokens_mask'][0].unsqueeze(0),
+
+                    'question_end_tokens': qa_batch['question_end_tokens'][0].unsqueeze(0),
+                    'question_end_attention_mask': qa_batch['question_end_attention_mask'][0].unsqueeze(0),
+
+                    'target_tokens': qa_batch['target_tokens'][true_target_idx].unsqueeze(0),
+                    'target_attention_mask': qa_batch['target_attention_mask'][true_target_idx].unsqueeze(0),
+
+                    'true_target_idx': qa_batch['question_start_tokens_mask'],
+
+                    'answer_tokens': qa_batch['answer_tokens'][true_target_idx].unsqueeze(0),
+                    'answer_mask': qa_batch['answer_mask'][true_target_idx].unsqueeze(0),
+                    'encoder_input_mask': qa_batch['encoder_input_mask'][sample_i].unsqueeze(0)
+                }
+                # join two batches
+                for key, val in batch.items():
+                    sample[key] = val
+
+                sample_outputs = self.model(sample,
+                                            output_attentions=False,
+                                            output_hidden_states=False)
+                pred_logits = sample_outputs['logits'].detach().cpu()
+                predicted_logits.append(pred_logits)
+                gt_tokens = sample_outputs['labels'].detach().cpu()
+                true_target_tokens.append(gt_tokens)
+
+                ppl_loss_var = torch.exp(sample_outputs['text_loss']).detach().cpu()
+                loss_based_ppls.append(ppl_loss_var)
+
+            loss_based_ppl_min_idx = torch.argmin(torch.stack(loss_based_ppls)).item()
+            min_loss_based_ppl_score = loss_based_ppls[loss_based_ppl_min_idx]
+
+            outputs = {
+                "predicted_index": loss_based_ppl_min_idx,
+                "true_target_index": true_target_idx,
+                "predicted_variant_ppl": min_loss_based_ppl_score,
+                "true_target_ppl": ppl_loss_var[true_target_idx]
+            }
+
+            return outputs, torch.Tensor([true_target_idx]).long()
 
         else:
             # join two batches
