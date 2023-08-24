@@ -535,6 +535,10 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
             question_end_labels[:, 1:]
         ], dim=1)
 
+        # print(f"Labels decoded:")
+        # for labs in text_labels:
+        #     print(f"{self.tokenizer.decode([t for t in labs if t != -100], skip_special_tokens=False)}")
+
         # 6) Pass through LM
         self._device_type = self.language_model.device.type  # 'cuda' or 'cpu'
         with torch.autocast(device_type=self._device_type):
@@ -815,6 +819,15 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
             raise AttributeError(f"Unable to use prefix prompt in provided form: {type(prefix_prompt)}!")
 
         prefix_prompt_embeddings = self.language_model_tokens_embedding_func(prefix_prompt_tokens)
+
+        # if it already ends with [trx]
+        if self.has_start_token(prefix_prompt_tokens):
+            self.replace_start_token(prefix_prompt_tokens, prefix_prompt_embeddings)
+
+        # Replace task special tokens embeddings with trainable parameters
+        if self.has_task_tokens(prefix_prompt_tokens):
+            self.replace_task_tokens(prefix_prompt_tokens, prefix_prompt_embeddings)
+
         prefix_prompt_embeddings_batch = prefix_prompt_embeddings.repeat(batch_size, 1, 1)
         prefix_prompt_mask_batch = torch.full(prefix_prompt_embeddings_batch.size()[:2], 1).long().to(device)
 
@@ -830,6 +843,7 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
 
         # In case questions in tokenized form of tensors
         elif isinstance(questions, torch.Tensor):
+            question_tokens = questions
             question_mask = torch.full(questions.size(), 1).long().to(device)
             question_embeddings = self.language_model_tokens_embedding_func(questions)
             if question_embeddings.size(0) != batch_size:
@@ -849,6 +863,10 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
             question_embeddings_batch = question_embeddings
         else:
             raise AttributeError(f"Unable to use questions in provided form: {type(questions)}!")
+
+        # if it already starts with [/trx]
+        if self.has_end_token(question_tokens):
+            self.replace_end_token(question_tokens, question_embeddings)
 
         # Answer template --> embeddings
         answer_template_tokens = self.tokenizer.encode(answer_template,
