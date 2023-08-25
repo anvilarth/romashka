@@ -740,6 +740,7 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
                  allowed_token_ids: Optional[List[int]] = None,
                  hidden_dims_indexes: Optional[List[int]] = None,
                  stopping_criteria: Optional[Any] = None,
+                 use_custom_generation: Optional[bool] = False,
                  seed: Optional[int] = 11):
         """
         Generates answers for questions.
@@ -789,24 +790,13 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
         transactions_history_embeddings, transactions_embeddings_mask = self.transaction_model.get_embs(
             transactions_batch
         )
-
-        # 2) Next pass them to connector == linear mapping -> to LM inner dim
-        # Checks whether a connector requires mask argument
-        if self.inspect_forward_signature("mask", self.connector):
-            transactions_history_embeddings = self.connector(transactions_history_embeddings,
-                                                             mask=transactions_embeddings_mask)
-        else:
-            transactions_history_embeddings = self.connector(transactions_history_embeddings)
-
         vocab_size = self.language_model.vocab_size
         batch_size = transactions_history_embeddings.size(0)
-        transactions_seq_len = transactions_history_embeddings.size(1)
 
         # Fill empty parameters
         hidden_dims_indexes = hidden_dims_indexes if hidden_dims_indexes is not None else [-1]
 
         # Encode everything
-
         # Starting prompts
         # In case single question in string form
         if isinstance(prefix_prompt, str):
@@ -868,6 +858,26 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
         if self.has_end_token(question_tokens):
             self.replace_end_token(question_tokens, question_embeddings)
 
+        # 2) Pass transaction embeddings to connector == linear mapping -> to LM inner dim
+        # Checks whether a connector requires mask argument
+        if self.inspect_forward_signature("mask", self.connector):
+            transactions_history_embeddings = self.connector(transactions_history_embeddings,
+                                                     mask=transactions_embeddings_mask)
+        elif self.inspect_forward_signature("input_text_ids", self.connector) and \
+                self.inspect_forward_signature("input_text_attention_mask", self.connector):
+            # using Instruct QFormer model
+            transactions_history_embeddings = self.connector(
+                embeds=transactions_history_embeddings,
+                # strip 2 tokens from the start of Q, as "[/trx]" + "."
+                input_text_ids=question_tokens[:, 2:],
+                input_text_attention_mask=question_mask[:, 2:]
+            )
+
+        else:
+            transactions_history_embeddings = self.connector(transactions_history_embeddings)
+
+        transactions_seq_len = transactions_history_embeddings.size(1)
+
         # Answer template --> embeddings
         answer_template_tokens = self.tokenizer.encode(answer_template,
                                                        add_special_tokens=False,
@@ -891,7 +901,7 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
                                 torch.full(answer_template_embeddings_batch.size()[:2], 1).long().to(device)
                                 ], dim=1).to(device)
 
-        if self.language_model.config.architectures[0] in USE_HF_GENERATE:
+        if (self.language_model.config.architectures[0] in USE_HF_GENERATE) and not use_custom_generation:
             return self._hf_generate(input_embedds=input_embedds,
                                      input_mask=input_mask,
                                      temperature=temperature,
