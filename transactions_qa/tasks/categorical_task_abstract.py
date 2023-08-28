@@ -24,7 +24,7 @@ class CategoricalTaskAbstract(AbstractTask, ABC):
     num_classes: Optional[int] = None
     ignore_class_index: Optional[int] = None
     decision_threshold: Optional[float] = 0.5
-    max_options: Optional[int] = 100
+    max_options: Optional[int] = 109
 
     def __post_init__(self):
         super().__post_init__()
@@ -112,7 +112,7 @@ class CategoricalTaskAbstract(AbstractTask, ABC):
 
         if question_start_tokens[:, -1] == self.tokenizer.eos_token_id:
             question_start_tokens = question_start_tokens[:, :-1]
-        question_start_tokens = question_start_tokens.repeat(batch_size, 1).to(device)
+        question_start_tokens = question_start_tokens.to(device)
 
         # as dict(input_ids: torch.Tensor, attention_mask: torch.Tensor), padded to max_seq_len in batch
         question_target_encoded_batch = self.custom_tokenize(question_target_batch,
@@ -127,7 +127,7 @@ class CategoricalTaskAbstract(AbstractTask, ABC):
 
         # Attention masks
         # already for full batch
-        question_start_tokens_mask = torch.ones(question_start_tokens.size()).to(device)
+        question_start_tokens_mask = torch.ones(question_start_tokens.size()).repeat(batch_size, 1).to(device)
         transactions_embedding_mask = sample['mask'].repeat(batch_size, 1).to(device)
 
         encoder_input_mask = torch.cat(
