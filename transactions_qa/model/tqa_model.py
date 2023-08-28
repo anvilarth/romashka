@@ -663,8 +663,12 @@ class TransactionQAModel(pl.LightningModule):
         )
 
         # as list of strings
-        predictions_decoded = self.model.tokenizer.batch_decode(predictions['generated_texts'],
-                                                                skip_special_tokens=True)
+        if isinstance(predictions, dict):
+            predictions_decoded = self.model.tokenizer.batch_decode(predictions['generated_texts'],
+                                                                    skip_special_tokens=True)
+        else:
+            predictions_decoded = self.model.tokenizer.batch_decode(predictions,
+                                                                    skip_special_tokens=True)
         batch_answers_decoded = self.model.tokenizer.batch_decode(batch_answers,
                                                                   skip_special_tokens=True) \
             if batch_answers is not None else None
@@ -693,9 +697,9 @@ class TransactionQAModel(pl.LightningModule):
         }
         if batch_answers is not None:
             outputs['answers'] = batch_answers_decoded
-        if return_embeddings:
+        if return_embeddings and isinstance(predictions, dict):
             outputs['embeddings'] = predictions['output_embeddings']
-        if return_logits:
+        if return_logits and isinstance(predictions, dict):
             outputs['logits'] = predictions['output_logits'].detach().cpu()
         return outputs
 

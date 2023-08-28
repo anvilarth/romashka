@@ -529,9 +529,11 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
             # <trns> token
             batch['question_start_tokens'][:, -1].repeat(batch_size, 1),
             # transactions_tokens
-            transactions_tokens.to(device),
+            # transactions_tokens.to(device),
+            # -100 * transactions_tokens
+            torch.full_like(transactions_tokens, -100).to(device),
             question_end_tokens_full[:, 0].unsqueeze(-1),  # </trns> to [batch_size, 1]
-            # -100 * (question_end_tokens_len - 1)
+            # -100 * (question_end_tokens_len - answer_len) + answer tokens
             question_end_labels[:, 1:]
         ], dim=1)
 
@@ -989,7 +991,8 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
             generated_tokens_ids = self.language_model.generate(
                 inputs_embeds=input_embedds,
                 attention_mask=input_mask,
-                generation_config=generation_config
+                generation_config=generation_config,
+                pad_token_id=self.tokenizer.pad_token_id
             )
         return generated_tokens_ids
 
