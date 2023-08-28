@@ -15,10 +15,13 @@
 """ InstructBLIP model configuration"""
 
 import os
+import copy
 from typing import Union
 
 from transformers.configuration_utils import PretrainedConfig
 from transformers.utils import logging
+from transformers.models.auto import CONFIG_MAPPING
+from transformers.models.auto.modeling_auto import MODEL_FOR_CAUSAL_LM_MAPPING_NAMES
 
 
 logger = logging.get_logger(__name__)
@@ -63,21 +66,7 @@ class InstructBlipVisionConfig(PretrainedConfig):
             The standard deviation of the truncated_normal_initializer for initializing all weight matrices.
         qkv_bias (`bool`, *optional*, defaults to `True`):
             Whether to add a bias to the queries and values in the self-attention layers.
-
-    Example:
-
-    ```python
-    >>> from transformers import InstructBlipVisionConfig, InstructBlipVisionModel
-
-    >>> # Initializing a InstructBlipVisionConfig with Salesforce/instruct-blip-flan-t5 style configuration
-    >>> configuration = InstructBlipVisionConfig()
-
-    >>> # Initializing a InstructBlipVisionModel (with random weights) from the Salesforce/instruct-blip-flan-t5 style configuration
-    >>> model = InstructBlipVisionModel(configuration)
-
-    >>> # Accessing the model configuration
-    >>> configuration = model.config
-    ```"""
+"""
 
     model_type = "instructblip_vision_model"
 
@@ -177,19 +166,7 @@ class InstructBlipQFormerConfig(PretrainedConfig):
         encoder_hidden_size (`int`, *optional*, defaults to 1408):
             The hidden size of the hidden states for cross-attention.
 
-    Examples:
-
-    ```python
-    >>> from transformers import InstructBlipQFormerConfig, InstructBlipQFormerModel
-
-    >>> # Initializing a InstructBLIP Salesforce/instruct-blip-flan-t5 style configuration
-    >>> configuration = InstructBlipQFormerConfig()
-
-    >>> # Initializing a model (with random weights) from the Salesforce/instruct-blip-flan-t5 style configuration
-    >>> model = InstructBlipQFormerModel(configuration)
-    >>> # Accessing the model configuration
-    >>> configuration = model.config
-    ```"""
+    """
     model_type = "instructblip_qformer"
 
     def __init__(
@@ -270,36 +247,7 @@ class InstructBlipConfig(PretrainedConfig):
 
         kwargs (*optional*):
             Dictionary of keyword arguments.
-
-    Example:
-
-    ```python
-    >>> from transformers import (
-    ...     InstructBlipVisionConfig,
-    ...     InstructBlipQFormerConfig,
-    ...     OPTConfig,
-    ...     InstructBlipConfig,
-    ...     InstructBlipForConditionalGeneration,
-    ... )
-
-    >>> # Initializing a InstructBlipConfig with Salesforce/instruct-blip-flan-t5 style configuration
-    >>> configuration = InstructBlipConfig()
-
-    >>> # Initializing a InstructBlipForConditionalGeneration (with random weights) from the Salesforce/instruct-blip-flan-t5 style configuration
-    >>> model = InstructBlipForConditionalGeneration(configuration)
-
-    >>> # Accessing the model configuration
-    >>> configuration = model.config
-
-    >>> # We can also initialize a InstructBlipConfig from a InstructBlipVisionConfig, InstructBlipQFormerConfig and any PretrainedConfig
-
-    >>> # Initializing InstructBLIP vision, InstructBLIP Q-Former and language model configurations
-    >>> vision_config = InstructBlipVisionConfig()
-    >>> qformer_config = InstructBlipQFormerConfig()
-    >>> text_config = OPTConfig()
-
-    >>> config = InstructBlipConfig.from_text_vision_configs(vision_config, qformer_config, text_config)
-    ```"""
+"""
 
     model_type = "instructblip"
     is_composition = True
