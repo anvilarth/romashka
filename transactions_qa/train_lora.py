@@ -7,6 +7,7 @@ from collections import OrderedDict
 
 import wandb
 os.environ["WANDB_MODE"] = "online"
+os.environ["WANDB_API_KEY"] = "de71b243e187c02735ee3d741c05d2d906905d2b"
 
 import warnings
 warnings.filterwarnings("ignore")
