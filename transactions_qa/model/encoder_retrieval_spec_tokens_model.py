@@ -1,3 +1,4 @@
+import traceback
 import numpy as np
 from typing import (List, Optional,
                     Tuple, Any,
@@ -508,16 +509,16 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
         # torch.cat([qa_batch['answer_mask'], qa_batch['target_attention_mask']], dim=1)
 
         # Pass through LM
-        self._device_type = self.language_model.device.type  # 'cuda' or 'cpu'
-        with torch.autocast(device_type=self._device_type):
-            # contains: ['loss', 'logits', 'past_key_values', 'encoder_last_hidden_state']
-            # `logits` of size: [batch_size, max_pred_len, vocab_size]
-            lm_outputs = self.language_model(inputs_embeds=encoder_input,
-                                             attention_mask=encoder_input_mask,
-                                             labels=batch_answers,
-                                             output_attentions=output_attentions,
-                                             output_hidden_states=output_hidden_states,
-                                             decoder_attention_mask=batch_answers_mask)
+        # self._device_type = self.language_model.device.type  # 'cuda' or 'cpu'
+        # with torch.autocast(device_type=self._device_type):
+        # contains: ['loss', 'logits', 'past_key_values', 'encoder_last_hidden_state']
+        # `logits` of size: [batch_size, max_pred_len, vocab_size]
+        lm_outputs = self.language_model(inputs_embeds=encoder_input,
+                                         attention_mask=encoder_input_mask,
+                                         labels=batch_answers,
+                                         output_attentions=output_attentions,
+                                         output_hidden_states=output_hidden_states,
+                                         decoder_attention_mask=batch_answers_mask)
         # Create answers + masks for LM's decoder inputs
         lm_outputs['answer_tokens'] = batch_answers
 
@@ -530,6 +531,7 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
                                                                     output_hidden_states=True)
         except Exception as e:
             self._logger.error(f"Contrastive loss error: {e}")
+            self._logger.error(traceback.format_exc())
             ret_loss_outputs = {'loss': torch.Tensor([0.0]).to(lm_outputs.loss.device)}
 
         # Re-scale losses
