@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 import transformers
 
+from romashka.transactions_qa.utils import seed_everything
 from romashka.transactions_qa.utils import maybe_autocast
 from romashka.transactions_qa.model.generation_utils import isin
 from romashka.transactions_qa.model.encoder_model import EncoderSimpleModel
@@ -16,6 +17,8 @@ from romashka.transactions_qa.tasks.task_token_updater import collect_task_speci
 from romashka.transactions_qa.losses.infonce_loss import InfoNCE
 from romashka.transactions_qa.layers.initialization import (init_embeddings_with_tensor,
                                                             init_parameter_with_tensor)
+
+from romashka.transactions_qa.model.generation_utils import USE_HF_GENERATE
 
 class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
     def __init__(self,
@@ -559,6 +562,8 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
 
         if is_train:
             outputs['labels'] = batch_answers.contiguous().long()
+            outputs['question_encoded'] = torch.cat([question_start_tokens_batch,
+                                                     batch['question_end_tokens']], dim=1)
         return outputs
 
     def _compute_retrieval_loss(self,
@@ -712,6 +717,7 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
                  filter_value: Optional[float] = -float('Inf'),
                  allowed_token_ids: Optional[List[int]] = None,
                  hidden_dims_indexes: Optional[List[int]] = None,
+                 bad_words_ids: Optional[List[int]] = None,
                  stopping_criteria: Optional[Any] = None,
                  use_custom_generation: Optional[bool] = False,
                  seed: Optional[int] = 11):
@@ -881,6 +887,7 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
                                      min_new_tokens=min_new_tokens,
                                      max_new_tokens=max_new_tokens,
                                      top_p=top_p,
+                                     bad_words_ids=bad_words_ids,
                                      hidden_dims_indexes=hidden_dims_indexes,
                                      allowed_token_ids=allowed_token_ids,
                                      stopping_criteria=stopping_criteria,
@@ -894,6 +901,7 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
                                          max_new_tokens=max_new_tokens,
                                          top_p=top_p,
                                          suggestions=suggestions,
+                                         bad_words_ids=bad_words_ids,
                                          diversity_penalty=diversity_penalty,
                                          hidden_dims_indexes=hidden_dims_indexes,
                                          allowed_token_ids=allowed_token_ids,
@@ -911,6 +919,7 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
                      repetition_penalty: Optional[float] = 1.0,
                      length_penalty: Optional[float] = 1.0,
                      filter_value: Optional[float] = -float('Inf'),
+                     bad_words_ids: Optional[List[int]] = None,
                      allowed_token_ids: Optional[List[int]] = None,
                      hidden_dims_indexes: Optional[List[int]] = None,
                      stopping_criteria: Optional[Any] = None,
@@ -954,6 +963,7 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
                                                           num_beams=1,
                                                           temperature=temperature,
                                                           top_p=top_p,
+                                                          bad_words_ids=bad_words_ids,
                                                           repetition_penalty=repetition_penalty,
                                                           length_penalty=length_penalty,
                                                           eos_token_id=self.tokenizer.eos_token_id,
@@ -961,6 +971,7 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
         with torch.no_grad():  # no tracking history
             generated_tokens_ids = self.language_model.generate(
                 inputs_embeds=input_embedds,
+                # decoder_embeds=input_embedds,
                 attention_mask=input_mask,
                 generation_config=generation_config,
                 pad_token_id=self.tokenizer.pad_token_id
@@ -973,6 +984,7 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
                          top_p: Optional[float] = 1.0,
                          temperature: Optional[float] = 0.0,
                          suggestions: Optional[int] = 1,
+                         bad_words_ids: Optional[List[int]] = None,
                          diversity_penalty: Optional[float] = 0.0,
                          filter_value: Optional[float] = -float('Inf'),
                          allowed_token_ids: Optional[List[int]] = None,

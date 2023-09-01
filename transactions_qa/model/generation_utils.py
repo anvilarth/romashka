@@ -4,7 +4,7 @@ from transformers import StoppingCriteriaList, StoppingCriteria, GenerationConfi
 
 # Mark models than can use HF generate method with input_embeddings
 USE_HF_GENERATE = [
-    "GPT2", "GPTJ", "GPTNeo", "LlamaForCausalLM", "Llama"
+    "GPT2", "GPTJ", "GPTNeo", "LlamaForCausalLM", "Llama", "T5ForConditionalGeneration"
 ]
 
 
