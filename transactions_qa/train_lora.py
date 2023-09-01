@@ -7,6 +7,7 @@ from collections import OrderedDict
 
 import wandb
 os.environ["WANDB_MODE"] = "online"
+os.environ["WANDB_API_KEY"] = "de71b243e187c02735ee3d741c05d2d906905d2b"
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -57,7 +58,8 @@ from romashka.transactions_qa.layers.connector import (CONNECTOR_TYPES,
                                                        make_recurrent_connector,
                                                        make_complex_linear_connector,
                                                        make_transformer_connector,
-                                                       make_qformer_connector)
+                                                       make_qformer_connector,
+                                                       make_instruct_qformer_connector)
 from romashka.transactions_qa.train_utils import get_warmup_steps
 
 from romashka.transactions_qa.tasks import AutoTask
@@ -200,7 +202,8 @@ def main():
         "cache_dir": model_args.cache_dir,
         "revision": model_args.model_revision,
         "use_auth_token": True if model_args.use_auth_token else None,
-        "return_unused_kwargs": True
+        "return_unused_kwargs": True,
+        "tie_word_embeddings": True
     }
 
     # Load pretrained model and tokenizer
@@ -353,6 +356,34 @@ def main():
             input_size=lm_input_size,
             **connector_args
         )
+    elif model_args.connector_type == "instruct_qformer":
+
+        # Connector args are hardcoded, should be changed here
+        qformer_config = {
+            "hidden_size": model_args.connector_hidden_size,
+            "num_attention_heads": model_args.num_attention_heads,
+            "num_hidden_layers": model_args.num_hidden_layers,
+            "intermediate_size": model_args.intermediate_size,
+            "cross_attention_frequency": 2,
+            "attention_probs_dropout_prob": 0.1,
+            "hidden_act": "gelu",
+            "hidden_dropout_prob": 0.1,
+            "initializer_range": 0.02,
+            "max_position_embeddings": 1024,
+            "position_embedding_type": "absolute",
+        }
+
+        connector_args = {
+            'config': qformer_config,
+            "vocab_size": len(tokenizer),
+            "pad_token_id": tokenizer.pad_token_id,
+            "num_queries": model_args.num_queries
+        }
+        connector = make_instruct_qformer_connector(
+            output_size=trns_output_size,
+            input_size=lm_input_size,
+            **connector_args
+        )
 
     else:
         raise AttributeError(f"Unknown connector type: {model_args.connector_type}")
@@ -402,7 +433,7 @@ def main():
         model_ = DecoderRetrievalSpecTokensModel(
             language_model=lm_model,
             transaction_model=transactions_model,
-            taks=tasks,
+            tasks=tasks,
             tokenizer=tokenizer,
             connector=connector,
             is_debug=True,

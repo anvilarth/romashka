@@ -84,8 +84,9 @@ class TransactionQAModel(pl.LightningModule):
         #                 "question", "prediction", "truth",
         #                 "transactions_history_lengths"]
         # self.log_eval_predictions_table = wandb.Table(columns=self.columns)
-        # self.log_eval_steps_counter = 0
-        # self.num_eval_batches_to_log = -1
+
+        self.log_eval_steps_counter = 0
+        self.log_eval_max_steps = 10
 
     def configure_optimizers(self):
         """
@@ -242,22 +243,54 @@ class TransactionQAModel(pl.LightningModule):
                 qa_batch[key] = val
 
             true_target_idx = qa_batch.get('true_target_idx')
-            outputs = self.model(qa_batch, output_attentions=output_attentions)
-            preds_outputs = evaluate_ppl_variants(model_outputs=outputs,
-                                                  true_target_idx=true_target_idx,
-                                                  input_prompt_length=0,
-                                                  ignore_index=-100,
-                                                  reduction='none')
-            selected_var_idx, pred_label, ppl_per_var = preds_outputs
-            batch_answers = outputs.get("labels")
 
-            outputs['selected_var_idx'] = selected_var_idx
-            outputs['true_target_idx'] = true_target_idx
-            outputs['predicted_label'] = pred_label
-            outputs['true_label'] = batch_answers[true_target_idx]
-            outputs['ppl_per_var'] = ppl_per_var
+            predicted_logits = []
+            true_target_tokens = []
+            loss_based_ppls = []
 
-            return outputs, batch_answers
+            for sample_i in range(qa_batch['target_tokens'].size(0)):
+                sample = {
+                    'question_start_tokens': qa_batch['question_start_tokens'],
+                    'question_start_tokens_mask': qa_batch['question_start_tokens_mask'][0].unsqueeze(0),
+
+                    'question_end_tokens': qa_batch['question_end_tokens'][0].unsqueeze(0),
+                    'question_end_attention_mask': qa_batch['question_end_attention_mask'][0].unsqueeze(0),
+
+                    'target_tokens': qa_batch['target_tokens'][true_target_idx].unsqueeze(0),
+                    'target_attention_mask': qa_batch['target_attention_mask'][true_target_idx].unsqueeze(0),
+
+                    'true_target_idx': qa_batch['question_start_tokens_mask'],
+
+                    'answer_tokens': qa_batch['answer_tokens'][true_target_idx].unsqueeze(0),
+                    'answer_mask': qa_batch['answer_mask'][true_target_idx].unsqueeze(0),
+                    'encoder_input_mask': qa_batch['encoder_input_mask'][sample_i].unsqueeze(0)
+                }
+                # join two batches
+                for key, val in batch.items():
+                    sample[key] = val
+
+                sample_outputs = self.model(sample,
+                                            output_attentions=False,
+                                            output_hidden_states=False)
+                pred_logits = sample_outputs['logits'].detach().cpu()
+                predicted_logits.append(pred_logits)
+                gt_tokens = sample_outputs['labels'].detach().cpu()
+                true_target_tokens.append(gt_tokens)
+
+                ppl_loss_var = torch.exp(sample_outputs['text_loss']).detach().cpu()
+                loss_based_ppls.append(ppl_loss_var)
+
+            loss_based_ppl_min_idx = torch.argmin(torch.stack(loss_based_ppls)).item()
+            min_loss_based_ppl_score = loss_based_ppls[loss_based_ppl_min_idx]
+
+            outputs = {
+                "predicted_index": loss_based_ppl_min_idx,
+                "true_target_index": true_target_idx,
+                "predicted_variant_ppl": min_loss_based_ppl_score,
+                "true_target_ppl": ppl_loss_var[true_target_idx]
+            }
+
+            return outputs, torch.Tensor([true_target_idx]).long()
 
         else:
             # join two batches
@@ -292,35 +325,23 @@ class TransactionQAModel(pl.LightningModule):
         if outputs is None:
             return None
 
-        loss = outputs['loss'].detach().cpu()
+        loss = outputs['loss']
         logging_dict = {
             'train_loss': loss,
             f'{task_name}_train_loss': loss,
         }
-        self.log(name='train_loss', value=loss,
-                 sync_dist=True,
-                 on_step=True, on_epoch=True,
-                 prog_bar=True, logger=True)
-        self.log(name=f'{task_name}_train_loss', value=loss,
-                 sync_dist=True,
-                 on_step=True, on_epoch=True,
-                 prog_bar=True, logger=True)
 
         # Log additional loss values
         for k in outputs:
             if k.endswith("loss"):
                 logging_dict[f"train_{k}"] = outputs[k]
-                self.log(name=f"train_{k}", value=outputs[k],
-                         sync_dist=True,
-                         on_step=True, on_epoch=True,
-                         prog_bar=True, logger=True)
 
-        # self.log_dict(
-        #     logging_dict,
-        #     sync_dist=True,
-        #     on_step=False, on_epoch=True,
-        #     prog_bar=True, logger=True
-        # )
+        self.log_dict(
+            logging_dict,
+            sync_dist=True,
+            on_step=False, on_epoch=True,
+            prog_bar=True, logger=True
+        )
 
         return loss
 
@@ -348,7 +369,7 @@ class TransactionQAModel(pl.LightningModule):
         if outputs is None:
             return None
 
-        loss = outputs['loss'].detach().cpu()
+        loss = outputs['loss']
 
         # Calc metrics
         metrics_scores = {}
@@ -363,38 +384,44 @@ class TransactionQAModel(pl.LightningModule):
             'val_loss': loss,
             f'{task.task_name}_val_loss': loss
         }
-        self.log(name='val_loss', value=loss,
-                 sync_dist=True,
-                 on_step=True, on_epoch=True,
-                 prog_bar=True, logger=True)
-        self.log(name=f'{task.task_name}_val_loss', value=loss,
-                 sync_dist=True,
-                 on_step=True, on_epoch=True,
-                 prog_bar=True, logger=True)
 
         # Log additional loss values
         for k in outputs:
             if k.endswith("loss"):
                 logging_dict[f"val_{k}"] = outputs[k]
-                self.log(name=f"val_{k}", value=outputs[k],
-                         sync_dist=True,
-                         on_step=True, on_epoch=True,
-                         prog_bar=True, logger=True)
 
-        for metric_name, score in metrics_scores.items():
-            self.log(name=f"{task.task_name}_{metric_name}",
-                     value=score, sync_dist=True,
-                     on_step=True, on_epoch=True,
-                     prog_bar=True, logger=True)
+        logging_dict = dict(list(logging_dict.items()) + list(metrics_scores.items()))
+        self.log_dict(
+            logging_dict,
+            batch_size=batch_answers.size(0),
+            sync_dist=True,
+            on_step=False, on_epoch=True,
+            prog_bar=True, logger=True
+        )
 
-        # logging_dict = dict(list(logging_dict.items()) + list(metrics_scores.items()))
-        # self.log_dict(
-        #     logging_dict,
-        #     batch_size=batch_answers.size(0),
-        #     sync_dist=True,
-        #     on_step=False, on_epoch=True,
-        #     prog_bar=True, logger=True
-        # )
+        if self.log_eval_steps_counter < self.log_eval_max_steps:
+            self._logger.info(f"--- Validation step #{self.log_eval_steps_counter} ---")
+            labels = outputs['labels']
+            self._logger.info(f"Labels:")
+            for lab_i, label in enumerate(labels):
+                label_dec = self.model.tokenizer.decode([l for l in label if l != -100])
+                self._logger.info(f"#{lab_i}: {label_dec}")
+
+            self._logger.info(f"\nAnswer tokens:")
+            batch_answers_dec = self.model.tokenizer.batch_decode(batch_answers, skip_special_tokens=False)
+            for answ_i, answ in enumerate(batch_answers_dec):
+                self._logger.info(f"#{answ_i}: {answ}")
+
+        self.log_eval_steps_counter += 1
+
+        logging_dict = dict(list(logging_dict.items()) + list(metrics_scores.items()))
+        self.log_dict(
+            logging_dict,
+            batch_size=batch_answers.size(0),
+            sync_dist=True,
+            on_step=False, on_epoch=True,
+            prog_bar=True, logger=True
+        )
         return loss
 
     def predict_step(self,
@@ -645,7 +672,11 @@ class TransactionQAModel(pl.LightningModule):
         )
 
         # as list of strings
-        predictions_decoded = self.model.tokenizer.batch_decode(predictions['generated_texts'],
+        if isinstance(predictions, dict):
+            predictions_decoded = self.model.tokenizer.batch_decode(predictions['generated_texts'],
+                                                                    skip_special_tokens=True)
+        else:
+            predictions_decoded = self.model.tokenizer.batch_decode(predictions,
                                                                 skip_special_tokens=True)
         batch_answers_decoded = self.model.tokenizer.batch_decode(batch_answers,
                                                                   skip_special_tokens=True) \
@@ -675,17 +706,17 @@ class TransactionQAModel(pl.LightningModule):
         }
         if batch_answers is not None:
             outputs['answers'] = batch_answers_decoded
-        if return_embeddings:
+        if return_embeddings and isinstance(predictions, dict):
             outputs['embeddings'] = predictions['output_embeddings']
-        if return_logits:
+        if return_logits and isinstance(predictions, dict):
             outputs['logits'] = predictions['output_logits'].detach().cpu()
         return outputs
 
     def on_validation_epoch_start(self) -> None:
         print(f"\n----------- Validation start ----------\n")
 
-    #     # Reset log counter
-    #     self.log_eval_steps_counter = 0
+        # Reset log counter
+        self.log_eval_steps_counter = 0
 
     def on_validation_epoch_end(self) -> None:
         # ✨ W&B: Log predictions table to wandb

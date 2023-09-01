@@ -1,20 +1,22 @@
 import torch
 import torch.nn as nn
 from typing import Optional, Union, List, Dict, Any
-from transformers import PretrainedConfig, PreTrainedTokenizerBase
+
+from transformers import PretrainedConfig
 from romashka.transactions_qa.layers.initialization import (init_xavier_uniform_layers,
                                                             init_linear)
 from romashka.transactions_qa.layers.layers import TransformerEncoderLayer
-# from romashka.transactions_qa.layers.qformer_connector import QFromerConnector
-from romashka.transactions_qa.layers.qformer_connector_hf import HFQFromerConnector
-from romashka.transactions_qa.layers.qformer import QFormerModel
+from romashka.transactions_qa.layers.qformer_connector_hf import QFormerConnector
+from romashka.transactions_qa.layers.instruct_qformer_connector_hf import InstructQFormerConnector
+
 
 CONNECTOR_TYPES = [
     "linear",
     "complex_linear",
     "recurrent",
     "transformer",
-    "qformer"
+    "qformer",
+    "instruct_qformer"
 ]
 
 
@@ -441,7 +443,7 @@ def make_qformer_connector(output_size: int,
     print(f"Creating connector from {output_size} to {input_size} "
           f"and move to device: {device}.")
     if from_hf:
-        return HFQFromerConnector(
+        return QFormerConnector(
             output_size=output_size,
             input_size=input_size,
             vocab_size=vocab_size,
@@ -453,4 +455,45 @@ def make_qformer_connector(output_size: int,
         )
     else:
         raise AttributeError(f"Currently others implementations of Q-Former are not supported!")
+
+
+def make_instruct_qformer_connector(output_size: int,
+                                   input_size: int,
+                                   vocab_size: Optional[int],
+                                   pad_token_id: Optional[int],
+                                   config: Optional[Union[PretrainedConfig, Dict[str, Any]]] = None,
+                                   num_queries: Optional[int] = 32,
+                                   from_checkpoint: Optional[bool] = False,
+                                   device: Optional[Union[torch.device, str]] = 'cpu'):
+    """
+    Creates a connector based on Querying Transformer (Q-Former) with instruction-aware cross-attention,
+    used in InstructBLIP.
+    Args:
+        output_size: an output size of an embeddings model (i.e. input size for the first connector layer);
+        input_size: an input size of an autoregressive model (i.e. output size for the last connector layer);
+        vocab_size: a vocabulary size of LM (need to be passed AFTER extending it with special/additional tokens!);
+        pad_token_id: a pad_token_id from LM tokenizer;
+        config: a pretrained config for Q-Former model;
+        num_queries: a number of queries for cross attention with embeddings
+                    (equals to output sequence length of transactions history);
+        device: a device to allocate model.
+
+    Returns:
+        a connector.
+    """
+    # Check parameters consistency
+    print(f"Output dimension of embedding model: {output_size}")
+    print(f"Input dimension of autoregressive model: {input_size}")
+    print(f"Creating connector from {output_size} to {input_size} "
+          f"and move to device: {device}.")
+    return InstructQFormerConnector(
+            output_size=output_size,
+            input_size=input_size,
+            vocab_size=vocab_size,
+            pad_token_id=pad_token_id,
+            num_queries=num_queries,
+            config=config,
+            from_checkpoint=from_checkpoint,
+            device=device
+        )
 
