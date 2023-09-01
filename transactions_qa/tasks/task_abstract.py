@@ -244,7 +244,7 @@ class AbstractTask(ABC):
 
         # get new tokens ids in tokenizers' vocabulary
         if return_ids:
-            return {token: tokenizer(token)['input_ids'][0] for token in new_tokens}
+            return {token: tokenizer(token, add_special_tokens=False)['input_ids'][0] for token in new_tokens}
 
     def custom_tokenize(self, sequence: Union[str, List[str]],
                         **kwargs) -> Dict[str, Union[List[int], torch.Tensor]]:
@@ -264,6 +264,8 @@ class AbstractTask(ABC):
         sequence, is_pre_tokenized = self.pre_tokenize(sequence=sequence)
         if not len(sequence) and is_pre_tokenized:
             sequence = ""
+
+        # Note: add_special_tokens is 'True' by default in tokenizers!
         sequence_encoded = self.tokenizer(sequence,
                                           is_split_into_words=True if is_pre_tokenized else False,
                                           **kwargs)

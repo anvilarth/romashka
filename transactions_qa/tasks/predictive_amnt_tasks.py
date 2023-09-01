@@ -872,6 +872,7 @@ class PredNumericAmountTaskOpenEnded(NumericTaskAbstract):
 
         # single tensor without </s> (EOS), but only for encoder-decoder !!!
         question_start_tokens = self.custom_tokenize(question_start,
+                                                     add_special_tokens=True,
                                                      return_tensors='pt')['input_ids']
         if question_start_tokens[:, -1] == self.tokenizer.eos_token_id:
             question_start_tokens = question_start_tokens[:, :-1]
@@ -882,6 +883,7 @@ class PredNumericAmountTaskOpenEnded(NumericTaskAbstract):
                                                              return_tensors='pt',
                                                              padding=True,
                                                              truncation=True,
+                                                             # add_special_tokens=False,
                                                              return_attention_mask=True
                                                              ).to(device)
         # Attention masks
@@ -900,6 +902,7 @@ class PredNumericAmountTaskOpenEnded(NumericTaskAbstract):
         target_encoded_batch = self.custom_tokenize(target_batch,
                                                     return_tensors='pt',
                                                     padding=True,
+                                                    # add_special_tokens=True,
                                                     truncation=True).to(device)
         # Answer template encoding + strip </s> (EOS) token
         answer_template_encoded = self.custom_tokenize(self.answer_template,
@@ -1187,6 +1190,7 @@ class PredBinnedAmountTaskOpenEnded(NumericTaskAbstract):
 
         # single tensor without </s> (EOS), but only for encoder-decoder !!!
         question_start_tokens = self.custom_tokenize(question_start,
+                                                     add_special_tokens=True,
                                                      return_tensors='pt')['input_ids']
         if question_start_tokens[:, -1] == self.tokenizer.eos_token_id:
             question_start_tokens = question_start_tokens[:, :-1]
@@ -1197,6 +1201,7 @@ class PredBinnedAmountTaskOpenEnded(NumericTaskAbstract):
                                                              return_tensors='pt',
                                                              padding=True,
                                                              truncation=True,
+                                                             # add_special_tokens=False,
                                                              return_attention_mask=True
                                                              ).to(device)
         # Attention masks
@@ -1215,10 +1220,12 @@ class PredBinnedAmountTaskOpenEnded(NumericTaskAbstract):
         target_encoded_batch = self.custom_tokenize(target_batch,
                                                     return_tensors='pt',
                                                     padding=True,
+                                                    # add_special_tokens=True,
                                                     truncation=True).to(device)
         # Answer template encoding + strip </s> (EOS) token
         answer_template_encoded = self.custom_tokenize(self.answer_template,
                                                        return_tensors='pt',
+                                                       # add_special_tokens=False,
                                                        return_attention_mask=False)['input_ids'][:, :-1].to(device)
 
         batch_answer_template_encoded = answer_template_encoded.repeat(batch_size, 1)
