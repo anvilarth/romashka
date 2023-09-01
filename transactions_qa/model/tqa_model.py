@@ -345,7 +345,6 @@ class TransactionQAModel(pl.LightningModule):
 
         return loss
 
-
     def validation_step(self, batch,
                         batch_idx: Optional[int],
                         dataloader_idx: Optional[int] = None, **kwargs) -> Optional[Any]:
