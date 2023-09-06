@@ -73,7 +73,11 @@ class QFormerConnector(nn.Module):
         try:
             self.qformer = Blip2QFormerModel(self.config)
             if from_checkpoint and hasattr(self.config, 'text_model_name'):
-                self._init_from_checkpoint(getattr(self.config, 'text_model_name'))
+                self._init_from_text_checkpoint(getattr(self.config, 'text_model_name'))
+
+            elif from_checkpoint and hasattr(self.config, 'connector_model_name_or_path'):
+                self._init_from_pretrained_checkpoint(getattr(self.config, 'connector_model_name_or_path'))
+
             self.qformer.to(self.device)
 
             self.query_tokens_embeddings = torch.nn.Parameter(
@@ -84,7 +88,7 @@ class QFormerConnector(nn.Module):
             self._logger.error(f"Error occurred during Q-Former connector creation:\n{e}")
             raise AttributeError(f"Error occurred during Q-Former connector creation:\n{e}")
 
-    def _init_from_checkpoint(self, ckpt_path: str):
+    def _init_from_text_checkpoint(self, ckpt_path: str):
         self._logger.info(f"Initializing connector Q-Former from checkpoint: {ckpt_path}")
         if os.path.isfile(ckpt_path):
             checkpoint = torch.load(ckpt_path, map_location="cpu")
@@ -99,6 +103,16 @@ class QFormerConnector(nn.Module):
         num_params_to_fill_with = len(checkpoint)
         self._logger.info(f"Connector params to fill: {num_params_to_fill} vs. "
                           f"from checkpoint: {num_params_to_fill_with}")
+        self.load_state_dict(checkpoint, strict=False)
+        self._logger.info(f"Connector weights initialized from checkpoint: {ckpt_path}")
+
+    def _init_from_pretrained_checkpoint(self, ckpt_path: str):
+        self._logger.info(f"Initializing connector Q-Former from checkpoint: {ckpt_path}")
+        if os.path.isfile(ckpt_path):
+            checkpoint = torch.load(ckpt_path, map_location="cpu")
+        else:
+            raise RuntimeError(f"Checkpoint path is invalid or doesn't exist: {ckpt_path}")
+
         self.load_state_dict(checkpoint, strict=False)
         self._logger.info(f"Connector weights initialized from checkpoint: {ckpt_path}")
 

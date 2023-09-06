@@ -203,7 +203,7 @@ def main():
         "revision": model_args.model_revision,
         "use_auth_token": True if model_args.use_auth_token else None,
         "return_unused_kwargs": True,
-        "tie_word_embeddings": True
+        # "tie_word_embeddings": True
     }
 
     # Load pretrained model and tokenizer
@@ -340,8 +340,12 @@ def main():
             "max_position_embeddings": 1024,
             "position_embedding_type": "absolute",
         }
-        if model_args.connector_model_name_or_path is not None:
+        if (model_args.connector_model_name_or_path is not None) \
+                and ("bert" in model_args.connector_model_name_or_path):
             qformer_config['text_model_name'] = model_args.connector_model_name_or_path,  # bert-mini/small/base
+        elif (model_args.connector_model_name_or_path is not None) \
+                and ("blip2" in model_args.connector_model_name_or_path):  # init from BLIP2-FLAN-T5 QFormer model
+            qformer_config['connector_model_name_or_path'] = model_args.connector_model_name_or_path,  # bert-mini/small/base
 
         connector_args = {
             'config': qformer_config,
