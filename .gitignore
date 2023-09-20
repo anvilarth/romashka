@@ -131,3 +131,14 @@ dmypy.json
 wandb/
 experiments/
 *.ipynb
+checkpoints/
+
+
+# IDE files & folders
+.idea/*
+.DS_Store
+checkpoints/
+.vscode/
+
+# Other
+./peft/*
