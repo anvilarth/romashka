@@ -339,6 +339,7 @@ def main():
             "initializer_range": 0.02,
             "max_position_embeddings": 1024,
             "position_embedding_type": "absolute",
+            # "connector_model_name_or_path": '/home/jovyan/abdullaeva/pretrained_weights/q-former-blip2-pretrained/state_dict.pt'
         }
         if (model_args.connector_model_name_or_path is not None) \
                 and ("bert" in model_args.connector_model_name_or_path):
