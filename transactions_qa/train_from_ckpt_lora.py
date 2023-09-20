@@ -8,6 +8,7 @@ from collections import OrderedDict
 
 import wandb
 os.environ["WANDB_MODE"] = "online"
+os.environ["WANDB_API_KEY"] = "de71b243e187c02735ee3d741c05d2d906905d2b"
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -48,10 +49,9 @@ from romashka.transactions_qa.dataset.dataloader import (TransactionQADataset, T
 from romashka.transactions_qa.transactions_model.model import TransactionsModel
 
 from romashka.transactions_qa.model import (EncoderRetrievalModel,
-                                            EncoderSingleRetrievalModel,
-                                            EncoderRetrievalSpecTokensModel,
                                             DecoderRetrievalModel,
-                                            DecoderSingleRetrievalModel)
+                                            EncoderRetrievalSpecTokensModel,
+                                            DecoderRetrievalSpecTokensModel)
 
 from romashka.transactions_qa.model.tqa_model import TransactionQAModel
 from romashka.transactions_qa.layers.connector import (CONNECTOR_TYPES,
@@ -59,7 +59,8 @@ from romashka.transactions_qa.layers.connector import (CONNECTOR_TYPES,
                                                        make_recurrent_connector,
                                                        make_complex_linear_connector,
                                                        make_transformer_connector,
-                                                       make_qformer_connector)
+                                                       make_qformer_connector,
+                                                       make_instruct_qformer_connector)
 from romashka.transactions_qa.train_utils import get_warmup_steps
 
 from romashka.transactions_qa.tasks import AutoTask
@@ -209,7 +210,8 @@ def main():
         "cache_dir": model_args.cache_dir,
         "revision": model_args.model_revision,
         "use_auth_token": True if model_args.use_auth_token else None,
-        "return_unused_kwargs": True
+        "return_unused_kwargs": True,
+        # "tie_word_embeddings": True
     }
 
     # Load pretrained model and tokenizer
@@ -240,9 +242,9 @@ def main():
     #     model_loading_kwargs['load_in_8bit'] = training_args.do_8bit
     #     model_loading_kwargs['device_map'] = "auto"
     if model_args.language_model_type == "encoder-decoder":
-        lm_model = AutoModelForSeq2SeqLM.from_pretrained(**model_loading_kwargs)
+        lm_model = AutoModelForSeq2SeqLM.from_pretrained(**model_loading_kwargs)  #.half()
     else:
-        # Otherwise try to cerate decoder-only model for CLM
+        # Otherwise try to create decoder-only model for CLM
         lm_model = AutoModelForCausalLM.from_pretrained(**model_loading_kwargs
         )
 
@@ -375,9 +377,14 @@ def main():
             "initializer_range": 0.02,
             "max_position_embeddings": 1024,
             "position_embedding_type": "absolute",
+            # "connector_model_name_or_path": '/home/jovyan/abdullaeva/pretrained_weights/q-former-blip2-pretrained/state_dict.pt'
         }
-        if model_args.connector_model_name_or_path is not None:
+        if (model_args.connector_model_name_or_path is not None) \
+                and ("bert" in model_args.connector_model_name_or_path):
             qformer_config['text_model_name'] = model_args.connector_model_name_or_path,  # bert-mini/small/base
+        elif (model_args.connector_model_name_or_path is not None) \
+                and ("blip2" in model_args.connector_model_name_or_path):  # init from BLIP2-FLAN-T5 QFormer model
+            qformer_config['connector_model_name_or_path'] = model_args.connector_model_name_or_path,  # bert-mini/small/base
 
         connector_args = {
             'config': qformer_config,
@@ -388,6 +395,34 @@ def main():
             "num_queries": model_args.num_queries
         }
         connector = make_qformer_connector(
+            output_size=trns_output_size,
+            input_size=lm_input_size,
+            **connector_args
+        )
+    elif model_args.connector_type == "instruct_qformer":
+
+        # Connector args are hardcoded, should be changed here
+        qformer_config = {
+            "hidden_size": model_args.connector_hidden_size,
+            "num_attention_heads": model_args.num_attention_heads,
+            "num_hidden_layers": model_args.num_hidden_layers,
+            "intermediate_size": model_args.intermediate_size,
+            "cross_attention_frequency": 2,
+            "attention_probs_dropout_prob": 0.1,
+            "hidden_act": "gelu",
+            "hidden_dropout_prob": 0.1,
+            "initializer_range": 0.02,
+            "max_position_embeddings": 1024,
+            "position_embedding_type": "absolute",
+        }
+
+        connector_args = {
+            'config': qformer_config,
+            "vocab_size": len(tokenizer),
+            "pad_token_id": tokenizer.pad_token_id,
+            "num_queries": model_args.num_queries
+        }
+        connector = make_instruct_qformer_connector(
             output_size=trns_output_size,
             input_size=lm_input_size,
             **connector_args
@@ -409,15 +444,15 @@ def main():
             "retrieval_loss_scale": training_args.retrieval_loss_scale,
             "text_loss_scale": training_args.text_loss_scale,
             "embeddings_dropout_p": 0.1,
-            # "add_temporal_embeddings": model_args.add_temporal_embeddings,
+            "add_temporal_embeddings": model_args.add_temporal_embeddings,
             "transactions_embeddings_start_token": r"[trx]",
             "transactions_embeddings_end_token": r"[/trx]",
         }
         # EncoderRetrievalModel
         model_ = EncoderRetrievalSpecTokensModel(
             language_model=lm_model,
-            tasks=tasks,
             transaction_model=transactions_model,
+            tasks=tasks,
             tokenizer=tokenizer,
             connector=connector,
             is_debug=True,
@@ -438,9 +473,10 @@ def main():
             "transactions_embeddings_start_token": r"[trx]",
             "transactions_embeddings_end_token": r"[/trx]",
         }
-        model_ = DecoderRetrievalModel(
+        model_ = DecoderRetrievalSpecTokensModel(
             language_model=lm_model,
             transaction_model=transactions_model,
+            tasks=tasks,
             tokenizer=tokenizer,
             connector=connector,
             is_debug=True,
@@ -468,19 +504,30 @@ def main():
                                **lm_model_config,  # as additional kwargs -> to save hyperparameters to checkpoint
                                **connector_args)
     # PEFT
-
-    # Define LoRA Config
-    lora_config = LoraConfig(
-        r=16,
-        lora_alpha=32,
-        target_modules=["q", "v"],
-        lora_dropout=0.05,
-        bias="none",
-        task_type=TaskType.SEQ_2_SEQ_LM
-    )
+    # Create general LLM model
+    if model_args.language_model_type == "encoder-decoder":
+        # Define LoRA Config for Encoder-Decoder
+        lora_config = LoraConfig(
+            r=16,
+            lora_alpha=32,
+            target_modules=["q", "v"],
+            lora_dropout=0.05,
+            bias="none",
+            task_type=TaskType.SEQ_2_SEQ_LM
+        )
+    else:
+        # Define LoRA Config for Decoder-only
+        lora_config = LoraConfig(
+            r=16,
+            lora_alpha=32,
+            target_modules=["q_proj", "v_proj"],
+            lora_dropout=0.05,
+            bias="none",
+            task_type=TaskType.CAUSAL_LM
+        )
     if training_args.do_8bit:
         # prepare int-8 model for training
-        lm_model = prepare_model_for_int8_training(lm_model, output_embedding_layer_name="lm_headddd")
+        lm_model = prepare_model_for_int8_training(lm_model)
 
     # add LoRA adaptor
     lm_model = get_peft_model(lm_model, lora_config)
@@ -575,10 +622,6 @@ def main():
 
     # log gradients and model topology
     wb_logger.watch(model, log_graph=False)
-
-    tb_logger = TensorBoardLogger(name=training_args.run_name,
-                                  save_dir="./tb_logs",
-                                  default_hp_metric=False)
     lr_monitor_callback = LearningRateMonitor(logging_interval='step')
 
     # Create separate checkpoints directory for each run
@@ -596,7 +639,7 @@ def main():
         save_weights_only=training_args.save_only_weights,  # default: 'True'
         every_n_epochs=training_args.save_epochs,  # default: '1'
         save_last=training_args.save_last_checkpoint,  # default: 'True'
-        save_top_k=5,  #training_args.save_top_k,  # default: 1
+        save_top_k=1,  #training_args.save_top_k,  # default: 1
         mode=training_args.save_strategy_mode,  # default: 'min' for monitor='val_loss'
     )
 
@@ -636,7 +679,7 @@ def main():
         # strategy="ddp",
         log_every_n_steps=10,
         reload_dataloaders_every_n_epochs=1,
-        precision=training_args.precision,
+        precision=training_args.precision,  # bf16 - ?
         gradient_clip_val=training_args.gradient_clip_val,
         gradient_clip_algorithm=training_args.gradient_clip_algorithm,
         accumulate_grad_batches=training_args.gradient_accumulation_steps,

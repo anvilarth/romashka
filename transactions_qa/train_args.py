@@ -1,15 +1,9 @@
-import torch
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import (Optional, Union, Dict, List, Any)
-from transformers.trainer_utils import (
-    EvaluationStrategy,
-    ShardedDDPOption
-)
-# from transformers import TrainingArguments
-from transformers.models.auto.modeling_auto import MODEL_FOR_CAUSAL_LM_MAPPING_NAMES
-from ..logging_handler import get_logger
+
 from romashka.transactions_qa.layers.connector import CONNECTOR_TYPES
+from ..logging_handler import get_logger
 
 logger = get_logger(
     name="Tasks",
