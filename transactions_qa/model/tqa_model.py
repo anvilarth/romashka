@@ -1,6 +1,7 @@
+import sys
+import copy
 import random
 import traceback
-import sys
 import numpy as np
 import collections
 from typing import List, Optional, Tuple, Any, Dict, Union
@@ -15,7 +16,6 @@ from pytorch_lightning.utilities import rank_zero_info
 from pytorch_lightning.loggers import WandbLogger
 
 import bitsandbytes as bnb
-from romashka.transactions_qa.lion_optim import Lion
 from romashka.transactions_qa.utils import inspect_init_signature
 from romashka.transactions_qa.model.generation_utils import AnsweredQACriteria
 from romashka.transactions_qa.tasks.task_abstract import AbstractTask
@@ -129,13 +129,6 @@ class TransactionQAModel(pl.LightningModule):
 
             # Instantiate optimizer
             optimizer = optimizer_type(**optim_params)
-            rank_zero_info(
-                f"Instantiating {self.optimizer_type} optimizer"
-            )
-        elif self.optimizer_type == 'Lion':
-            optimizer = Lion(self.parameters(),
-                             betas=(self.adam_beta1, self.adam_beta2),
-                             lr=self.base_learning_rate)
             rank_zero_info(
                 f"Instantiating {self.optimizer_type} optimizer"
             )
@@ -413,6 +406,15 @@ class TransactionQAModel(pl.LightningModule):
                 self._logger.info(f"#{answ_i}: {answ}")
 
         self.log_eval_steps_counter += 1
+
+        logging_dict = dict(list(logging_dict.items()) + list(metrics_scores.items()))
+        self.log_dict(
+            logging_dict,
+            batch_size=batch_answers.size(0),
+            sync_dist=True,
+            on_step=False, on_epoch=True,
+            prog_bar=True, logger=True
+        )
         return loss
 
     def predict_step(self,
@@ -439,20 +441,20 @@ class TransactionQAModel(pl.LightningModule):
             try:
                 # For encoder-decoder models make a step with a model and get answers from outputs
                 if self._is_encoder_decoder and not (multiple_choice_grade or self._multiple_choice_grade):
-                    predictions = self._predict_step_task(batch,
+                    predictions = self._predict_step_task(copy.deepcopy(batch),
                                                           batch_idx=batch_idx,
                                                           task_idx=task_idx,
                                                           verbose=verbose,
                                                           calculate_metrics=False)
                 elif self._is_encoder_decoder and (multiple_choice_grade or self._multiple_choice_grade):
-                    predictions = self._predict_step_multichoice(batch,
+                    predictions = self._predict_step_multichoice(copy.deepcopy(batch),
                                                                  batch_idx=batch_idx,
                                                                  task_idx=task_idx,
                                                                  verbose=verbose,
                                                                  calculate_metrics=False)
                 else:
                     # For decoder-only models run generate() on questions
-                    predictions = self._predict_with_generate_step_task(batch,
+                    predictions = self._predict_with_generate_step_task(copy.deepcopy(batch),
                                                                         batch_idx=batch_idx,
                                                                         task_idx=task_idx,
                                                                         verbose=verbose,
