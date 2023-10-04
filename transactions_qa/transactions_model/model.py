@@ -91,13 +91,6 @@ class TransactionsModel(nn.Module):
         else:
             embedding = embeds
 
-        if self.head_type != 'next' and self.head_type != 'next_time' and self.head_type!= 'last_output':
-            cls_token = self.cls_token.repeat(batch_size, 1, 1)
-            embedding = torch.cat([embedding, cls_token], dim=1)
-
-            cls_token_mask = torch.ones(batch_size, 1, dtype=bool, device=mask.device)
-            mask = torch.cat([mask, cls_token_mask], dim=1)
-
         x, mask = self.encoder_model(embedding, mask)
 
         return x, mask
