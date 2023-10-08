@@ -13,10 +13,9 @@ import warnings
 warnings.filterwarnings("ignore")
 
 import torch
-from torch.utils.data import DataLoader
 
 import pytorch_lightning as pl
-from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
+from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor, EarlyStopping
 
 # Use custom transformers version == 4.27.4 + modifications
@@ -47,9 +46,7 @@ from romashka.transactions_qa.dataset.dataloader import (TransactionQADataset, T
 
 from romashka.transactions_qa.transactions_model.model import TransactionsModel
 
-from romashka.transactions_qa.model import (EncoderRetrievalModel,
-                                            DecoderRetrievalModel,
-                                            EncoderRetrievalSpecTokensModel,
+from romashka.transactions_qa.model import (EncoderRetrievalSpecTokensModel,
                                             DecoderRetrievalSpecTokensModel)
 
 from romashka.transactions_qa.model.tqa_model import TransactionQAModel
