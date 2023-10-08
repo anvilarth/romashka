@@ -125,7 +125,6 @@ class QFormerConnector(nn.Module):
         # step 1: get embeddings -> done!
         # step 2: forward the query tokens through the QFormer, using input embeddings for cross-attention
         # embeds_attention_mask = torch.ones(embeds.size()[:-1], dtype=torch.long, device=embeds.device)
-        
 
         query_tokens = self.query_tokens_embeddings.expand(embeds.shape[0], -1, -1)
         query_outputs = self.qformer(
