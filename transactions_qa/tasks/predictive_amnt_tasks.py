@@ -219,7 +219,8 @@ class PredNumericAmountTaskBinary(NumericTaskAbstract):
             float_feature_ = self.buckets_means[last_feature.item()]  # take a mean bucket value of the last feature
             target_feature_value_batch.append(float_feature_)
             # Mask last feature to predict it!
-            batch['mask'][i, last_feature_index] = 0
+            # batch['mask'][i, last_feature_index] = 0
+            self.mask_single_transaction(batch, i, last_feature_index, 0)
 
         # Convert to corresponding bucket id
         target_feature_value_bucket_batch = torch.tensor(np.digitize(
@@ -484,7 +485,8 @@ class PredOverThresholdAmountTaskBinary(NumericTaskAbstract):
             float_feature_ = self.buckets_means[last_feature.item()]  # take a mean bucket value of the last feature
             target_feature_value_batch.append(float_feature_ > self.threshold)
             # Mask last feature to predict it!
-            batch['mask'][i, last_feature_index] = 0
+            # batch['mask'][i, last_feature_index] = 0
+            self.mask_single_transaction(batch, i, last_feature_index, 0)
 
         # for binary task randomly sample True and False examples from batch
         # and construct target sequences
@@ -719,7 +721,8 @@ class PredUnderThresholdAmountTaskBinary(NumericTaskAbstract):
             float_feature_ = self.buckets_means[last_feature.item()]  # take a mean bucket value of the last feature
             target_feature_value_batch.append(float_feature_ < self.threshold)
             # Mask last feature to predict it!
-            batch['mask'][i, last_feature_index] = 0
+            # batch['mask'][i, last_feature_index] = 0
+            self.mask_single_transaction(batch, i, last_feature_index, 0)
 
         # for binary task randomly sample True and False examples from batch
         # and construct target sequences
@@ -969,7 +972,8 @@ class PredNumericAmountTaskOpenEnded(NumericTaskAbstract):
 
             target_feature_value_batch.append(float_feature_)
             # Mask last feature to predict it!
-            batch['mask'][i, last_feature_index] = 0
+            # batch['mask'][i, last_feature_index] = 0
+            self.mask_single_transaction(batch, i, last_feature_index, 0)
 
         # Convert to corresponding bucket id
         if self.is_real:
@@ -1281,7 +1285,8 @@ class PredBinnedAmountTaskOpenEnded(NumericTaskAbstract):
             float_feature_ = self.buckets_means[last_feature.item()]  # take a mean bucket value of the last feature
             target_feature_value_batch.append(float_feature_)
             # Mask last feature to predict it!
-            batch['mask'][i, last_feature_index] = 0
+            # batch['mask'][i, last_feature_index] = 0
+            self.mask_single_transaction(batch, i, last_feature_index, 0)
 
         # Convert to corresponding bucket id
         target_feature_value_bucket_batch = torch.tensor(np.digitize(

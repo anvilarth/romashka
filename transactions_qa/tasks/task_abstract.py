@@ -325,6 +325,7 @@ class AbstractTask(ABC):
         Returns:
             -
         """
+        # Mask all features for selected transaction in selected transactions history
         batch['num_features'][:, batch_item_i, trns_i] = masking_value
         batch['cat_features'][:, batch_item_i, trns_i] = masking_value
         batch['mask'][batch_item_i, trns_i] = 0

@@ -98,7 +98,8 @@ class PredDateTaskOpenEnded(CategoricalTaskAbstract):
             target_feature_value_batch.append(most_freq_feature.to(device))
             # Mask last feature to predict it!
             last_feature_index = mask_.sum() - 1
-            batch['mask'][i, last_feature_index] = 0
+            # batch['mask'][i, last_feature_index] = 0
+            self.mask_single_transaction(batch, i, last_feature_index, 0)
 
         # Target's questions numeric/categorical answers as str
         # Convert to DD/MM format
