@@ -310,6 +310,25 @@ class AbstractTask(ABC):
                 setattr(self, key, value)
                 logger.info(f"For Task attribute: {key} set value = {value}")
 
+    @staticmethod
+    def mask_single_transaction(batch: Dict[str, Any], batch_item_i: int, trns_i: int,
+                                masking_value: Optional[int] = 0):
+        """
+        Mask a whole transaction features along with a mask set to '0/False' in appropriate place.
+        Changes initial batch!!!
+        Args:
+            batch (Dict[str, Any]): a batch of transactions histories;
+            batch_item_i (int): an index of transactions history inside the batch;
+            trns_i (int): an index of transaction to mask;
+            masking_value (int, default = 0): a value to mask features;
+
+        Returns:
+            -
+        """
+        batch['num_features'][:, batch_item_i, trns_i] = masking_value
+        batch['cat_features'][:, batch_item_i, trns_i] = masking_value
+        batch['mask'][batch_item_i, trns_i] = 0
+
     @classmethod
     def generate_question_templates(cls,
                                     starting_options: List[str],

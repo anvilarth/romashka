@@ -132,13 +132,6 @@ class TransactionQAModel(pl.LightningModule):
             rank_zero_info(
                 f"Instantiating {self.optimizer_type} optimizer"
             )
-        elif self.optimizer_type == 'Lion':
-            optimizer = Lion(self.parameters(),
-                             betas=(self.adam_beta1, self.adam_beta2),
-                             lr=self.base_learning_rate)
-            rank_zero_info(
-                f"Instantiating {self.optimizer_type} optimizer"
-            )
         else:
             rank_zero_info(f"Unknown {optimizer_type} optimizer, so create AdamW optimizer.")
             optimizer = torch.optim.AdamW(self.parameters(),
@@ -225,9 +218,9 @@ class TransactionQAModel(pl.LightningModule):
             task_idx = 0
         task = self.tasks[task_idx]
         if multiple_choice_grade or self._multiple_choice_grade:
-            qa_batch = task.process_input_multichoice(batch)
+            qa_batch = task.process_input_multichoice(copy.deepcopy(batch))
         else:
-            qa_batch = task.process_input_batch(batch)
+            qa_batch = task.process_input_batch(copy.deepcopy(batch))
 
         if len(qa_batch) == 0:
             return None, None
