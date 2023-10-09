@@ -218,9 +218,9 @@ class TransactionQAModel(pl.LightningModule):
             task_idx = 0
         task = self.tasks[task_idx]
         if multiple_choice_grade or self._multiple_choice_grade:
-            qa_batch = task.process_input_multichoice(copy.deepcopy(batch))
+            qa_batch = task.process_input_multichoice(batch)
         else:
-            qa_batch = task.process_input_batch(copy.deepcopy(batch))
+            qa_batch = task.process_input_batch(batch)
 
         if len(qa_batch) == 0:
             return None, None
