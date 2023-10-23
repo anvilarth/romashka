@@ -35,6 +35,22 @@ class AbstractSerializer(ABC):
         self.idx2feature = idx2feature
         self.verbose = verbose
 
+    @staticmethod
+    def map_to_string(feature: Any):
+        """
+        Converts to string.
+        Args:
+            feature (Any):
+        Returns:
+            string representation.
+        """
+        if isinstance(feature, str):
+            return feature
+        elif isinstance(feature, int):
+            return str(feature)
+        elif isinstance(feature, float):
+            return "%0.3f" % feature
+
     @abstractmethod
     def serialize_sample(self, features: np.ndarray, *args, **kwargs) -> str:
         """

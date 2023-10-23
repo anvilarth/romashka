@@ -66,15 +66,15 @@ class TemplateSerializer(AbstractSerializer):
                          *args, **kwargs) -> str:
         self._check_features(features)
         if feature_names is not None:
-            features_ = [str(features[feature_names.index(selected_fn)])
+            features_ = [self.map_to_string(features[feature_names.index(selected_fn)])
                          for selected_fn in self.selected_feature_names]
         # Passed all data features (selected and others also)
         # Assumed, that they have the same order as was encoded in feature2idx and idx2feature mappings
         elif len(features) == len(self.feature2idx):
-            features_ = [str(features[self.feature2idx.get(selected_fn)])
+            features_ = [self.map_to_string(features[self.feature2idx.get(selected_fn)])
                          for selected_fn in self.selected_feature_names]
         else:
-            features_ = [str(f) for f in features]
+            features_ = [self.map_to_string(f) for f in features]
 
         return self.template % tuple(features_)
 
