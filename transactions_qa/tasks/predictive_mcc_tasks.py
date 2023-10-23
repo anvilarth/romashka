@@ -469,7 +469,6 @@ class PredMCCCodeTaskOpenEnded(CategoricalTaskAbstract):
             a target values if strings form.
         """
         device = batch['mask'].device
-        mask_batch = batch['mask']  # bool Tensor [batch_size, seq_len]
 
         # Use a default formatted question end template
         question_end = kwargs.get("question_end", "%s")
@@ -482,7 +481,7 @@ class PredMCCCodeTaskOpenEnded(CategoricalTaskAbstract):
         # Construct target values
         target_feature_value_batch = []
         question_endings_batch = []
-        for i, (feature_, mask_, cap_) in enumerate(zip(target_feature_batch, mask_batch, captions)):
+        for i, (feature_, cap_) in enumerate(zip(target_feature_batch,  captions)):
             last_feature = feature_[-1]
             target_feature_value_batch.append(last_feature.to(device))
             # Construct target sequences
