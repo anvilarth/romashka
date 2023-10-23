@@ -18,6 +18,8 @@ from romashka.transactions_qa.dataset.data_generator import (transaction_feature
                                                              num_features_indices,
                                                              cat_features_indices)
 
+INT_FEATURES = cat_features_names + ['hour_diff', 'days_before']
+
 class AbstractSerializer(ABC):
 
     def __init__(self,
@@ -46,7 +48,7 @@ class AbstractSerializer(ABC):
         """
         if isinstance(feature, str):
             return feature
-        elif isinstance(feature, int) or (feature_name in cat_features_names):
+        elif isinstance(feature, int) or (feature_name in INT_FEATURES):
             return str(int(feature))
         elif isinstance(feature, float):
             return "%0.3f" % feature
