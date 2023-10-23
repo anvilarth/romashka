@@ -10,10 +10,12 @@ import transformers
 from romashka.logging_handler import get_logger
 from romashka.transactions_qa.utils import seed_everything
 
+
 class ESQATextModel(nn.Module):
     def __init__(self,
                  language_model: nn.Module,
                  tokenizer: transformers.PreTrainedTokenizerBase,
+                 max_input_sequence_len: Optional[int] = 4096,
                  do_freeze_lm: Optional[bool] = True,
                  do_freeze_lm_embeddings: Optional[bool] = True,
                  generation_config: Optional[Dict[str, Any]] = None,
@@ -26,6 +28,7 @@ class ESQATextModel(nn.Module):
         self.tokenizer = tokenizer
         self.language_model = language_model
 
+        self.max_input_sequence_len = max_input_sequence_len
         self.language_model_arch_type = None
         self.language_model_tokens_embedding_func = None
         self.do_freeze_lm: bool = do_freeze_lm
@@ -94,12 +97,6 @@ class ESQATextModel(nn.Module):
         self._set_language_model_embedding_func()
 
         # Freezing some weights
-        if self.do_freeze_tm:
-            self.transaction_model.eval()
-            self._logger.info(f"Freezing transaction model's parameters...")
-            for param in self.transaction_model.parameters():
-                param.requires_grad = False
-
         if self.do_freeze_lm:
             self.language_model.eval()
             self._logger.info(f"Freezing language model's parameters...")
@@ -112,12 +109,6 @@ class ESQATextModel(nn.Module):
         else:
             self._logger.info(f"Unfreezing (if frozen) language model's embeddings...")
             self.language_model_tokens_embedding_func.requires_grad = True
-
-        if self.do_freeze_connector:
-            self.connector.eval()
-            self._logger.info(f"Freezing connector layer's parameters...")
-            for param in self.connector.parameters():
-                param.requires_grad = False
 
         self.params_precision = 32
         if self.language_model.dtype == torch.float16:
@@ -143,6 +134,9 @@ class ESQATextModel(nn.Module):
         Configures the tokenizer for the model (optionally,
         can be performed before passing tokenizer instance to the model).
         """
+        self._logger.info(f"Initial tokenizer has `model_max_length` = {self.tokenizer.model_max_length}")
+        self.tokenizer.model_max_length = self.max_input_sequence_len
+        self._logger.info(f"Change it to `model_max_length` = {self.tokenizer.model_max_length}")
         self.register_buffer("whitespace_token_id",
                              torch.Tensor(self.tokenizer.encode(' ', add_special_tokens=False)).long())
 
@@ -189,12 +183,29 @@ class ESQATextModel(nn.Module):
                 is_train: Optional[bool] = True) -> Any:
         """
 
+        Simply passes input batch through LLM and output predictions.
         Args:
-            batch ():
-            output_attentions ():
-            is_train ():
+            batch: a prepared with chosen task batch of items;
+            output_attentions: whether to output attentions;
+            is_train: whether to pass to LM forward input labels or not;
 
         Returns:
+            LM model's outputs with added labels (if `is_train` was set).
 
         """
-        pass
+        # batch: 'input_ids', 'attention_mask', 'target_tokens', 'target_attention_mask'
+
+        # Pass through LM
+        # contains: ['loss', 'logits', 'past_key_values', 'encoder_last_hidden_state']
+        # `logits` of size: [batch_size, max_pred_len, vocab_size]
+        lm_outputs = self.language_model(input_ids=batch['input_ids'],
+                                         attention_mask=batch['attention_mask'],
+                                         labels=batch['target_tokens'],
+                                         output_attentions=output_attentions,
+                                         decoder_attention_mask=batch['target_attention_mask'])
+        # Create answers + masks for LM's decoder inputs
+        lm_outputs['input_ids'] = batch['input_ids']
+        lm_outputs['attention_mask'] = batch['attention_mask']
+        lm_outputs['target_tokens'] = batch['target_tokens']
+
+        return lm_outputs

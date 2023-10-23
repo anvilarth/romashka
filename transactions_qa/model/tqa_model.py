@@ -286,9 +286,6 @@ class TransactionQAModel(pl.LightningModule):
             return outputs, torch.Tensor([true_target_idx]).long()
 
         else:
-            # join two batches
-            for key, val in batch.items():
-                qa_batch[key] = val
             outputs = self.model(qa_batch, output_attentions=output_attentions)
             batch_answers = qa_batch['answer_tokens'] if "answer_tokens" not in outputs else outputs['answer_tokens']
 

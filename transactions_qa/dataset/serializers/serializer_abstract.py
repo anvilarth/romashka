@@ -36,7 +36,7 @@ class AbstractSerializer(ABC):
         self.verbose = verbose
 
     @staticmethod
-    def map_to_string(feature: Any):
+    def map_to_string(feature: Any, feature_name: str):
         """
         Converts to string.
         Args:
@@ -46,8 +46,8 @@ class AbstractSerializer(ABC):
         """
         if isinstance(feature, str):
             return feature
-        elif isinstance(feature, int):
-            return str(feature)
+        elif isinstance(feature, int) or (feature_name in cat_features_names):
+            return str(int(feature))
         elif isinstance(feature, float):
             return "%0.3f" % feature
 
