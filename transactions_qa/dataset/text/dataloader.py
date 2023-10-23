@@ -13,21 +13,18 @@ from datasets import IterableDataset as HFIterableDataset
 from romashka.logging_handler import get_logger
 
 logger = get_logger(
-    name="pretrain_dataloader"
+    name="text_dataloader"
 )
-
-from romashka.transactions_qa.dataset.serializers import AbstractSerializer
-from romashka.transactions_qa.dataset.pretrain.data_generator import text_batches_generator_proc
+from romashka.transactions_qa.dataset.text.data_generator import text_batches_generator_proc
 
 
 class TransactionCaptioningDataset:
     """
-    Dataset for transactions captioning pretrain.
+    Dataset for transactions as text.
     """
     def __init__(self, dataset,
                  generator_batch_size: Optional[int] = 1,
                  sub_seq_len: Optional[int] = 10,
-                 serializer: Optional[AbstractSerializer] = None,
                  seed: Optional[int] = 42, buffer_size: Optional[int] = 10_000,
                  is_train: Optional[bool] = True, shuffle: Optional[bool] = False, *args, **kwargs):
         super().__init__()
@@ -35,7 +32,6 @@ class TransactionCaptioningDataset:
         self.sub_seq_len = sub_seq_len
         self.is_train = is_train
         self.seed = seed
-        self.serializer = serializer
         self.generator_batch_size = generator_batch_size
         self.shuffle = shuffle
         self.buffer_size = buffer_size

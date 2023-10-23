@@ -10,7 +10,7 @@ from pathlib import Path
 from romashka.logging_handler import get_logger
 
 logger = get_logger(
-    name="pretrain_data_generator"
+    name="pretrain_preprocessing"
 )
 
 from romashka.transactions_qa.dataset.serializers import AbstractSerializer
