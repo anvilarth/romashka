@@ -773,6 +773,7 @@ class PredNumericAmountTaskOpenEnded(NumericTaskAbstract):
         self.is_text_task = False
         self.is_binary_task = False
         self.is_open_ended_task = True
+        self.is_real = True
 
         # Select to not to convert integer range to floating point number
         # (with required processing of output predictions & answers)
@@ -947,9 +948,7 @@ class PredNumericAmountTaskOpenEnded(NumericTaskAbstract):
             last_feature = feature_[-1]
             if not self.is_real:
                 # Construct target values from DISCRETIZED input data
-                feature_masked = feature_masked.long()
-                last_feature = last_feature[-1]  # get a single Tensor value of a feature
-                last_feature = self.buckets_means[last_feature.item()]  # take a mean bucket value of the last feature
+                last_feature = self.buckets_means[last_feature.long().item()]  # take a mean bucket value of the last feature
             target_feature_value_batch.append(last_feature)
 
             # Construct target sequences
