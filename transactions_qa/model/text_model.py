@@ -20,6 +20,7 @@ class ESQATextModel(nn.Module):
     def __init__(self,
                  language_model: nn.Module,
                  tokenizer: transformers.PreTrainedTokenizerBase,
+                 tasks: Optional[List[AbstractTask]] = None,
                  max_input_sequence_len: Optional[int] = 4096,
                  do_freeze_lm: Optional[bool] = True,
                  do_freeze_lm_embeddings: Optional[bool] = True,
@@ -35,6 +36,7 @@ class ESQATextModel(nn.Module):
         )
         self.tokenizer = tokenizer
         self.language_model = language_model
+        self.tasks = tasks if tasks is not None else []
 
         self.max_input_sequence_len = max_input_sequence_len
         self.language_model_arch_type = None
@@ -98,6 +100,12 @@ class ESQATextModel(nn.Module):
         # Set language model architecture type / family (i.e. T5/...)
         self._set_language_model_arch_type()
 
+        self.params_precision = 32
+        if self.language_model.dtype == torch.float16:
+            self.params_precision = 16
+        self.params_precision = eval(f"torch.float{self.params_precision}")
+        self._logger.info(f"Language model weights loaded in {self.params_precision} precision.")
+
         # Prepare tokenizer
         self._configure_tokenizer()
 
@@ -125,12 +133,6 @@ class ESQATextModel(nn.Module):
         else:
             self._logger.info(f"Unfreezing (if frozen) language model's embeddings...")
             self.language_model_tokens_embedding_func.requires_grad = True
-
-        self.params_precision = 32
-        if self.language_model.dtype == torch.float16:
-            self.params_precision = 16
-        self.params_precision = eval(f"torch.float{self.params_precision}")
-        self._logger.info(f"Language model weights loaded in { self.params_precision} precision.")
 
         # Check total trainable parameters
         parameters = list(self.parameters())
@@ -381,11 +383,12 @@ class ESQATextModel(nn.Module):
         lm_outputs = self.language_model(inputs_embeds=input_embeddings,
                                          attention_mask=batch['attention_mask'],
                                          labels=batch['target_tokens'],
-                                         output_attentions=output_attentions,
+                                         output_attentions=False,
+                                         output_hidden_states=False,
                                          decoder_attention_mask=batch['target_attention_mask'])
         # Create answers + masks for LM's decoder inputs
         lm_outputs['input_ids'] = batch['input_ids']
         lm_outputs['attention_mask'] = batch['attention_mask']
-        lm_outputs['target_tokens'] = batch['target_tokens']
+        lm_outputs['labels'] = batch['target_tokens']
 
         return lm_outputs
