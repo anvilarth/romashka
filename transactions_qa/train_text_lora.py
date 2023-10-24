@@ -41,7 +41,7 @@ from romashka.transactions_qa.dataset.data_generator import (
     cat_features_names,
     num_features_names,
     meta_features_names)
-
+from romashka.transactions_qa.model.tqa_model import TransactionQAModel
 from romashka.transactions_qa.dataset.text.dataloader import (TransactionCaptioningDataset,
                                                               TransactionCaptioningDataModule)
 
@@ -169,7 +169,8 @@ def main():
         "use_fast": model_args.use_fast_tokenizer,
         "revision": model_args.model_revision,
         "use_auth_token": True if model_args.use_auth_token else None,
-        "do_lowercase": False
+        "do_lowercase": False,
+        "model_max_length": 4096
     }
 
     config, unused_kwargs = AutoConfig.from_pretrained(
@@ -212,3 +213,198 @@ def main():
         task = AutoTask.get(task_name=task_name, **task_kwargs)
         tasks.append(task)
     logger.info(f"Created {len(tasks)} tasks.")
+
+    # Create general LLM model
+    lm_model_config = {
+        "do_freeze_lm": training_args.do_freeze_language_model,
+        "do_freeze_lm_embeddings": training_args.do_freeze_language_model_embeddings,
+        "max_input_sequence_len": 4096,
+        "embeddings_dropout_p": 0.1,
+        "transactions_embeddings_start_token": r"[trx]",
+        "transactions_embeddings_end_token": r"[/trx]",
+    }
+    # EncoderRetrievalModel
+    model_ = ESQATextModel(
+        language_model=lm_model,
+        tasks=tasks,
+        tokenizer=tokenizer,
+        is_debug=True,
+        **lm_model_config
+    )
+
+    # Create general Tranactions QA model
+    transactionsQA_model_config = {
+        "learning_rate": training_args.learning_rate,
+        "scheduler_type": training_args.lr_scheduler_type,
+        "optimizer_type": "AdamW",  # training_args.optimizer_type,
+        "adam_beta1": training_args.adam_beta1,
+        "adam_beta2": training_args.adam_beta2,
+        "adam_epsilon": training_args.adam_epsilon,
+        "warmup_steps": get_warmup_steps(
+            num_training_steps=training_args.max_steps,
+            num_warmup_steps=training_args.warmup_steps,
+            warmup_ratio=training_args.warmup_ratio),
+        "training_steps": training_args.max_steps
+    }
+
+    model = TransactionQAModel(model=model_,
+                               tasks=tasks,
+                               **lm_model_config)
+    # PEFT
+    # Create general LLM model
+    if model_args.language_model_type == "encoder-decoder":
+        # Define LoRA Config for Encoder-Decoder
+        lora_config = LoraConfig(
+            r=16,
+            lora_alpha=32,
+            target_modules=["q", "v"],
+            lora_dropout=0.05,
+            bias="none",
+            task_type=TaskType.SEQ_2_SEQ_LM
+        )
+    else:
+        # Define LoRA Config for Decoder-only
+        lora_config = LoraConfig(
+            r=16,
+            lora_alpha=32,
+            target_modules=["q_proj", "v_proj"],
+            lora_dropout=0.05,
+            bias="none",
+            task_type=TaskType.CAUSAL_LM
+        )
+    if training_args.do_8bit:
+        # prepare int-8 model for training
+        lm_model = prepare_model_for_int8_training(lm_model)
+
+    # add LoRA adaptor
+    lm_model = get_peft_model(lm_model, lora_config)
+    lm_model.print_trainable_parameters()
+
+    # Datasets & Dataloader & Other utils
+    if training_args.do_train and "train" in data_files:
+        train_dataset_config = {
+            'dataset': data_files['train'],
+            'seed': training_args.seed,
+            'generator_batch_size': 1,
+            'buffer_size': data_args.shuffle_buffer_size,
+            'batch_size': training_args.per_device_train_batch_size,
+            'num_workers': data_args.preprocessing_num_workers
+        }
+    else:
+        train_dataset_config = None
+
+        logger.info(f"Created train dataloader.")
+    if training_args.do_eval and "validation" in data_files:
+        val_dataset_config = {
+            'dataset': data_files['validation'],
+            'seed': training_args.seed,
+            'buffer_size': 0,
+            'generator_batch_size': 1,
+            'batch_size': training_args.per_device_eval_batch_size,
+            'num_workers': data_args.preprocessing_num_workers
+        }
+    else:
+        val_dataset_config = None
+
+        logger.info(f"Created validation dataloader.")
+    if (not training_args.do_train) and (not training_args.do_eval):
+        logger.error("There is nothing to do. Please pass `do_train` and/or `do_eval`.")
+        return 1
+
+    datamodule = TransactionCaptioningDataModule(train_dataset_config, val_dataset_config)
+
+    # Training & Callbacks
+    wb_logger = WandbLogger(
+        project=training_args.project_name,
+        group=training_args.group_name,
+        name=training_args.run_name
+    )
+    # log gradients, parameter histogram and model topology
+    # wb_logger.watch(model, log="all")
+
+    # log gradients and model topology
+    wb_logger.watch(model, log_graph=False)
+    lr_monitor_callback = LearningRateMonitor(logging_interval='step')
+
+    # Create separate checkpoints directory for each run
+    save_checkpoints_dir = f"{training_args.save_checkpoints_dir}/{training_args.run_name}"
+    if not Path(save_checkpoints_dir).resolve().exists():
+        logger.info(f"Checkpoints path do not exists: {Path(save_checkpoints_dir).resolve()}")
+        logger.info("Creating...")
+        Path(save_checkpoints_dir).resolve().mkdir()
+        logger.info(f"Checkpoints path created at: {Path(save_checkpoints_dir).resolve()}")
+
+    every_n_train_steps = 1000
+    checkpoint_callback = ModelCheckpoint(
+        monitor=training_args.save_strategy_metric,  # default: 'val_loss'
+        dirpath=save_checkpoints_dir,  # default: './checkpoints/'
+        filename=training_args.save_filename_format,  # default: 'checkpoint-{epoch:02d}-{loss3:.2f}'
+        save_weights_only=training_args.save_only_weights,  # default: 'True'
+        # every_n_epochs=training_args.save_epochs,  # default: '1'
+        every_n_train_steps=every_n_train_steps,
+        save_last=training_args.save_last_checkpoint,  # default: 'True'
+        save_top_k=1,  # training_args.save_top_k,  # default: 1
+        mode=training_args.save_strategy_mode,  # default: 'min' for monitor='val_loss'
+    )
+
+    early_stopping_callback = EarlyStopping(
+        monitor="val_loss",
+        patience=2,  # training_args.early_stopping_patience,
+        mode="min",
+        strict=False,
+        verbose=True
+    )
+
+    # Saving tokenizer
+    if Path(save_checkpoints_dir).resolve().exists():
+        logger.info(f"Checkpoints path: {Path(save_checkpoints_dir).resolve()}")
+        ckpt_files = [fn.name for fn in Path(save_checkpoints_dir).glob("*.json") if not fn.is_dir()]
+        if ("tokenizer_config.json" not in ckpt_files) and ("config.json" not in ckpt_files):
+            save_fn = str(Path(save_checkpoints_dir).resolve())
+            logger.info(f"Saving tokenizer with `save_pretrained()` to {save_fn}")
+            saved_files = tokenizer.save_pretrained(save_fn)
+            logger.info(f"Saved to:\n{[f for f in saved_files]}")
+        else:
+            tok_fn = [fn for fn in ckpt_files if ("tokenizer_config.json" in fn) or ("config.json" in fn)][0]
+            logger.info(f"Pretrained tokenizer exists: {tok_fn}")
+
+    callbacks = [checkpoint_callback, lr_monitor_callback]
+    until_convergence = True
+    if until_convergence:  # training_args.until_convergence:
+        callbacks += [early_stopping_callback]
+
+    trainer = pl.Trainer(
+        fast_dev_run=training_args.fast_dev_run,
+        # training_args.until_convergence
+        max_steps=-1 if until_convergence else training_args.max_steps,
+        max_epochs=-1 if until_convergence else training_args.max_epochs,
+        gpus=len(available_gpus),
+        auto_select_gpus=True,
+        # strategy="ddp",
+        log_every_n_steps=10,
+        reload_dataloaders_every_n_epochs=1,
+        precision=training_args.precision,  # bf16 - ?
+        gradient_clip_val=training_args.gradient_clip_val,
+        gradient_clip_algorithm=training_args.gradient_clip_algorithm,
+        accumulate_grad_batches=training_args.gradient_accumulation_steps,
+        logger=wb_logger,  # [tb_logger, wb_logger],
+        callbacks=callbacks
+    )
+
+    trainer.fit(model=model, datamodule=datamodule)
+
+
+if __name__ == '__main__':
+    import os
+
+    # os.environ['HF_DATASETS_OFFLINE'] = '1'  # offline mode for HF datasets
+    # os.environ['TRANSFORMERS_OFFLINE'] = '1'  # offline mode for HF Transformers
+    # os.environ['CUDA_VISIBLE_DEVICES'] = '0'  # disable DataParallel for test
+
+    # Pretrained models are downloaded and locally cached at: ~/.cache/huggingface/transformers/.
+    # This is the default directory given by the shell environment variable TRANSFORMERS_CACHE.
+    # os.environ['TRANSFORMERS_CACHE'] = "/Users/abdullaeva/Documents/Projects/TransactionsQA/checkpoints/cache"
+    # or "/home/jovyan/.cache/huggingface/hub"
+    # os.environ['HF_DATASETS_CACHE'] = "/Users/abdullaeva/Documents/Projects/TransactionsQA/checkpoints/cache"
+    # or "/home/jovyan/.cache/huggingface/datasets"
+    main()
