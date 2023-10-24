@@ -9,6 +9,11 @@ import transformers
 
 from romashka.logging_handler import get_logger
 from romashka.transactions_qa.utils import seed_everything
+from romashka.transactions_qa.model.generation_utils import isin
+from romashka.transactions_qa.tasks.task_abstract import AbstractTask
+from romashka.transactions_qa.layers.initialization import (init_embeddings_with_tensor,
+                                                            init_parameter_with_tensor)
+from romashka.transactions_qa.tasks.task_token_updater import collect_task_specific_tokens
 
 
 class ESQATextModel(nn.Module):
@@ -18,6 +23,9 @@ class ESQATextModel(nn.Module):
                  max_input_sequence_len: Optional[int] = 4096,
                  do_freeze_lm: Optional[bool] = True,
                  do_freeze_lm_embeddings: Optional[bool] = True,
+                 embeddings_dropout_p: Optional[float] = 0.1,
+                 transactions_embeddings_start_token: Optional[str] = r"[trx]",
+                 transactions_embeddings_end_token: Optional[str] = r"[/trx]",
                  generation_config: Optional[Dict[str, Any]] = None,
                  is_debug: Optional[bool] = False):
         super().__init__()
@@ -33,6 +41,9 @@ class ESQATextModel(nn.Module):
         self.language_model_tokens_embedding_func = None
         self.do_freeze_lm: bool = do_freeze_lm
         self.do_freeze_lm_embeddings: bool = do_freeze_lm_embeddings
+        self.embeddings_dropout_p = embeddings_dropout_p
+        self._transactions_embeddings_start_token = transactions_embeddings_start_token
+        self._transactions_embeddings_end_token = transactions_embeddings_end_token
 
         self.generation_config = generation_config
 
@@ -90,10 +101,15 @@ class ESQATextModel(nn.Module):
         # Prepare tokenizer
         self._configure_tokenizer()
 
+        # Create mean embedding
+        self.lm_mean_embedding = self._create_mean_lm_embedding()
+
         # In case any of tasks extends initial tokenizer vocab with additional tokens
         self._resize_text_embeddings()
 
-        # Set embedding func
+        self._create_trainable_parameters()
+
+        # Additionally re-assign embeddings
         self._set_language_model_embedding_func()
 
         # Freezing some weights
@@ -115,6 +131,109 @@ class ESQATextModel(nn.Module):
             self.params_precision = 16
         self.params_precision = eval(f"torch.float{self.params_precision}")
         self._logger.info(f"Language model weights loaded in { self.params_precision} precision.")
+
+        # Check total trainable parameters
+        parameters = list(self.parameters())
+        trainable_parameters = list(filter(lambda p: p.requires_grad, parameters))
+        self._logger.info(f"Totally trainable parameters: {len(trainable_parameters)} from {len(parameters)}")
+
+
+    def _create_trainable_parameters(self):
+        """
+        Creates trainable parameters for:
+            - transactions embeddings start/end tokens: [trx] / [/trx];
+            - retrieval tokens: RET_0 ... RET_N;
+        Note: those parameters need to be passed to separate optimizer (with connector & projections layers)!
+        i.e:
+            opt = Adafactor(
+                list(projection.parameters())
+                + [trns_start_embedding, trns_end_embedding], lr=1e-2, relative_step=False)
+        """
+        # Create transactions embeddings start/end tokens: [trx] / [/trx] and trainable parameters for them
+        self._create_surrounding_parameters()
+
+        # Create trainable task-specific tokens
+        self._create_trainable_task_special_tokens()
+
+        # Additionally call to re-init embedding function reference to resized (maybe) embeddings
+        self._resize_text_embeddings()
+
+    def _create_surrounding_parameters(self):
+        """
+        Creates trainable parameters for:
+            - transactions embeddings start/end tokens: [trx] / [/trx];
+        Note: those parameters need to be passed to separate optimizer (with connector & projections layers)!
+        i.e:
+            opt = Adafactor(
+                list(projection.parameters())
+                + [trns_start_embedding, trns_end_embedding], lr=1e-2, relative_step=False)
+        """
+        # Check if transactions embeddings start/end tokens, exists in tokenizers' vocabulary,
+        # add them if not exist and get their indexes
+        self.transactions_special_tokens_ids_mapping = AbstractTask.extend_vocabulary(
+            new_tokens=[self._transactions_embeddings_start_token,
+                        self._transactions_embeddings_end_token],
+            tokenizer=self.tokenizer,
+            return_ids=True,
+            special=True
+        )
+
+        # Init transactions injection tokens ids
+        self.transactions_start_token_id = self.transactions_special_tokens_ids_mapping.get(
+            self._transactions_embeddings_start_token
+        )
+        self.transactions_end_token_id = self.transactions_special_tokens_ids_mapping.get(
+            self._transactions_embeddings_end_token
+        )
+
+        params_dim = None
+        if hasattr(self.language_model.config, "hidden_size"):
+            params_dim = self.language_model.config.hidden_size
+        elif hasattr(self.language_model.config, "d_model"):  # may occur in encoder-decoder models (like T5)
+            params_dim = self.language_model.config.d_model
+        else:
+            raise AttributeError(f"The default setting, where parameters embeddings dimensionality "
+                                 "equals to LLM hidden dimensionality can not be run because "
+                                 "model do not have required attribute: `hidden_size` or `d_model` in config.")
+
+        # Transactions embeddings start/end
+        self.transactions_start_embedding = nn.Parameter(
+            torch.normal(mean=torch.zeros(params_dim), std=torch.ones(params_dim)),
+            requires_grad=True).to(self.params_precision)
+        self.transactions_end_embedding = nn.Parameter(
+            torch.normal(mean=torch.zeros(params_dim), std=torch.ones(params_dim)),
+            requires_grad=True).to(self.params_precision)
+
+        init_parameter_with_tensor(self.transactions_start_embedding, self.lm_mean_embedding)
+        init_parameter_with_tensor(self.transactions_end_embedding, self.lm_mean_embedding)
+        self._logger.info(f"Initialized trainable parameters for transactions embeddings start/end tokens.")
+
+    def _create_trainable_task_special_tokens(self):
+        """
+        Creates trainable parameters for task special tokens.
+        """
+        self.task_special_tokens = collect_task_specific_tokens(self.tasks)
+        self.register_buffer("task_special_tokens_ids",
+                             self.tokenizer(self.task_special_tokens,
+                                            add_special_tokens=False,
+                                            padding=False,
+                                            return_tensors='pt')['input_ids'].flatten())
+        self._logger.info(f"Collected {len(self.task_special_tokens)} task special tokens: {self.task_special_tokens} "
+                          f"with corresponding ids: {self.task_special_tokens_ids}")
+        params_dim = None
+        if hasattr(self.language_model.config, "hidden_size"):
+            params_dim = self.language_model.config.hidden_size
+        elif hasattr(self.language_model.config, "d_model"):  # may occur in encoder-decoder models (like T5)
+            params_dim = self.language_model.config.d_model
+        else:
+            raise AttributeError(f"The default setting, where parameters embeddings dimensionality "
+                                 "equals to LLM hidden dimensionality can not be run because "
+                                 "model do not have required attribute: `hidden_size` or `d_model` in config.")
+
+        # Embeddings for special tokens
+        self.task_special_tokens_embeddings = nn.Embedding(num_embeddings=self.task_special_tokens_ids.size(0),
+                                                           embedding_dim=params_dim).to(self.params_precision)
+        init_embeddings_with_tensor(self.task_special_tokens_embeddings, self.lm_mean_embedding)
 
     def _resize_text_embeddings(self):
         # For encoder-decoder-based models
@@ -178,6 +297,52 @@ class ESQATextModel(nn.Module):
             return True
         return False
 
+    def has_start_token(self, input_tokens_ids: Union[List[int], torch.Tensor]) -> bool:
+        """
+        Checks whether transactions injection start token id already contained in given ids.
+        """
+        return (input_tokens_ids == self.transactions_start_token_id).sum() > 0
+
+    def replace_start_token(self, input_tokens_ids: Union[List[int], torch.Tensor],
+                            input_embeddings: torch.Tensor):
+        """
+        Replace transactions injection start tokens' embedding with trainable parameter.
+        """
+        mask = input_tokens_ids == self.transactions_start_token_id
+        input_embeddings[mask] = self.transactions_start_embedding.to(
+            input_tokens_ids.device).to(input_embeddings.dtype)
+
+    def has_end_token(self, input_tokens_ids: Union[List[int], torch.Tensor]) -> bool:
+        """
+        Checks whether transactions injection end token id already contained in given ids.
+        """
+        return (input_tokens_ids == self.transactions_end_token_id).sum() > 0
+
+    def replace_end_token(self, input_tokens_ids: Union[List[int], torch.Tensor],
+                          input_embeddings: torch.Tensor):
+        """
+        Replace transactions injection end tokens' embedding with trainable parameter.
+        """
+        mask = input_tokens_ids == self.transactions_end_token_id
+        input_embeddings[mask] = self.transactions_end_embedding.to(
+            input_tokens_ids.device).to(input_embeddings.dtype)
+
+    def has_task_tokens(self, input_tokens_ids: Union[List[int], torch.Tensor]) -> bool:
+        """
+        Checks whether any task special token id already contained in given ids.
+        """
+        return isin(input_tokens_ids, self.task_special_tokens_ids).sum() > 0
+
+    def replace_task_tokens(self,
+                            input_tokens_ids: Union[List[int], torch.Tensor],
+                            input_embeddings: torch.Tensor):
+        """
+        Replace task special tokens' embedding with trainable parameters.
+        """
+        mask = isin(input_tokens_ids, self.task_special_tokens_ids)
+        embs = self.task_special_tokens_embeddings(input_tokens_ids[mask] - min(self.task_special_tokens_ids))
+        input_embeddings[mask] = embs
+
     def forward(self, batch: Union[Dict[str, torch.Tensor], Any],
                 output_attentions: Optional[bool] = False,
                 is_train: Optional[bool] = True) -> Any:
@@ -194,11 +359,26 @@ class ESQATextModel(nn.Module):
 
         """
         # batch: 'input_ids', 'attention_mask', 'target_tokens', 'target_attention_mask'
+        # 1) Input ids to embedding of LM
+        input_embeddings = self.language_model_tokens_embedding_func(
+            batch['input_ids'])  # call for (embed_tokens): Embedding(vocab_size, model_hidden_dim)
+
+        # 2) if it contains [trx]
+        if self.has_start_token(batch['input_ids']):
+            self.replace_start_token(batch['input_ids'], input_embeddings)
+
+        # 3) if it contains [/trx]
+        if self.has_end_token(batch['input_ids']):
+            self.replace_end_token(batch['input_ids'], input_embeddings)
+
+        # 4) Replace task special tokens embeddings with trainable parameters
+        if self.has_task_tokens(batch['input_ids']):
+            self.replace_task_tokens(batch['input_ids'], input_embeddings)
 
         # Pass through LM
         # contains: ['loss', 'logits', 'past_key_values', 'encoder_last_hidden_state']
         # `logits` of size: [batch_size, max_pred_len, vocab_size]
-        lm_outputs = self.language_model(input_ids=batch['input_ids'],
+        lm_outputs = self.language_model(inputs_embeds=input_embeddings,
                                          attention_mask=batch['attention_mask'],
                                          labels=batch['target_tokens'],
                                          output_attentions=output_attentions,

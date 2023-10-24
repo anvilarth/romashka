@@ -45,8 +45,6 @@ from romashka.transactions_qa.dataset.data_generator import (
 from romashka.transactions_qa.dataset.text.dataloader import (TransactionCaptioningDataset,
                                                               TransactionCaptioningDataModule)
 
-from romashka.transactions_qa.transactions_model.model import TransactionsModel
-
 from romashka.transactions_qa.model import ESQATextModel
 from romashka.transactions_qa.train_utils import get_warmup_steps
 
