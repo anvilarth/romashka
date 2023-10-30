@@ -123,14 +123,6 @@ def main():
         logger.info(f"Detected {len(dataset_files)} files for validation.")
         data_files["validation"] = dataset_files
 
-    # Check weights existence by paths from args
-    if (model_args.transactions_model_name_or_path is None) \
-            or not os.path.exists(model_args.transactions_model_name_or_path):
-        logger.error(f"Transactions model weights path do not exists: {model_args.transactions_model_name_or_path}")
-        raise FileExistsError(
-            f"Transactions model weights path do not exists: {model_args.transactions_model_name_or_path}"
-        )
-
     # Configure device
     available_gpus = []
     if training_args.no_cuda:
@@ -384,6 +376,7 @@ def main():
         log_every_n_steps=10,
         reload_dataloaders_every_n_epochs=1,
         precision=training_args.precision,  # bf16 - ?
+        limit_train_batches=100_000,
         gradient_clip_val=training_args.gradient_clip_val,
         gradient_clip_algorithm=training_args.gradient_clip_algorithm,
         accumulate_grad_batches=training_args.gradient_accumulation_steps,

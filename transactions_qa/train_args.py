@@ -184,11 +184,11 @@ class DataTrainingArguments:
     projections_mappings_path: Optional[str] = field(default=None,
                                                      metadata={"help": "The mappings files base path."})
     train_folder: Optional[str] = field(
-        default="train_buckets",
+        default="train_buckets_text_short",
         metadata={"help": "The input training data folder with preprocessed samples (in .pickle files)."}
     )
     validation_folder: Optional[str] = field(
-        default="val_buckets",
+        default="val_buckets_text_short",
         metadata={"help": "The input validations data folder with preprocessed samples (in .pickle files)."}
     )
     train_file: Optional[str] = field(
@@ -209,7 +209,7 @@ class DataTrainingArguments:
         },
     )
     max_source_length: Optional[int] = field(
-        default=512,
+        default=4096,
         metadata={
             "help": (
                 "The maximum total input sequence length after tokenization. Sequences longer "

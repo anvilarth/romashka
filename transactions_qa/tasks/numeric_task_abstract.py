@@ -22,7 +22,7 @@ class NumericTaskAbstract(AbstractTask, ABC):
     feature_max: Optional[float] = 1.0
 
     # Identifies whether the feature value passes in discretized form or in real-valued
-    is_real: Optional[bool] = False
+    is_real: Optional[bool] = True
 
     # for binned feature representation
     buckets: Optional[List[float]] = None
