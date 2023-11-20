@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
 from typing import Optional, Union, List, Dict, Any
-from transformers import PretrainedConfig, PreTrainedTokenizerBase
+
+from transformers import PretrainedConfig
 from romashka.transactions_qa.layers.initialization import (init_xavier_uniform_layers,
                                                             init_linear)
 from romashka.transactions_qa.layers.layers import TransformerEncoderLayer

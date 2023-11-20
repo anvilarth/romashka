@@ -73,7 +73,11 @@ class QFormerConnector(nn.Module):
         try:
             self.qformer = Blip2QFormerModel(self.config)
             if from_checkpoint and hasattr(self.config, 'text_model_name'):
-                self._init_from_checkpoint(getattr(self.config, 'text_model_name'))
+                self._init_from_text_checkpoint(getattr(self.config, 'text_model_name'))
+
+            elif from_checkpoint and hasattr(self.config, 'connector_model_name_or_path'):
+                self._init_from_pretrained_checkpoint(getattr(self.config, 'connector_model_name_or_path'))
+
             self.qformer.to(self.device)
 
             self.query_tokens_embeddings = torch.nn.Parameter(
@@ -84,7 +88,7 @@ class QFormerConnector(nn.Module):
             self._logger.error(f"Error occurred during Q-Former connector creation:\n{e}")
             raise AttributeError(f"Error occurred during Q-Former connector creation:\n{e}")
 
-    def _init_from_checkpoint(self, ckpt_path: str):
+    def _init_from_text_checkpoint(self, ckpt_path: str):
         self._logger.info(f"Initializing connector Q-Former from checkpoint: {ckpt_path}")
         if os.path.isfile(ckpt_path):
             checkpoint = torch.load(ckpt_path, map_location="cpu")
@@ -102,7 +106,17 @@ class QFormerConnector(nn.Module):
         self.load_state_dict(checkpoint, strict=False)
         self._logger.info(f"Connector weights initialized from checkpoint: {ckpt_path}")
 
-    def forward(self, embeds: torch.Tensor,
+    def _init_from_pretrained_checkpoint(self, ckpt_path: str):
+        self._logger.info(f"Initializing connector Q-Former from checkpoint: {ckpt_path}")
+        if os.path.isfile(ckpt_path):
+            checkpoint = torch.load(ckpt_path, map_location="cpu")
+        else:
+            raise RuntimeError(f"Checkpoint path is invalid or doesn't exist: {ckpt_path}")
+
+        self.load_state_dict(checkpoint, strict=False)
+        self._logger.info(f"Connector weights initialized from checkpoint: {ckpt_path}")
+
+    def forward(self, embeds: torch.Tensor, mask: torch.Tensor,
                 output_attentions: Optional[bool] = False,
                 output_hidden_states: Optional[bool] = False,
                 return_dict: Optional[bool] = True,
@@ -110,13 +124,13 @@ class QFormerConnector(nn.Module):
 
         # step 1: get embeddings -> done!
         # step 2: forward the query tokens through the QFormer, using input embeddings for cross-attention
-        embeds_attention_mask = torch.ones(embeds.size()[:-1], dtype=torch.long, device=embeds.device)
+        # embeds_attention_mask = torch.ones(embeds.size()[:-1], dtype=torch.long, device=embeds.device)
 
         query_tokens = self.query_tokens_embeddings.expand(embeds.shape[0], -1, -1)
         query_outputs = self.qformer(
             query_embeds=query_tokens,
             encoder_hidden_states=embeds,
-            encoder_attention_mask=embeds_attention_mask,
+            encoder_attention_mask=mask,
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,

@@ -13,10 +13,9 @@ import warnings
 warnings.filterwarnings("ignore")
 
 import torch
-from torch.utils.data import DataLoader
 
 import pytorch_lightning as pl
-from pytorch_lightning.loggers import WandbLogger, TensorBoardLogger
+from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor, EarlyStopping
 
 # Use custom transformers version == 4.27.4 + modifications
@@ -47,9 +46,7 @@ from romashka.transactions_qa.dataset.dataloader import (TransactionQADataset, T
 
 from romashka.transactions_qa.transactions_model.model import TransactionsModel
 
-from romashka.transactions_qa.model import (EncoderRetrievalModel,
-                                            DecoderRetrievalModel,
-                                            EncoderRetrievalSpecTokensModel,
+from romashka.transactions_qa.model import (EncoderRetrievalSpecTokensModel,
                                             DecoderRetrievalSpecTokensModel)
 
 from romashka.transactions_qa.model.tqa_model import TransactionQAModel
@@ -181,20 +178,21 @@ def main():
     transactions_model = TransactionsModel(**transactions_model_config)
 
     # Load weights
-    ckpt = torch.load(model_args.transactions_model_name_or_path, map_location='cpu')
-    renamed_state_dict = OrderedDict()
-    for key, param in ckpt.items():
-        key_ = key
-        if key.startswith("head"):
-            key_ = ".".join(["head", key])
-        elif key.startswith("encoder"):
-            key_ = ".".join(["encoder_model", key])
-        elif key.startswith("mapping_embedding"):
-            key_ = ".".join(['connector', 'connector'] + key.split(".")[1:])
-        renamed_state_dict[key_] = param
+    if "whisper-tiny" in model_args.transactions_model_encoder_type:
+        ckpt = torch.load(model_args.transactions_model_name_or_path, map_location='cpu')
+        renamed_state_dict = OrderedDict()
+        for key, param in ckpt.items():
+            key_ = key
+            if key.startswith("head"):
+                key_ = ".".join(["head", key])
+            elif key.startswith("encoder"):
+                key_ = ".".join(["encoder_model", key])
+            elif key.startswith("mapping_embedding"):
+                key_ = ".".join(['connector', 'connector'] + key.split(".")[1:])
+            renamed_state_dict[key_] = param
 
-    logger.info(f"Renaming & loading transactions model...")
-    transactions_model.load_state_dict(renamed_state_dict, strict=False)
+        logger.info(f"Renaming & loading transactions model...")
+        transactions_model.load_state_dict(renamed_state_dict, strict=False)
 
     # Configure and load from HF hub LM model
     logger.info(f"Loading Language model: `{model_args.language_model_name_or_path}`...")
@@ -339,14 +337,14 @@ def main():
             "initializer_range": 0.02,
             "max_position_embeddings": 1024,
             "position_embedding_type": "absolute",
-            # "connector_model_name_or_path": '/home/jovyan/abdullaeva/pretrained_weights/q-former-blip2-pretrained/state_dict.pt'
+            "connector_model_name_or_path": '/home/jovyan/abdullaeva/pretrained_weights/q-former-blip2-with-whisper-small-pretrained/state_dict.pt'
         }
-        if (model_args.connector_model_name_or_path is not None) \
-                and ("bert" in model_args.connector_model_name_or_path):
-            qformer_config['text_model_name'] = model_args.connector_model_name_or_path,  # bert-mini/small/base
-        elif (model_args.connector_model_name_or_path is not None) \
-                and ("blip2" in model_args.connector_model_name_or_path):  # init from BLIP2-FLAN-T5 QFormer model
-            qformer_config['connector_model_name_or_path'] = model_args.connector_model_name_or_path,  # bert-mini/small/base
+        # if (model_args.connector_model_name_or_path is not None) \
+        #         and ("bert" in model_args.connector_model_name_or_path):
+        #     qformer_config['text_model_name'] = model_args.connector_model_name_or_path,  # bert-mini/small/base
+        # elif (model_args.connector_model_name_or_path is not None) \
+        #         and ("blip2" in model_args.connector_model_name_or_path):  # init from BLIP2-FLAN-T5 QFormer model
+        #     qformer_config['connector_model_name_or_path'] = model_args.connector_model_name_or_path,  # bert-mini/small/base
 
         connector_args = {
             'config': qformer_config,

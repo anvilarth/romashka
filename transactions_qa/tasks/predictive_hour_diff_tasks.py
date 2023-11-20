@@ -229,7 +229,8 @@ class PredHourDiffTaskOpenEnded(NumericTaskAbstract):
 
             target_feature_value_batch.append(float_feature_)
             # Mask last feature to predict it!
-            batch['mask'][i, last_feature_index] = 0
+            # batch['mask'][i, last_feature_index] = 0
+            self.mask_single_transaction(batch, i, last_feature_index, 0)
 
         # Convert to corresponding bucket id
         if self.is_real:

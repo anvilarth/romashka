@@ -202,7 +202,8 @@ class PredMCCCodeTaskBinary(CategoricalTaskAbstract):
             last_feature = feature_masked[-1]  # get a single Tensor value of a feature
             target_feature_value_batch.append(last_feature.to(device))
             # Mask last feature to predict it!
-            batch['mask'][i, last_feature_index] = 0
+            # batch['mask'][i, last_feature_index] = 0
+            self.mask_single_transaction(batch, i, last_feature_index, 0)
 
         # Map to strings
         target_feature_value_batch = list(map(lambda x: str(x.item()), target_feature_value_batch))
@@ -515,7 +516,8 @@ class PredMCCCodeTaskOpenEnded(CategoricalTaskAbstract):
             last_feature = feature_masked[-1]  # get a single Tensor value of a feature
             target_feature_value_batch.append(last_feature.to(device))
             # Mask last feature to predict it!
-            batch['mask'][i, last_feature_index] = 0
+            # batch['mask'][i, last_feature_index] = 0
+            self.mask_single_transaction(batch, i, last_feature_index, 0)
 
         # Map to strings
         target_batch = list(map(lambda x: str(x.item()), target_feature_value_batch))

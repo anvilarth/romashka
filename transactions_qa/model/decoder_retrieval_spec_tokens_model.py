@@ -52,8 +52,6 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
         self.max_ret_tokens = max_ret_tokens
         self._ret_tokens_template = "[RET_%s]"
         self.tasks = tasks if tasks is not None else []
-
-        # self.projection_layers = nn.ModuleList([])
         self._n_retrieval_layers = n_retrieval_layers
         self._embeddings_dropout_p = embeddings_dropout_p
 
@@ -111,9 +109,9 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
                 list(projection.parameters())
                 + [trns_start_embedding, trns_end_embedding], lr=1e-2, relative_step=False)
         """
-        if self.tokenizer.padding_side != 'right':
+        if self.tokenizer.padding_side != 'left':
             self._logger.error("Tokenizer padding size should be set to `right`!")
-            self.tokenizer.padding_side = 'right'
+            self.tokenizer.padding_side = 'left'
 
         if not self.tokenizer.add_eos_token:
             self._logger.error("Tokenizer `add_eos_token` should be set to `True`!")
@@ -281,12 +279,13 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
                 else:  # for GPT-like
                     in_dim = self.language_model.config.hidden_size
                 # Maps from LM hidden_size -> shared dim
-                text_fc = [nn.Linear(in_dim, shared_dim),  # , dtype=torch.float16
+                text_fc = [nn.Linear(in_dim, shared_dim).to(self.params_precision),  # , dtype=torch.float16
                            nn.Dropout(self._embeddings_dropout_p)]
                 self.projection_layers.append(nn.Sequential(*text_fc))
             # Take representation from any middle layer
             elif layer_idx < self.language_model.config.num_hidden_layers:
-                text_fc = [nn.Linear(self.language_model.config.hidden_size, shared_dim),  # , dtype=torch.float16
+                # , dtype=torch.float16
+                text_fc = [nn.Linear(self.language_model.config.hidden_size, shared_dim).to(self.params_precision),
                            nn.Dropout(self._embeddings_dropout_p)]
                 self.projection_layers.append(nn.Sequential(*text_fc))
             else:
@@ -561,6 +560,7 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
                                                                     output_hidden_states=True)
         except Exception as e:
             self._logger.error(f"Contrastive loss error: {e}")
+            self._logger.error(traceback.format_exc())
             ret_loss_outputs = {'loss': torch.Tensor([0.0]).to(lm_outputs.loss.device)}
 
         # Re-scale losses

@@ -193,7 +193,7 @@ class DecoderSimpleModel(nn.Module):
             self.tokenizer.unk_token = "<unk>"
             self.tokenizer.unk_token_id = 3
         elif self.language_model_arch_type == "Llama":
-            self.tokenizer.padding_side = "right"
+            self.tokenizer.padding_side = "left"
             self.tokenizer.add_eos_token = True
 
             if self.tokenizer.eos_token_id is None:
@@ -286,7 +286,7 @@ class DecoderSimpleModel(nn.Module):
         Passes input batch through:
         1) Sequence embedder model (transactions model);
         2) Connector
-        3) Collate CLM input sequences and pass through LM decoder
+        3) Collate LM input sequences and pass through LM decoder
         Args:
             batch: a prepared with chosen task batch of items;
             is_train: whether to pass to LM forward input labels or not;
