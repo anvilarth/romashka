@@ -88,7 +88,7 @@ class DecoderSimpleModel(nn.Module):
         elif self.language_model_arch_type == "GPT":  # has a .transformer.wte(...) Embedding layer
             self.language_model_tokens_embedding_func = self.language_model.transformer.wte
         elif self.language_model_arch_type == "Llama":
-            self.language_model_tokens_embedding_func = self.language_model.model.model.embed_tokens
+            self.language_model_tokens_embedding_func = self.language_model.model.embed_tokens
         else:
             raise AttributeError(f"Provided language model architecture is not currently supported "
                                  f"`{self.language_model_arch_type}`. "
@@ -232,7 +232,7 @@ class DecoderSimpleModel(nn.Module):
         elif self.language_model_arch_type == "GPT":  # has a .transformer.wte(...) Embedding layer
             embedds = self.language_model.transformer.wte.weight.cpu()
         elif self.language_model_arch_type == "Llama":
-            embedds = self.language_model.model.model.embed_tokens.weight.cpu()
+            embedds = self.language_model.model.embed_tokens.weight.cpu()
         else:
             raise AttributeError(f"Provided language model architecture is not currently supported "
                                  f"`{self.language_model_arch_type}`. "
