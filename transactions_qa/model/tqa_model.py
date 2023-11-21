@@ -28,7 +28,7 @@ from transformers import GenerationConfig
 from copy import deepcopy
 
 
-class TransactionQAModel(pl.LightningModule):
+class ContrastiveTransactionsModel(pl.LightningModule):
     def __init__(self,
                  model: nn.Module,
                  tasks: List[AbstractTask],
