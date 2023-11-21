@@ -88,7 +88,7 @@ class DecoderSimpleModel(nn.Module):
         elif self.language_model_arch_type == "GPT":  # has a .transformer.wte(...) Embedding layer
             self.language_model_tokens_embedding_func = self.language_model.transformer.wte
         elif self.language_model_arch_type == "Llama":
-            self.language_model_tokens_embedding_func = self.language_model.model.embed_tokens
+            self.language_model_tokens_embedding_func = self.language_model.model.model.embed_tokens
         else:
             raise AttributeError(f"Provided language model architecture is not currently supported "
                                  f"`{self.language_model_arch_type}`. "
@@ -178,10 +178,10 @@ class DecoderSimpleModel(nn.Module):
             # setup padding
             self.tokenizer.pad_token_id = 1
             self.tokenizer.pad_token = "<pad>"
-            self.tokenizer.padding_side = "left"
+            self.tokenizer.padding_side = "right"
 
             # setup truncation
-            self.tokenizer.truncation_side = "left"
+            self.tokenizer.truncation_side = "right"
 
             # setup special tokens
             self.tokenizer.bos_token_id = 0
@@ -193,7 +193,7 @@ class DecoderSimpleModel(nn.Module):
             self.tokenizer.unk_token = "<unk>"
             self.tokenizer.unk_token_id = 3
         elif self.language_model_arch_type == "Llama":
-            self.tokenizer.padding_side = "left"
+            self.tokenizer.padding_side = "right"
             self.tokenizer.add_eos_token = True
 
             if self.tokenizer.eos_token_id is None:
@@ -210,7 +210,7 @@ class DecoderSimpleModel(nn.Module):
                     self.tokenizer.pad_token = "<|endoftext|>"
                     self.tokenizer.eos_token = "<|endoftext|>"
 
-        self.tokenizer.padding_side = 'left'
+        self.tokenizer.padding_side = 'right'
 
         self.register_buffer("bos_token_id", torch.Tensor([self.tokenizer.bos_token_id, ]).long())
         # self.bos_token_id = torch.Tensor([self.tokenizer.bos_token_id, ]).long()
@@ -232,7 +232,7 @@ class DecoderSimpleModel(nn.Module):
         elif self.language_model_arch_type == "GPT":  # has a .transformer.wte(...) Embedding layer
             embedds = self.language_model.transformer.wte.weight.cpu()
         elif self.language_model_arch_type == "Llama":
-            embedds = self.language_model.model.embed_tokens.weight.cpu()
+            embedds = self.language_model.model.model.embed_tokens.weight.cpu()
         else:
             raise AttributeError(f"Provided language model architecture is not currently supported "
                                  f"`{self.language_model_arch_type}`. "

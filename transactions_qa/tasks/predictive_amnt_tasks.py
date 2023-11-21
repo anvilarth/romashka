@@ -1001,18 +1001,38 @@ class PredNumericAmountTaskOpenEnded(NumericTaskAbstract):
 
         return question_target_batch, target_feature_value_batch
 
-    def process_outputs(self, outputs: Any, answers: torch.Tensor,
-                        return_logits: Optional[bool] = True,
-                        as_strings: Optional[bool] = False) -> Any:
+    def process_outputs(self, outputs: Any = None,
+                    predicted: torch.Tensor = None,
+                    answers: torch.Tensor = None,
+                    return_logits: Optional[bool] = True,
+                    as_strings: Optional[bool] = False) -> Any:
         """
         Processing target text and output text to get the predictions
         """
         # Get predictions as list of strings
         default_value = 0.0
-        predictions_decoded = self.tokenizer.batch_decode(outputs['logits'].argmax(2),
-                                                          skip_special_tokens=True)
-        targets = self.tokenizer.batch_decode(outputs['labels'],
-                                              skip_special_tokens=True)
+        if (predicted is None) or (answers is None):
+            predictions_decoded = self.tokenizer.batch_decode(outputs['logits'].argmax(2),
+                                                              skip_special_tokens=True)
+            batch_answers_decoded = self.tokenizer.batch_decode(outputs['labels'],
+                                                                skip_special_tokens=True)
+            predictions_logits = outputs['logits']
+            batch_answers_logits = outputs['labels']
+        else:
+            answers_mask = answers != -100
+            batch_answers_decoded = []
+            predictions_decoded = []
+            predictions_logits = []
+            batch_answers_logits = []
+            for i in range(answers.size(0)):
+                answers_logits_ = answers[i][answers_mask[i]]
+                answer_ = self.tokenizer.decode(answers_logits_)
+                prediction_logits_ = predicted[i][answers_mask[i]]
+                prediction_ = self.tokenizer.decode(torch.argmax(predicted[i], -1)[answers_mask[i]])
+                batch_answers_decoded.append(answer_)
+                predictions_decoded.append(prediction_)
+                batch_answers_logits.append(answers_logits_)
+                predictions_logits.append(prediction_logits_)
 
         # In case multiple floating points in numeric answers -> take last one: 0.0.9 => 0.9
         predictions = [make_float(float_splitter(pred)) for pred in predictions_decoded]
@@ -1024,21 +1044,39 @@ class PredNumericAmountTaskOpenEnded(NumericTaskAbstract):
                                         default_value=default_value))
                        for pred in predictions]
 
-        targets = [float(transform_labels(answer,
+        batch_answers_decoded = [float(transform_labels(answer,
                                     do_make_numeric=True,
                                     do_clean_text=False,
                                     default_value=default_value))
-                   for answer in targets]
+                   for answer in batch_answers_decoded]
 
         # Assumed, that floating point features are in provided values range
         predictions = [pred if pred <= self.feature_max else self.feature_max for pred in predictions]
         predictions = [pred if pred >= self.feature_min else self.feature_min for pred in predictions]
 
-        processed_outputs = dict(targets=torch.FloatTensor(targets),
+        processed_outputs = dict(targets=torch.FloatTensor(batch_answers_decoded),
                                  predictions=torch.FloatTensor(predictions))
         if return_logits:
-            processed_outputs['predictions_logits'] = outputs['logits']
-            processed_outputs['labels_tokens'] = outputs['labels']
+            # Predictions logits
+            # Determine maximum length
+            max_len = max([x.size(0) for x in predictions_logits])
+            # pad all tensors to have same length
+            predictions_logits = [
+                torch.nn.functional.pad(x, pad=(0, 0, 0, max_len - x.size(0)), mode='constant', value=-100)
+                for x in predictions_logits]
+            # stack them
+            predictions_logits = torch.stack(predictions_logits)
+            processed_outputs['predictions_logits'] = predictions_logits
+
+            # Answer tokens
+            # Determine maximum length
+            max_len = max([x.size(0) for x in batch_answers_logits])
+            # pad all tensors to have same length
+            labels_tokens = [torch.nn.functional.pad(x, pad=(0, max_len - x.size(0)), mode='constant', value=-100)
+                             for x in batch_answers_logits]
+            # stack them
+            labels_tokens = torch.stack(labels_tokens)
+            processed_outputs['labels_tokens'] = labels_tokens
 
         return processed_outputs
 

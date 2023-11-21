@@ -180,48 +180,9 @@ class PredCountryTaskOpenEnded(CategoricalTaskAbstract):
             with_numeric_output=self.numeric_outputs
         )
 
-    def generate_target(self, batch: Any, **kwargs) -> Tuple[List[str], List[str]]:
-        """
-        Creates target values vector for a batch.
-        Args:
-            batch: a dict with required for target creation fields;
-            **kwargs: **optional**
-
-        Returns: a tuple which contains:
-            a question endings - as they (in this task cannot be separated from targets);
-            a target values if strings form.
-        """
-        device = batch['mask'].device
-        mask_batch = batch['mask']  # bool Tensor [batch_size, seq_len]
-        batch_size = batch['mask'].shape[0]
-
-        # Use a default formatted question end template
-        question_end = kwargs.get("question_end", "%s")
-
-        target_feature_batch = batch[self.target_feature_type][
-            self.target_feature_index]  # Tensor [batch_size, seq_len]
-
-        # Construct target values
-        target_feature_value_batch = []
-        for i, (feature_, mask_) in enumerate(zip(target_feature_batch, mask_batch)):
-            last_feature_index = mask_.sum() - 1
-            feature_masked = torch.masked_select(feature_.to("cpu"),
-                                                 mask=mask_.to("cpu")).long()  # get feature without padding
-            last_feature = feature_masked[-1]  # get a single Tensor value of a feature
-            target_feature_value_batch.append(last_feature.to(device))
-            # Mask last feature to predict it!
-            # batch['mask'][i, last_feature_index] = 0
-            self.mask_single_transaction(batch, i, last_feature_index, 0)
-
-        # Map to strings
-        target_batch = list(map(lambda x: str(x.item()), target_feature_value_batch))
-
-        # Construct target sequences
-        question_target_batch = [question_end for _ in range(batch_size)]  # as strings
-
-        return question_target_batch, target_batch
-
-    def process_outputs(self, outputs: Any, answers: torch.Tensor,
+    def process_outputs(self, outputs: Any = None,
+                        predicted: torch.Tensor = None,
+                        answers: torch.Tensor = None,
                         return_logits: Optional[bool] = True,
                         as_strings: Optional[bool] = False) -> Any:
         """
@@ -229,10 +190,29 @@ class PredCountryTaskOpenEnded(CategoricalTaskAbstract):
         """
         # Get predictions as list of strings
         default_value = 0
-        predictions_decoded = self.tokenizer.batch_decode(outputs['logits'].argmax(2),
-                                                          skip_special_tokens=True)
-        batch_answers_decoded = self.tokenizer.batch_decode(outputs['labels'],
-                                                            skip_special_tokens=True)
+        if predicted is None or answers is None:
+            predictions_decoded = self.tokenizer.batch_decode(outputs['logits'].argmax(2),
+                                                              skip_special_tokens=True)
+            batch_answers_decoded = self.tokenizer.batch_decode(outputs['labels'],
+                                                                skip_special_tokens=True)
+            predictions_logits = outputs['logits']
+            batch_answers_logits = outputs['labels']
+        else:
+            answers_mask = answers != -100
+            batch_answers_decoded = []
+            predictions_decoded = []
+            predictions_logits = []
+            batch_answers_logits = []
+            for i in range(answers.size(0)):
+                answers_logits_ = answers[i][answers_mask[i]]
+                answer_ = self.tokenizer.decode(answers_logits_)
+                prediction_logits_ = predicted[i][answers_mask[i]]
+                prediction_ = self.tokenizer.decode(predicted[i][answers_mask[i]])
+                batch_answers_decoded.append(answer_)
+                predictions_decoded.append(prediction_)
+                batch_answers_logits.append(answers_logits_)
+                predictions_logits.append(prediction_logits_)
+
         # Clean predicted texts and map them to categorical labels
         predictions_clean = [transform_labels(pred,
                                               do_make_numeric=True,
@@ -258,8 +238,107 @@ class PredCountryTaskOpenEnded(CategoricalTaskAbstract):
         processed_outputs = dict(targets=targets,
                                  predictions=predictions)
         if return_logits:
-            processed_outputs['predictions_logits'] = outputs['logits']
-            processed_outputs['labels_tokens'] = outputs['labels']
+            # Predictions logits
+            # Determine maximum length
+            max_len = max([x.size(0) for x in predictions_logits])
+            # pad all tensors to have same length
+            predictions_logits = [
+                torch.nn.functional.pad(x, pad=(0, 0, 0, max_len - x.size(0)), mode='constant', value=-100)
+                for x in predictions_logits]
+            # stack them
+            predictions_logits = torch.stack(predictions_logits)
+            processed_outputs['predictions_logits'] = predictions_logits
+
+            # Answer tokens
+            # Determine maximum length
+            max_len = max([x.size(0) for x in batch_answers_logits])
+            # pad all tensors to have same length
+            labels_tokens = [torch.nn.functional.pad(x, pad=(0, max_len - x.size(0)), mode='constant', value=-100)
+                             for x in batch_answers_logits]
+            # stack them
+            labels_tokens = torch.stack(labels_tokens)
+            processed_outputs['labels_tokens'] = labels_tokens
+
+        return processed_outputs
+
+    def process_outputs(self, outputs: Any = None,
+                        predicted: torch.Tensor = None,
+                        answers: torch.Tensor = None,
+                        return_logits: Optional[bool] = True,
+                        as_strings: Optional[bool] = False) -> Any:
+        """
+        Processing target text and output text to get the predictions
+        """
+        # Get predictions as list of strings
+        default_value = 0
+        if (predicted is None) or (answers is None):
+            predictions_decoded = self.tokenizer.batch_decode(outputs['logits'].argmax(2),
+                                                              skip_special_tokens=True)
+            batch_answers_decoded = self.tokenizer.batch_decode(outputs['labels'],
+                                                                skip_special_tokens=True)
+            predictions_logits = outputs['logits']
+            batch_answers_logits = outputs['labels']
+        else:
+            answers_mask = answers != -100
+            batch_answers_decoded = []
+            predictions_decoded = []
+            predictions_logits = []
+            batch_answers_logits = []
+            for i in range(answers.size(0)):
+                answers_logits_ = answers[i][answers_mask[i]]
+                answer_ = self.tokenizer.decode(answers_logits_)
+                prediction_logits_ = predicted[i][answers_mask[i]]
+                prediction_ = self.tokenizer.decode(torch.argmax(predicted[i], -1)[answers_mask[i]])
+                batch_answers_decoded.append(answer_)
+                predictions_decoded.append(prediction_)
+                batch_answers_logits.append(answers_logits_)
+                predictions_logits.append(prediction_logits_)
+
+        # Clean predicted texts and map them to categorical labels
+        predictions_clean = [transform_labels(pred,
+                                              do_make_numeric=True,
+                                              do_clean_text=False,
+                                              default_value=default_value)
+                             for pred in predictions_decoded]
+
+        batch_answers_decoded = [transform_labels(answer,
+                                                  do_make_numeric=True,
+                                                  do_clean_text=False,
+                                                  default_value=default_value)
+                                 for answer in batch_answers_decoded]
+
+        # Map to available labels
+        classes = [int(answer) for answer in self.answers_options]
+        predictions_clean = [pred if pred in classes else default_value
+                             for pred in predictions_clean]
+
+        # To Tensors
+        targets = torch.LongTensor(batch_answers_decoded)
+        predictions = torch.LongTensor(predictions_clean)
+
+        processed_outputs = dict(targets=targets,
+                                 predictions=predictions)
+        if return_logits:
+            # Predictions logits
+            # Determine maximum length
+            max_len = max([x.size(0) for x in predictions_logits])
+            # pad all tensors to have same length
+            predictions_logits = [
+                torch.nn.functional.pad(x, pad=(0, 0, 0, max_len - x.size(0)), mode='constant', value=-100)
+                for x in predictions_logits]
+            # stack them
+            predictions_logits = torch.stack(predictions_logits)
+            processed_outputs['predictions_logits'] = predictions_logits
+
+            # Answer tokens
+            # Determine maximum length
+            max_len = max([x.size(0) for x in batch_answers_logits])
+            # pad all tensors to have same length
+            labels_tokens = [torch.nn.functional.pad(x, pad=(0, max_len - x.size(0)), mode='constant', value=-100)
+                             for x in batch_answers_logits]
+            # stack them
+            labels_tokens = torch.stack(labels_tokens)
+            processed_outputs['labels_tokens'] = labels_tokens
 
         return processed_outputs
 

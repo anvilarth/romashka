@@ -109,9 +109,9 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
                 list(projection.parameters())
                 + [trns_start_embedding, trns_end_embedding], lr=1e-2, relative_step=False)
         """
-        if self.tokenizer.padding_side != 'left':
+        if self.tokenizer.padding_side != 'right':
             self._logger.error("Tokenizer padding size should be set to `right`!")
-            self.tokenizer.padding_side = 'left'
+            self.tokenizer.padding_side = 'right'
 
         if not self.tokenizer.add_eos_token:
             self._logger.error("Tokenizer `add_eos_token` should be set to `True`!")
@@ -440,7 +440,7 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
                                                    # check to not to insert <eos> before answer tokens!!!
                                                    answer_,
                                                    # add EOS token to train model to finish generation
-                                                   self.eos_token_id.to(device)
+                                                   # self.eos_token_id.to(device)
                                                    ], dim=0)
             question_end_tokens_full.append(full_question_end_tokens_)
 
@@ -519,7 +519,7 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
 
         question_end_labels = question_end_tokens_full.clone()
         for i in range(batch_size):
-            answer_tokens_len = batch['answer_tokens'][i].size(0) + 1  # + 1 for whitespace token
+            answer_tokens_len = batch['answer_tokens'][i].size(0)   # + 1 for whitespace token
             question_end_labels[i, 1:-answer_tokens_len] = -100
 
         text_labels = torch.cat([
@@ -533,23 +533,18 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
             torch.full_like(transactions_tokens, -100).to(device),
             question_end_tokens_full[:, 0].unsqueeze(-1),  # </trns> to [batch_size, 1]
             # -100 * (question_end_tokens_len - answer_len) + answer tokens
-            question_end_labels[:, 1:]
+            mask_lm_labels_padding(question_end_labels[:, 1:], pad_token_id=self.tokenizer.pad_token_id)
         ], dim=1)
 
-        # print(f"Labels decoded:")
-        # for labs in text_labels:
-        #     print(f"{self.tokenizer.decode([t for t in labs if t != -100], skip_special_tokens=False)}")
 
         # 6) Pass through LM
-        self._device_type = self.language_model.device.type  # 'cuda' or 'cpu'
-        with torch.autocast(device_type=self._device_type):
-            # contains: ['loss', 'logits', 'past_key_values', 'last_hidden_state']
-            # `logits` of size: [batch_size, max_pred_len, vocab_size]
-            lm_outputs = self.language_model(inputs_embeds=input_embedds,
-                                             attention_mask=input_mask,
-                                             labels=text_labels if is_train else None,
-                                             output_attentions=output_attentions,
-                                             output_hidden_states=output_hidden_states)
+        # contains: ['loss', 'logits', 'past_key_values', 'last_hidden_state']
+        # `logits` of size: [batch_size, max_pred_len, vocab_size]
+        lm_outputs = self.language_model(inputs_embeds=input_embedds,
+                                         attention_mask=input_mask,
+                                         labels=text_labels if is_train else None,
+                                         output_attentions=output_attentions,
+                                         output_hidden_states=output_hidden_states)
 
         # 7) Calculate retrival loss
         try:
@@ -569,6 +564,12 @@ class DecoderRetrievalSpecTokensModel(DecoderSimpleModel):
 
         # join two output dicts
         outputs = dict()
+        if self._is_debug:
+            outputs["question_end_tokens_full"] = question_end_tokens_full.detach().cpu()
+            outputs["input_mask"] = input_mask.detach().cpu()
+            outputs["text_labels"] = text_labels.detach().cpu()
+
+
         outputs["logits"] = lm_outputs.logits.contiguous().float()
 
         outputs["text_loss"] = lm_outputs.loss * self._text_loss_scale
