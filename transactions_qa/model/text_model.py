@@ -180,7 +180,7 @@ class TextEncoderModel(nn.Module):
         """
         Creates a Pooler network.
         """
-        self.pooler = PoolerType.get(pooler_type_name=self.pooler_type)
+        self.pooler = PoolerType.get(pooler_type_name=self.pooler_type).to(self.language_model.device)
         self._logger.info(f"Created `{self.pooler_type}` pooler.")
 
     def _create_projection(self):
@@ -291,21 +291,21 @@ class TextEncoderModel(nn.Module):
         # contains: ['loss', 'logits', 'past_key_values', 'encoder_last_hidden_state']
         # `logits` of size: [batch_size, max_pred_len, vocab_size]
         labels = captions_tokenized['input_ids'].clone()
-        lm_outputs = self.language_model(input_ids=captions_tokenized['input_ids'],
-                                         attention_mask=captions_tokenized['attention_mask'],
-                                         labels=labels,
+        lm_outputs = self.language_model(input_ids=captions_tokenized['input_ids'].to(self.language_model.device),
+                                         attention_mask=captions_tokenized['attention_mask'].to(self.language_model.device),
+                                         labels=labels.to(self.language_model.device),
                                          output_attentions=output_attentions,
                                          output_hidden_states=True)
         # 3) Pass through pooler
-        pooled_outputs = self.pooler(lm_outputs, captions_tokenized['attention_mask'])
+        pooled_outputs = self.pooler(lm_outputs, captions_tokenized['attention_mask'].to(self.language_model.device))
 
         # 4) Pass through projection
         projected_outputs = self.projection(pooled_outputs)
 
         # Create answers + masks for LM's decoder inputs
-        lm_outputs['input_ids'] = batch['input_ids']
-        lm_outputs['attention_mask'] = batch['attention_mask']
-        lm_outputs['labels'] = batch['target_tokens']
+        lm_outputs['input_ids'] = captions_tokenized['input_ids']
+        lm_outputs['attention_mask'] = captions_tokenized['attention_mask']
+        lm_outputs['labels'] = labels
         lm_outputs['projected_outputs'] = projected_outputs
 
         return lm_outputs

@@ -68,6 +68,7 @@ class ContrastiveTransactionsModel(pl.LightningModule):
         self.metric = torchmetrics.CosineSimilarity(reduction='mean')
 
         self._is_encoder_decoder: bool = text_model.is_encoder_decoder
+        self._prepare_model()
 
         self._verbose_for_debug: bool = verbose_for_debug
         self._return_logits: bool = return_logits
@@ -143,12 +144,6 @@ class ContrastiveTransactionsModel(pl.LightningModule):
         }
 
     def _prepare_model(self):
-        # Get precision
-        self.params_precision = 32
-        if self.language_model.dtype == torch.float16:
-            self.params_precision = 16
-        self.params_precision = eval(f"torch.float{self.params_precision}")
-        self._logger.info(f"Language model weights loaded in {self.params_precision} precision.")
 
         # Create additional layers
         self._create_encoder_pooler()
@@ -241,6 +236,10 @@ class ContrastiveTransactionsModel(pl.LightningModule):
             The loss value shown in the progress bar is smoothed (averaged) over the last values,
             so it differs from the actual loss returned in train/validation step.
         """
+        device = self.device
+        if device.type != 'cpu':
+            torch.cuda.empty_cache()
+
         # Encode transactions history to a single vector representation
         # trns_outputs size [bs, shared_dim]
         trns_outputs = self.encode_transactions(batch)
@@ -265,7 +264,7 @@ class ContrastiveTransactionsModel(pl.LightningModule):
         logits_per_trns_hist = logit_scale * trns_outputs @ text_outputs.t()
         logits_per_text_capt = logit_scale * text_outputs @ trns_outputs.t()
 
-        contrastive_labels = torch.arange(len(logits_per_trns_hist))
+        contrastive_labels = torch.arange(len(logits_per_trns_hist)).to(logits_per_trns_hist.device)
 
         trns_loss = torch.nn.functional.cross_entropy(logits_per_trns_hist, contrastive_labels)
         text_loss = torch.nn.functional.cross_entropy(logits_per_text_capt, contrastive_labels)
@@ -326,7 +325,7 @@ class ContrastiveTransactionsModel(pl.LightningModule):
         logits_per_trns_hist = logit_scale * trns_outputs @ text_outputs.t()
         logits_per_text_capt = logit_scale * text_outputs @ trns_outputs.t()
 
-        contrastive_labels = torch.arange(len(logits_per_trns_hist))
+        contrastive_labels = torch.arange(len(logits_per_trns_hist)).to(logits_per_trns_hist.device)
 
         trns_loss = torch.nn.functional.cross_entropy(logits_per_trns_hist, contrastive_labels)
         text_loss = torch.nn.functional.cross_entropy(logits_per_text_capt, contrastive_labels)

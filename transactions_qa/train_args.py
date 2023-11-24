@@ -141,11 +141,6 @@ class ModelArguments:
         metadata={"help": "A number of trainable queries for Q-Former connector."},
     )
 
-    shared_dim: Optional[int] = field(
-        default=768,
-        metadata={"help": "A shared dimension for contrastive loss calculation."},
-    )
-
     intermediate_size: Optional[int] = field(
         default=1024,
         metadata={"help": "An intermediate dimension for Q-Former connector (usually 1024 or 2048)."},
