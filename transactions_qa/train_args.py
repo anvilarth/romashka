@@ -35,12 +35,11 @@ class ModelArguments:
         },
     )
 
-    transactions_model_name_or_path: Optional[str] = field(
+    transactions_model_save_path: Optional[str] = field(
         default=None,
         metadata={
             "help": (
-                "The transactions model checkpoint for weights initialization. "
-                "Don't set if you want to train a model from scratch."
+                "The transactions model path for checkpoints saving."
             )
         },
     )
@@ -60,6 +59,50 @@ class ModelArguments:
             "help": (
                 "The text model checkpoint for weights initialization. "
                 "Don't set if you want to train a model from scratch."
+            )
+        },
+    )
+    text_projection_type: Optional[str] = field(
+        default="LINEAR",
+        metadata={
+            "help": (
+                "The Projection layer(-s) type. Can be one from: LINEAR, IDENTITY, MLP."
+            )
+        },
+    )
+
+    encoder_projection_type: Optional[str] = field(
+        default="LINEAR",
+        metadata={
+            "help": (
+                "The Projection layer(-s) type. Can be one from: LINEAR, IDENTITY, MLP."
+            )
+        },
+    )
+
+    text_pooler_type: Optional[str] = field(
+        default="EOS_POOLER",
+        metadata={
+            "help": (
+                "The Pooler layer(-s) type."
+            )
+        },
+    )
+
+    shared_dim: Optional[int] = field(
+        default=768,
+        metadata={
+            "help": (
+                "A shared dimension for Contrastive loss calculation."
+            )
+        },
+    )
+
+    encoder_pooler_type: Optional[str] = field(
+        default="EOS_POOLER",
+        metadata={
+            "help": (
+                "The Pooler layer(-s) type."
             )
         },
     )
@@ -121,22 +164,6 @@ class ModelArguments:
     connector_hidden_size: Optional[int] = field(
         default=512,
         metadata={"help": "A size of a hidden layers of Q-Former connector."},
-    )
-
-    min_ret_tokens: Optional[int] = field(
-        default=0,
-        metadata={"help": "A minimum number of retrieval tokens."},
-    )
-
-    max_ret_tokens: Optional[int] = field(
-        default=150,
-        metadata={"help": "A maximum number of retrieval tokens."},
-    )
-
-    add_temporal_embeddings: Optional[bool] = field(
-        default=False,
-        metadata={"help": "Whether to create trainable temporal positional embeddings "
-                          "for event sequences encoder output or not."},
     )
 
     cache_dir: Optional[str] = field(
@@ -355,40 +382,6 @@ class DataTrainingArguments:
 
 
 @dataclass
-class TasksArguments:
-    """
-    Arguments for tasks creation.
-    """
-    task_names: Optional[List[str]] = field(
-        default=None,
-        metadata={"help": "A list of comma-separated task names, that would be used during training."},
-    )
-    task_kwargs: Optional[List[Dict[str, Any]]] = field(
-        default_factory=list,
-        metadata={"help": "A list of dictionary-like arguments for tasks creation."}
-    )
-    special_task_token_type: Optional[Union[str, int]] = field(
-        default='TASK_SPECIFIC',
-        metadata={"help": "A special task token type naming scheme. "
-                          "Can be one of: [TASK_SPECIFIC, ATTRIBUTE_SPECIFIC, ANSWER_SPECIFIC]"},
-    )
-
-    def __post_init__(self):
-        if self.task_names is None:
-            raise ValueError("No tasks provided for training!")
-        elif isinstance(self.task_names, list):
-            if (len(self.task_names) == 1) and isinstance(self.task_names[0], str):
-                self.task_names = [task_name.strip() for task_name in self.task_names[0].split(",")]
-            else:
-                raise ValueError(f"Unable to handle task_names provided in this format!")
-
-        if (len(self.task_names) > 0) and (len(self.task_kwargs) > 0):
-            if len(self.task_names) != len(self.task_kwargs):
-                raise ValueError("Provided tasks list does not match length with given tasks kwargs."
-                                 "Check consistency for both lists and try again.")
-
-
-@dataclass
 class TrainingArguments:
     """
     Arguments for training/fine-tuning procedure.
@@ -436,16 +429,6 @@ class TrainingArguments:
     )
 
     # -----------------
-
-    text_loss_scale: Optional[float] = field(
-        default=1.0,
-        metadata={"help": "A scaling factor for general text-based loss (usually Cross-Entropy)."},
-    )
-
-    retrieval_loss_scale: Optional[float] = field(
-        default=1.0,
-        metadata={"help": "A scaling factor for retrieval from embeddings loss (usually kind of Contrastive loss)."},
-    )
 
     gradient_clip_val: float = field(
         default=5.0,

@@ -7,7 +7,7 @@ from torch import TensorType
 
 import transformers
 from transformers.modeling_outputs import BaseModelOutput, BaseModelOutputWithPooling, \
-        BaseModelOutputWithPoolingAndCrossAttentions
+    BaseModelOutputWithPoolingAndCrossAttentions
 
 from romashka.logging_handler import get_logger
 
@@ -40,6 +40,7 @@ class ClsPooler(nn.Module):
     """
     CLS token pooling.
     """
+
     def __init__(self, cls_token_position: Optional[int] = 0,
                  use_pooler_output: Optional[bool] = True):
         super().__init__()
@@ -48,8 +49,8 @@ class ClsPooler(nn.Module):
 
     def forward(self, x: BaseModelOutput, attention_mask: TensorType):
         if (self.use_pooler_output and
-            isinstance(x, (BaseModelOutputWithPooling, BaseModelOutputWithPoolingAndCrossAttentions)) and
-            (x.pooler_output is not None)
+                isinstance(x, (BaseModelOutputWithPooling, BaseModelOutputWithPoolingAndCrossAttentions)) and
+                (x.pooler_output is not None)
         ):
             return x.pooler_output
 
@@ -61,6 +62,7 @@ class ClsLastHiddenStatePooler(nn.Module):
     CLS token pooling
     NOTE: this is equivalent to ClsPooler above with use_pooler_output=False
     """
+
     def __init__(self, cls_token_position: Optional[int] = 0):
         super().__init__()
         self.cls_token_position = cls_token_position
@@ -73,14 +75,28 @@ class EosLastHiddenStatePooler(nn.Module):
     """
     EOS token pooling.
     """
+
     def __init__(self):
         super().__init__()
 
     def forward(self, x: BaseModelOutput, attention_mask: TensorType):
         # attention_mask of size: (batch_size, sequence_length) -> (batch_size,)
-        last_tokens_ids = attention_mask.sum(-1)
-        # last hidden state of size: (batch_size, sequence_length, hidden_size)
-        return x.hidden_states[-1][:, last_tokens_ids, :]
+        last_tokens_ids = attention_mask.sum(-1) - 1
+        hidden_states = None
+        if "hidden_states" in x:
+            # for decoder-only models
+            # last hidden state of size: (batch_size, sequence_length, hidden_size)
+            hidden_states = x['hidden_states'][-1]
+        elif "decoder_hidden_states" in x:
+            # for encoder-decoder models
+            # decoder hidden state of size: (batch_size, sequence_length, hidden_size)
+            hidden_states = x['decoder_hidden_states'][-1]
+        else:
+            hidden_states = x['encoder_hidden_states'][-1]
+
+        eos_states = torch.vstack([hidden_states[i][last_tokens_ids[i], :]
+                                   for i in range(hidden_states.size(0))])
+        return eos_states
 
 
 POOLER_TYPES = [
@@ -97,6 +113,7 @@ class PoolerType:
     """
     Selector class for specific pooling types.
     """
+
     @classmethod
     def get(cls, pooler_type_name: str, **kwargs):
         try:

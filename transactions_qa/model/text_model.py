@@ -8,12 +8,8 @@ import torch.nn as nn
 import transformers
 
 from romashka.logging_handler import get_logger
-from romashka.transactions_qa.utils import seed_everything
-from romashka.transactions_qa.model.generation_utils import isin
 from romashka.transactions_qa.model.pooler import PoolerType
 from romashka.transactions_qa.model.projection import ProjectionsType
-from romashka.transactions_qa.layers.initialization import (init_embeddings_with_tensor,
-                                                            init_parameter_with_tensor)
 
 
 class TextEncoderModel(nn.Module):
@@ -23,6 +19,7 @@ class TextEncoderModel(nn.Module):
                  max_input_sequence_len: Optional[int] = 4096,
                  pooler_type: str = "CLS_POOLER",
                  projection_type: str = "LINEAR",
+                 shared_dim: int = 768,
                  do_freeze_lm: Optional[bool] = True,
                  do_freeze_lm_embeddings: Optional[bool] = True,
                  embeddings_dropout_p: Optional[float] = 0.1,
@@ -38,13 +35,16 @@ class TextEncoderModel(nn.Module):
         self.pooler = None
         self.projection_type = projection_type
         self.projection = None
+        self.shared_dim = shared_dim
+        self.model_dim: int = None
 
-        self.max_input_sequence_len = max_input_sequence_len
-        self.language_model_arch_type = None
+        self.max_input_sequence_len: int = max_input_sequence_len
+        self.is_encoder_decoder: bool = False
+        self.language_model_arch_type: str = None
         self.language_model_tokens_embedding_func = None
         self.do_freeze_lm: bool = do_freeze_lm
         self.do_freeze_lm_embeddings: bool = do_freeze_lm_embeddings
-        self.embeddings_dropout_p = embeddings_dropout_p
+        self.embeddings_dropout_p: float = embeddings_dropout_p
 
         self.generation_config = generation_config
 
@@ -57,6 +57,7 @@ class TextEncoderModel(nn.Module):
         if len(self.language_model.config.architectures):
             if "T5" in self.language_model.config.architectures[0]:
                 self.language_model_arch_type = "T5"
+                self.is_encoder_decoder = True
             elif "OPT" in self.language_model.config.architectures[0]:
                 self.language_model_arch_type = "OPT"  # has a .model.decoder attribute
             elif "GPTNeoX" in self.language_model.config.architectures[0]:   # required for Pythia and GPT-NeoX
@@ -119,9 +120,23 @@ class TextEncoderModel(nn.Module):
         embedds_mean = torch.mean(embedds, dim=0).detach()
         return embedds_mean
 
+    def _set_model_dim(self):
+        """
+        Sets the hidden size / output embeddings dimension of the model.
+        """
+        if hasattr(self.language_model.config, "d_model"):
+            self.model_dim = self.language_model.config.d_model
+        elif self.language_model.config.hidden_size:
+            self.model_dim = self.language_model.config.hidden_size
+        else:
+            raise AttributeError(f"Unable to estimate Language model output embeddings dimension!")
+
     def _prepare_model(self):
         # Set language model architecture type / family (i.e. T5/...)
         self._set_language_model_arch_type()
+
+        # Sets the hidden size / output embeddings dimension of the model
+        self._set_model_dim()
 
         self.params_precision = 32
         if self.language_model.dtype == torch.float16:
@@ -172,7 +187,8 @@ class TextEncoderModel(nn.Module):
         """
         Creates a Projection network.
         """
-        self.projection = ProjectionsType.get(projection_type_name=self.projection_type)
+        proj_kwargs = {'in_dim': self.model_dim, "out_dim": self.shared_dim}
+        self.projection = ProjectionsType.get(projection_type_name=self.projection_type, **proj_kwargs)
         self._logger.info(f"Created `{self.projection_type}` projection.")
 
     def _resize_text_embeddings(self):
@@ -249,7 +265,6 @@ class TextEncoderModel(nn.Module):
             return True
         return False
 
-
     def forward(self, batch: Union[Dict[str, torch.Tensor], Any],
                 output_attentions: Optional[bool] = False) -> Any:
         """
@@ -264,19 +279,27 @@ class TextEncoderModel(nn.Module):
             LM model's outputs with added labels (if `is_train` was set).
 
         """
-        # batch: 'input_ids', 'attention_mask', 'target_tokens', 'target_attention_mask'
+        # batch: 'captions'
+        # 1) Tokenize text captions
+        captions_tokenized = self.tokenizer([cap[0] for cap in batch['captions']],
+                                            return_tensors='pt',
+                                            padding=True,
+                                            truncation=True,
+                                            return_attention_mask=True)
 
-        # 1) Pass through LM
+        # 2) Pass through LM
         # contains: ['loss', 'logits', 'past_key_values', 'encoder_last_hidden_state']
         # `logits` of size: [batch_size, max_pred_len, vocab_size]
-        lm_outputs = self.language_model(input_ids=batch['input_ids'],
-                                         attention_mask=batch['attention_mask'],
+        labels = captions_tokenized['input_ids'].clone()
+        lm_outputs = self.language_model(input_ids=captions_tokenized['input_ids'],
+                                         attention_mask=captions_tokenized['attention_mask'],
+                                         labels=labels,
                                          output_attentions=output_attentions,
                                          output_hidden_states=True)
-        # 2) Pass through pooler
-        pooled_outputs = self.pooler(lm_outputs)
+        # 3) Pass through pooler
+        pooled_outputs = self.pooler(lm_outputs, captions_tokenized['attention_mask'])
 
-        # 3) Pass through projection
+        # 4) Pass through projection
         projected_outputs = self.projection(pooled_outputs)
 
         # Create answers + masks for LM's decoder inputs

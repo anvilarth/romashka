@@ -6,7 +6,9 @@ from romashka.transactions_qa.layers.connector import (CONNECTOR_TYPES,
                                                        make_qformer_connector,
                                                        make_instruct_qformer_connector)
 from romashka.transactions_qa.layers.qformer_connector_hf import QFormerConnector
-from romashka.transactions_qa.layers.instruct_qformer_connector_hf import InstructQFormerConnector
+from romashka.transactions_qa.layers.layers import (MixedPrecisionLayerNorm,
+                                                    MuiltiHeadSelfAttention,
+                                                    RelativePositionEmbeddings)
 
 __all__ = [
     "CONNECTOR_TYPES",
@@ -17,5 +19,7 @@ __all__ = [
     "make_qformer_connector",
     "make_instruct_qformer_connector",
     "QFormerConnector",
-    "InstructQFormerConnector"
+    "MixedPrecisionLayerNorm",
+    "MuiltiHeadSelfAttention",
+    "RelativePositionEmbeddings"
 ]
