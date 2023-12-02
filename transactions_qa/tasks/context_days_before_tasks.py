@@ -65,7 +65,7 @@ class LastDaysBeforeTaskOpenEnded(NumericTaskAbstract):
 
         # Required to specify available feature value range
         self.feature_min = 1.0
-        self.feature_max = 23.0
+        self.feature_max = 350.0
 
         # If buckets are not provided externally
         if self.buckets is None:
