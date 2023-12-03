@@ -47,12 +47,14 @@ class ContrastiveTransactionsModel(pl.LightningModule):
                  ):
         super().__init__()
         self._logger = get_logger(
-            name=self.__class__.__name__
+            name=self.__class__.__name__,
+            log_filename="./DEBUG_logging_contrastive.txt"
         )
         self.text_model = text_model
         self.trns_encoder = trns_encoder
         self.encoder_pooler_type = encoder_pooler_type
         self.encoder_projection_type = encoder_projection_type
+        self.initial_params = None
 
         self.shared_dim = shared_dim
         self.warmup_steps: int = warmup_steps
@@ -243,6 +245,7 @@ class ContrastiveTransactionsModel(pl.LightningModule):
         # Encode transactions history to a single vector representation
         # trns_outputs size [bs, shared_dim]
         trns_outputs = self.encode_transactions(batch)
+        batch_size = trns_outputs.size(0)
 
         # Encode transactions history captions to a single vector representation
         # with keys: 'loss', 'logits', 'labels', 'projected_outputs',
@@ -278,12 +281,25 @@ class ContrastiveTransactionsModel(pl.LightningModule):
             "train_lm_text_loss": lm_outputs['loss']
         }
 
-        self.log_dict(
-            logging_dict,
-            sync_dist=True,
-            on_step=False, on_epoch=True,
-            prog_bar=True, logger=True
-        )
+        # self.log_dict(
+        #     logging_dict,
+        #     sync_dist=True,
+        #     on_step=False, on_epoch=True,
+        #     prog_bar=True, logger=True
+        # )
+
+        self.log('train_loss', loss, logger=True,
+                 on_step=True, on_epoch=True,
+                 sync_dist=True, batch_size=batch_size)
+        self.log('train_text_contr_loss', text_loss, logger=True,
+                 on_step=True, on_epoch=True,
+                 sync_dist=True, batch_size=batch_size)
+        self.log('train_trns_contr_loss', trns_loss, logger=True,
+                 on_step=True, on_epoch=True,
+                 sync_dist=True, batch_size=batch_size)
+        self.log('train_lm_text_loss', lm_outputs['loss'], logger=True,
+                 on_step=True, on_epoch=True,
+                 sync_dist=True, batch_size=batch_size)
 
         return loss
 
@@ -304,6 +320,7 @@ class ContrastiveTransactionsModel(pl.LightningModule):
         # Encode transactions history to a single vector representation
         # trns_outputs size [bs, shared_dim]
         trns_outputs = self.encode_transactions(batch)
+        batch_size = trns_outputs.size(0)
 
         # Encode transactions history captions to a single vector representation
         # with keys: 'loss', 'logits', 'labels', 'projected_outputs',
@@ -343,16 +360,32 @@ class ContrastiveTransactionsModel(pl.LightningModule):
         try:
             self.metric(text_outputs, trns_outputs)
             logging_dict['val_cosine_sim'] = self.metric
+            self.log('val_cosine_sim', self.metric, logger=True,
+                     on_step=True, on_epoch=True,
+                     sync_dist=True, batch_size=batch_size)
         except Exception as e:
             self._logger.error(f"Error occurred during metric calculation!")
             self._logger.error(f"{traceback.format_exc()}")
 
-        self.log_dict(
-            logging_dict,
-            sync_dist=True,
-            on_step=False, on_epoch=True,
-            prog_bar=True, logger=True
-        )
+        # self.log_dict(
+        #     logging_dict,
+        #     sync_dist=True,
+        #     on_step=True, on_epoch=True,
+        #     prog_bar=True, logger=True
+        # )
+
+        self.log('val_loss', loss, logger=True,
+                 on_step=True, on_epoch=True,
+                 sync_dist=True, batch_size=batch_size)
+        self.log('val_text_contr_loss', text_loss, logger=True,
+                 on_step=True, on_epoch=True,
+                 sync_dist=True, batch_size=batch_size)
+        self.log('val_trns_contr_loss', trns_loss, logger=True,
+                 on_step=True, on_epoch=True,
+                 sync_dist=True, batch_size=batch_size)
+        self.log('val_lm_text_loss', lm_outputs['loss'], logger=True,
+                 on_step=True, on_epoch=True,
+                 sync_dist=True, batch_size=batch_size)
 
         return loss
 
@@ -387,23 +420,98 @@ class ContrastiveTransactionsModel(pl.LightningModule):
         self.log('val_epoch_cosine_sim', self.metric)
 
     def on_before_optimizer_step(self, optimizer, optimizer_idx=0):
+
         # example to inspect gradient information in tensorboard
-        if self.trainer.global_step % 25 == 0:  # don't make logging too much
+        if self.trainer.global_step % 1 == 0:  # don't make logging too much
             # log gradients of model parameters
             for param_name, param in self.named_parameters():
                 if param_name.startswith("logit_scale") \
+                        or param_name.startswith("trns_encoder") \
                         or param_name.startswith("encoder_pooler"):
                     if param.grad is not None:
                         grad_sum = np.sum(np.abs(param.grad.detach().cpu().numpy()))
                         self._logger.info(f"Parameter `{param_name}` with grad of size: {param.grad.size()}")
                         self._logger.info(f"Summed `{param_name}` grad = {grad_sum}")
                         self.log(
-                            name=f"{param_name}_grad_sum", value=grad_sum, sync_dist=True
+                            name=f"{param_name}_grad_sum", value=grad_sum,
+                            sync_dist=True, on_epoch=True, on_step=True
+                        )
+                    else:
+                        self._logger.info(f"Parameter `{param_name}` has NO grad!")
+                        self.log(
+                            name=f"{param_name}_grad_sum", value=0.0,
+                            sync_dist=True, on_epoch=True, on_step=True
                         )
             # log norms of model embedding matrices
-            for param_name, param in self.trns_encoder.named_parameters():
-                if param_name.startswith("embedding"):
-                    vec_norm = torch.norm(param.detach().cpu())
-                    self.log(
-                        name=f"{param_name}_norm", value=vec_norm, sync_dist=True
+            # for param_name, param in self.trns_encoder.named_parameters():
+            #     if param_name.startswith("embedding"):
+            #         vec_norm = torch.norm(param.detach().cpu())
+            #         self.log(
+            #             name=f"{param_name}_norm", value=vec_norm, sync_dist=True
+            #         )
+
+            # Make sure that parameters updates
+            self._stash_params()
+
+    def _stash_params(self, params: Optional[Dict[str, Any]] = None):
+        """
+        Stashes parameters before updating.
+        Args:
+            params (Optional[List[str, Any]]): a dict of parameters and their names.
+        """
+        if params is None:
+            # get a list of params that are allowed to change
+            params = [name_param for name_param in self.named_parameters() if name_param[1].requires_grad]
+        if isinstance(params, dict):
+            params = [name_param for name_param in params.items()]
+
+        # take a copy
+        self.initial_params = [(name, p.clone()) for (name, p) in params]
+
+    def on_before_zero_grad(self) -> None:
+        """
+        Called after ``training_step()`` and before ``optimizer.zero_grad()``.
+        Called in the training loop after taking an optimizer step and before zeroing grads.
+        """
+        if self.initial_params is not None:
+            # get a list of params that are allowed to change
+            params = [name_param for name_param in self.named_parameters() if name_param[1].requires_grad]
+            self._var_change_helper(True,
+                                    initial_params=self.initial_params,
+                                    updated_params=params,
+                                    device=self.device)
+
+    def _var_change_helper(self, vars_change: bool, initial_params, updated_params, device):
+        """
+        Check if given variables (params) change or not during training
+
+        Parameters
+        ----------
+        vars_change : bool
+          a flag which controls the check for change or not change
+        initial_params : list,
+          list of parameters of form (name, variable)
+        updated_params : list,
+          list of parameters of form (name, variable)
+
+        Raises
+        ------
+        logs errors / warnings
+          if vars_change is True and params DO NOT change during training
+          if vars_change is False and params DO change during training
+        """
+
+        # check if variables have changed
+        for (_, p0), (name, p1) in zip(initial_params, updated_params):
+            try:
+                if vars_change:
+                    assert not torch.equal(p0.to(device), p1.to(device))
+                else:
+                    assert torch.equal(p0.to(device), p1.to(device))
+            except AssertionError:
+                raise self._logger.warning(  # error message
+                    "{var_name} {msg}".format(
+                        var_name=name,
+                        msg='did not change!' if vars_change else 'changed!'
                     )
+                )
