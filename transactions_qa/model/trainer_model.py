@@ -159,9 +159,9 @@ class ContrastiveTransactionsModel(pl.LightningModule):
         # Check total trainable parameters
         parameters = list(self.parameters())
         trainable_parameters = list(filter(lambda p: p.requires_grad, parameters))
-        self._logger.info(f"Totally trainable parameters: {len(trainable_parameters)} from {len(parameters)}")
+        self._logger.info(f"Transactions encoder - totally trainable parameters: {len(trainable_parameters)} from {len(parameters)}")
 
-        # Figure out what the model type passed% encoder-decoder / decoder-only
+        # Figure out what the model type passed encoder-decoder / decoder-only
         self._set_model_type()
 
     def _create_encoder_pooler(self):

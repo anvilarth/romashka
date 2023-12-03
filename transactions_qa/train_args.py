@@ -420,7 +420,7 @@ class TrainingArguments:
         default=False, metadata={"help": "Whether to freeze weights of a Connector layer during training."}
     )
     do_freeze_language_model_embeddings: Optional[bool] = field(
-        default=False, metadata={"help": "Whether to freeze Embeddings of Language model during training."}
+        default=True, metadata={"help": "Whether to freeze Embeddings of Language model during training."}
     )
 
     # -----------------

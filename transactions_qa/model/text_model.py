@@ -163,9 +163,6 @@ class TextEncoderModel(nn.Module):
         if self.do_freeze_lm_embeddings:
             self._logger.info(f"Freezing language model's embeddings...")
             self.language_model_tokens_embedding_func.requires_grad = False
-        else:
-            self._logger.info(f"Unfreezing (if frozen) language model's embeddings...")
-            self.language_model_tokens_embedding_func.requires_grad = True
 
         # Create additional layers
         self._create_pooler()

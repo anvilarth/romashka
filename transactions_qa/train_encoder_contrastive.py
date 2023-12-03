@@ -189,8 +189,8 @@ def main():
         pooler_type=model_args.text_pooler_type,
         projection_type=model_args.text_projection_type,
         shared_dim=model_args.shared_dim,
-        do_freeze_lm=training_args.do_freeze_language_model,
-        do_freeze_lm_embeddings=training_args.do_freeze_language_model_embeddings
+        do_freeze_lm=True,
+        do_freeze_lm_embeddings=True
     )
 
     # Loading Transactions model & weights
@@ -306,6 +306,10 @@ def main():
         verbose=True
     )
 
+    print(f"Contrastive model summary:")
+    for param_name, param in model.named_parameters():
+        print(f"{param_name} requires grad: {param.requires_grad}")
+
     # Saving tokenizer
     if Path(save_checkpoints_dir).resolve().exists():
         logger.info(f"Checkpoints path: {Path(save_checkpoints_dir).resolve()}")
@@ -342,6 +346,11 @@ def main():
         logger=wb_logger,  # [tb_logger, wb_logger],
         callbacks=callbacks
     )
+
+    # Saving initial weights (for debug)
+    if Path(save_checkpoints_dir).resolve().exists():
+        save_fn = str(Path(save_checkpoints_dir).resolve() / "initial_checkpoint.ckpt")
+        trainer.save_checkpoint(save_fn, weights_only=True)
 
     trainer.fit(model=model, datamodule=datamodule)
 
