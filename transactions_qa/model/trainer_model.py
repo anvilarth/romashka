@@ -17,6 +17,8 @@ import pytorch_lightning as pl
 from pytorch_lightning.utilities import rank_zero_info
 from pytorch_lightning.loggers import WandbLogger
 
+from deepspeed.ops.adam import FusedAdam
+
 import bitsandbytes as bnb
 from romashka.logging_handler import get_logger
 from romashka.transactions_qa.utils import inspect_init_signature
@@ -41,7 +43,8 @@ class ContrastiveTransactionsModel(pl.LightningModule):
                  adam_epsilon: Optional[float] = 1e-8,
                  warmup_steps: Optional[int] = 100,
                  training_steps: Optional[int] = 10_000,
-                 verbose_for_debug: Optional[bool] = False,
+                 is_debug: Optional[bool] = False,
+                 use_deepspeed: Optional[bool] = False,
                  return_logits: Optional[bool] = False,
                  **additional_kwargs
                  ):
@@ -66,13 +69,15 @@ class ContrastiveTransactionsModel(pl.LightningModule):
         self.adam_beta1: float = adam_beta1
         self.adam_beta2: float = adam_beta2
         self.adam_epsilon = adam_epsilon
+        self.use_deepspeed = use_deepspeed
 
         self.metric = torchmetrics.CosineSimilarity(reduction='mean')
 
         self._is_encoder_decoder: bool = text_model.is_encoder_decoder
-        self._prepare_model()
+        if not self.use_deepspeed:
+            self._prepare_model()
 
-        self._verbose_for_debug: bool = verbose_for_debug
+        self._is_debug: bool = is_debug
         self._return_logits: bool = return_logits
         self.save_hyperparameters(ignore=['_logger', 'text_model', 'trns_encoder'])
 
@@ -92,7 +97,12 @@ class ContrastiveTransactionsModel(pl.LightningModule):
         )
         # Init optimizer
         optimizer_type = None
-        if isinstance(self.optimizer_type, torch.optim.Optimizer):
+        if self.use_deepspeed:
+            optimizer = FusedAdam(self.parameters())
+            rank_zero_info(
+                f"The model will train with DeepSpeed FusedAdam optimizer."
+            )
+        elif isinstance(self.optimizer_type, torch.optim.Optimizer):
             optimizer_type = self.optimizer_type
             rank_zero_info(
                 f"The model will train with {optimizer_type} optimizer."
@@ -144,6 +154,31 @@ class ContrastiveTransactionsModel(pl.LightningModule):
             "optimizer": optimizer,
             "lr_scheduler": scheduler,
         }
+
+    def configure_model(self):
+        """
+        Created within sharded model context, modules are instantly sharded across processes
+        as soon as they are made.
+        For DeepSpeed Zero-3!
+        """
+        # Create additional layers
+        self._create_encoder_pooler()
+        self._create_encoder_projection()
+
+        # Create norms & scales
+        self.text_l_norm = MixedPrecisionLayerNorm(normalized_shape=(self.shared_dim))
+        self.encoder_l_norm = MixedPrecisionLayerNorm(normalized_shape=(self.shared_dim))
+        self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
+
+        # Check total trainable parameters
+        parameters = list(self.parameters())
+        trainable_parameters = list(filter(lambda p: p.requires_grad, parameters))
+        self._logger.info(
+            f"Transactions encoder - totally trainable parameters: {len(trainable_parameters)} from {len(parameters)}")
+
+        # Figure out what the model type passed encoder-decoder / decoder-only
+        self._set_model_type()
+
 
     def _prepare_model(self):
 
@@ -451,8 +486,9 @@ class ContrastiveTransactionsModel(pl.LightningModule):
             #             name=f"{param_name}_norm", value=vec_norm, sync_dist=True
             #         )
 
-            # Make sure that parameters updates
-            self._stash_params()
+            if self._is_debug:
+                # Make sure that parameters updates
+                self._stash_params()
 
     def _stash_params(self, params: Optional[Dict[str, Any]] = None):
         """
@@ -474,7 +510,7 @@ class ContrastiveTransactionsModel(pl.LightningModule):
         Called after ``training_step()`` and before ``optimizer.zero_grad()``.
         Called in the training loop after taking an optimizer step and before zeroing grads.
         """
-        if self.initial_params is not None:
+        if self._is_debug  and (self.initial_params is not None):
             # get a list of params that are allowed to change
             params = [name_param for name_param in self.named_parameters() if name_param[1].requires_grad]
             self._var_change_helper(True,

@@ -19,6 +19,7 @@ import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import (ModelCheckpoint, LearningRateMonitor,
                                          EarlyStopping, BatchSizeFinder)
+from pytorch_lightning.strategies import DeepSpeedStrategy
 
 import transformers
 from transformers import (AutoModelForSeq2SeqLM,
@@ -338,7 +339,11 @@ def main():
         max_epochs=-1 if until_convergence else training_args.max_epochs,
         gpus=len(available_gpus),
         auto_select_gpus=True,
-        # strategy="ddp",
+        strategy=DeepSpeedStrategy(
+            stage=3,
+            offload_optimizer=False,
+            offload_parameters=False,
+        ),
         log_every_n_steps=10,
         reload_dataloaders_every_n_epochs=3,
         precision=training_args.precision,  # bf16 - ?
