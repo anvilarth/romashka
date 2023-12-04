@@ -326,7 +326,7 @@ def main():
             tok_fn = [fn for fn in ckpt_files if ("tokenizer_config.json" in fn) or ("config.json" in fn)][0]
             logger.info(f"Pretrained tokenizer exists: {tok_fn}")
 
-    callbacks = [checkpoint_callback, lr_monitor_callback, batch_size_finder_callback]
+    callbacks = [checkpoint_callback, lr_monitor_callback]  #batch_size_finder_callback
     until_convergence = True
     if until_convergence:  # training_args.until_convergence:
         callbacks += [early_stopping_callback]
