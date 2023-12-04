@@ -159,7 +159,8 @@ class ContrastiveTransactionsModel(pl.LightningModule):
         # Check total trainable parameters
         parameters = list(self.parameters())
         trainable_parameters = list(filter(lambda p: p.requires_grad, parameters))
-        self._logger.info(f"Transactions encoder - totally trainable parameters: {len(trainable_parameters)} from {len(parameters)}")
+        self._logger.info(
+            f"Transactions encoder - totally trainable parameters: {len(trainable_parameters)} from {len(parameters)}")
 
         # Figure out what the model type passed encoder-decoder / decoder-only
         self._set_model_type()
@@ -468,7 +469,7 @@ class ContrastiveTransactionsModel(pl.LightningModule):
         # take a copy
         self.initial_params = [(name, p.clone()) for (name, p) in params]
 
-    def on_before_zero_grad(self) -> None:
+    def on_before_zero_grad(self, optimizer) -> None:
         """
         Called after ``training_step()`` and before ``optimizer.zero_grad()``.
         Called in the training loop after taking an optimizer step and before zeroing grads.
@@ -508,10 +509,9 @@ class ContrastiveTransactionsModel(pl.LightningModule):
                     assert not torch.equal(p0.to(device), p1.to(device))
                 else:
                     assert torch.equal(p0.to(device), p1.to(device))
-            except AssertionError:
-                raise self._logger.warning(  # error message
-                    "{var_name} {msg}".format(
-                        var_name=name,
-                        msg='did not change!' if vars_change else 'changed!'
-                    )
+            except Exception as e:
+                msg = 'did not change!' if vars_change else 'changed!'
+                var_name = name
+                self._logger.warning(  # error message
+                    f"{var_name} {msg}"
                 )

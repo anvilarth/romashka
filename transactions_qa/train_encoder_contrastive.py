@@ -17,7 +17,8 @@ warnings.filterwarnings("ignore")
 import torch
 import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
-from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor, EarlyStopping
+from pytorch_lightning.callbacks import (ModelCheckpoint, LearningRateMonitor,
+                                         EarlyStopping, BatchSizeFinder)
 
 import transformers
 from transformers import (AutoModelForSeq2SeqLM,
@@ -300,11 +301,13 @@ def main():
 
     early_stopping_callback = EarlyStopping(
         monitor="val_loss",
-        patience=3,  # training_args.early_stopping_patience,
+        patience=5,  # training_args.early_stopping_patience,
         mode="min",
         strict=False,
         verbose=True
     )
+
+    batch_size_finder_callback = BatchSizeFinder(mode='binsearch', steps_per_trial=3)
 
     print(f"Contrastive model summary:")
     for param_name, param in model.named_parameters():
@@ -323,7 +326,7 @@ def main():
             tok_fn = [fn for fn in ckpt_files if ("tokenizer_config.json" in fn) or ("config.json" in fn)][0]
             logger.info(f"Pretrained tokenizer exists: {tok_fn}")
 
-    callbacks = [checkpoint_callback, lr_monitor_callback]
+    callbacks = [checkpoint_callback, lr_monitor_callback, batch_size_finder_callback]
     until_convergence = True
     if until_convergence:  # training_args.until_convergence:
         callbacks += [early_stopping_callback]
@@ -337,9 +340,9 @@ def main():
         auto_select_gpus=True,
         # strategy="ddp",
         log_every_n_steps=10,
-        reload_dataloaders_every_n_epochs=1,
+        reload_dataloaders_every_n_epochs=3,
         precision=training_args.precision,  # bf16 - ?
-        limit_train_batches=100_000,
+        limit_train_batches=1000,
         gradient_clip_val=training_args.gradient_clip_val,
         gradient_clip_algorithm=training_args.gradient_clip_algorithm,
         accumulate_grad_batches=training_args.gradient_accumulation_steps,
@@ -350,7 +353,7 @@ def main():
     # Saving initial weights (for debug)
     if Path(save_checkpoints_dir).resolve().exists():
         save_fn = str(Path(save_checkpoints_dir).resolve() / "initial_checkpoint.ckpt")
-        trainer.save_checkpoint(save_fn, weights_only=True)
+        torch.save(model.state_dict(), save_fn)
 
     trainer.fit(model=model, datamodule=datamodule)
 
