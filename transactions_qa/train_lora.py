@@ -26,6 +26,8 @@ from transformers import (AutoModelForSeq2SeqLM,
                           AutoTokenizer,
                           AutoConfig,
                           HfArgumentParser)
+from pytorch_lightning.strategies import DeepSpeedStrategy
+
 import peft
 from peft import LoraConfig, get_peft_model, prepare_model_for_int8_training, TaskType
 
@@ -595,7 +597,11 @@ def main():
         max_epochs=-1 if until_convergence else training_args.max_epochs,
         gpus=len(available_gpus),
         auto_select_gpus=True,
-        # strategy="ddp",
+        strategy=DeepSpeedStrategy(
+            stage=3,
+            offload_optimizer=False,
+            offload_parameters=False,
+        ),
         log_every_n_steps=10,
         reload_dataloaders_every_n_epochs=1,
         precision=training_args.precision,  # bf16 - ?

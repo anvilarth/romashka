@@ -12,6 +12,7 @@ import torch.nn as nn
 
 import transformers
 import pytorch_lightning as pl
+from deepspeed.ops.adam import FusedAdam
 from pytorch_lightning.utilities import rank_zero_info
 from pytorch_lightning.loggers import WandbLogger
 
@@ -44,6 +45,7 @@ class TransactionQAModel(pl.LightningModule):
                  verbose_for_debug: Optional[bool] = False,
                  return_logits: Optional[bool] = False,
                  multiple_choice_grade: Optional[bool] = False,
+                 use_deepspeed: Optional[bool] = False,
                  **additional_kwargs
                  ):
         super().__init__()
@@ -68,6 +70,7 @@ class TransactionQAModel(pl.LightningModule):
         self.adam_beta1: float = adam_beta1
         self.adam_beta2: float = adam_beta2
         self.adam_epsilon = adam_epsilon
+        self.use_deepspeed = use_deepspeed
 
         self._is_multitask: bool = False
         self._is_encoder_decoder: bool = False
@@ -78,12 +81,6 @@ class TransactionQAModel(pl.LightningModule):
 
         self.hparams['task_specific_tokens_map'] = self.task_specific_tokens_map
         self.save_hyperparameters(ignore=['tasks', '_logger', 'model'])
-
-        # ✨ W&B: Create a Table to store predictions for each test step
-        # self.columns = ["epoch", "step #", "task",
-        #                 "question", "prediction", "truth",
-        #                 "transactions_history_lengths"]
-        # self.log_eval_predictions_table = wandb.Table(columns=self.columns)
 
         self.log_eval_steps_counter = 0
         self.log_eval_max_steps = 10
@@ -104,7 +101,12 @@ class TransactionQAModel(pl.LightningModule):
         )
         # Init optimizer
         optimizer_type = None
-        if isinstance(self.optimizer_type, torch.optim.Optimizer):
+        if self.use_deepspeed:
+            optimizer = FusedAdam(self.parameters())
+            rank_zero_info(
+                f"The model will train with DeepSpeed FusedAdam optimizer."
+            )
+        elif isinstance(self.optimizer_type, torch.optim.Optimizer):
             optimizer_type = self.optimizer_type
             rank_zero_info(
                 f"The model will train with {optimizer_type} optimizer."
