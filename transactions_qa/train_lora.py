@@ -9,6 +9,10 @@ import wandb
 os.environ["WANDB_MODE"] = "online"
 os.environ["WANDB_API_KEY"] = "de71b243e187c02735ee3d741c05d2d906905d2b"
 
+from huggingface_hub import login
+access_token = "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"
+login(token=access_token)
+
 import warnings
 warnings.filterwarnings("ignore")
 
