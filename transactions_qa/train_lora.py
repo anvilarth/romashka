@@ -598,7 +598,7 @@ def main():
         gpus=len(available_gpus),
         auto_select_gpus=True,
         strategy=DeepSpeedStrategy(
-            stage=3,
+            stage=2,
             offload_optimizer=False,
             offload_parameters=False,
         ),
