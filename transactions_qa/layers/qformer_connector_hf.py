@@ -41,8 +41,7 @@ class QFormerConnector(nn.Module):
 
         super().__init__()
         self._logger = get_logger(
-            name=self.__class__.__name__,
-            logging_level="INFO"
+            name=self.__class__.__name__
         )
 
         self.output_size = output_size  # output size of embedder model

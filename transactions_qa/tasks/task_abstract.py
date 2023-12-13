@@ -18,8 +18,7 @@ from torchmetrics.text.rouge import ROUGEScore
 from romashka.logging_handler import get_logger
 
 logger = get_logger(
-    name="Tasks",
-    logging_level="INFO"
+    name="Tasks"
 )
 
 from romashka.transactions_qa.tasks.task_token_updater import (TaskTokenType,

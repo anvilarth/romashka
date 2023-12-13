@@ -69,8 +69,7 @@ class TransactionsModel(nn.Module):
                                                 inp_size,
                                                 hidden_size,
                                                 pretrained,
-                                                num_layers,
-        )
+                                                num_layers)
 
         self.output_size = self.encoder_model.get_output_size()
         self.connector_type = self.encoder_model.get_connector_type()
@@ -91,6 +90,8 @@ class TransactionsModel(nn.Module):
                 self._logger.error(f"`shared_dim` is obligatory parameter for Layer Norm creation."
                                    f"Specified default value = `{self.output_size}`")
             self.encoder_l_norm = MixedPrecisionLayerNorm(normalized_shape=(shared_dim))
+        else:
+            self.encoder_l_norm = None
         if add_projection:
             # Projection: trns_encoder_dim -> shared dim
             # 768 -> 768
@@ -103,7 +104,9 @@ class TransactionsModel(nn.Module):
                 projection_type = 'IDENTITY'
                 self._logger.error(f"`projection_type` is obligatory parameter for projection layer creation."
                                    f"Specified default value = `{projection_type}`")
-            trns_encoder_projection = ProjectionsType.get(projection_type, **proj_kwargs)
+            self.encoder_projection = ProjectionsType.get(projection_type, **proj_kwargs)
+        else:
+            self.encoder_projection = None
 
         self.shared_dim = shared_dim
         self.add_projection = add_projection
@@ -127,6 +130,11 @@ class TransactionsModel(nn.Module):
             embedding = embeds
 
         x, mask = self.encoder_model(embedding, mask)
+
+        if self.encoder_projection is not None:
+            x = self.encoder_projection(x * mask.unsqueeze(-1))
+        if self.encoder_l_norm is not None:
+            x = self.encoder_l_norm(x * mask.unsqueeze(-1))
 
         return x, mask
 
