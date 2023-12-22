@@ -51,8 +51,8 @@ class PredDaysBeforeTaskOpenEnded(NumericTaskAbstract):
 
         self.ending_prompts = [
             ". How many days are left from the client's next transaction until the credit is issued to him?"
-            " Answer the index of the range in which this date falls, from 0 to 23 inclusive."
-            " In case the answer is larger then 23, answer 23 as maximum significant date range index."
+            " Answer the index of the range in which this date falls, from 0 to 350 inclusive."
+            " In case the answer is larger then 350, answer 350 as maximum significant date range index."
         ]
 
         self.question_templates = self.generate_question_templates(self.starting_prompts,
