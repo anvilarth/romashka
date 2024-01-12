@@ -26,6 +26,7 @@ class NumericTaskAbstract(AbstractTask, ABC):
 
     # for binned feature representation
     buckets: Optional[List[float]] = None
+    buckets_info_path: Optional[str] = "romashka/assets/dense_features_buckets.pkl"
 
     def __post_init__(self):
         super().__post_init__()
@@ -73,7 +74,8 @@ class NumericTaskAbstract(AbstractTask, ABC):
             buckets_means.append((bucket_min + bucket_max) / 2)
             bucket_min = bucket_max
 
-        buckets_means.append(feature_max)
+        if feature_max > bucket_max:
+            buckets_means.append(feature_max)
         return buckets_means
 
     @staticmethod

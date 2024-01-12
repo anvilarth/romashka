@@ -217,8 +217,7 @@ def main():
         "cache_dir": model_args.cache_dir,
         "revision": model_args.model_revision,
         "use_auth_token": True if model_args.use_auth_token else None,
-        "return_unused_kwargs": True,
-        # "tie_word_embeddings": True
+        "return_unused_kwargs": True
     }
 
     # Load pretrained model and tokenizer
@@ -266,12 +265,17 @@ def main():
         tasks_kwargs = eval(tasks_kwargs)
     logger.info(f"Got task_names: {task_names} with task_kwargs: {tasks_kwargs}")
 
+    buckets_info_path = "romashka/assets/dense_features_buckets_v2.pkl"
+    logger.info(f"Running with buckets file path: {buckets_info_path}")
+
     for task_i, task_name in enumerate(task_names):
         task_kwargs = tasks_kwargs[task_i] if task_i < len(tasks_kwargs) else {}
         if "tokenizer" not in task_kwargs:
             task_kwargs['tokenizer'] = tokenizer
         if 'task_special_token_type' not in task_kwargs:
             task_kwargs['task_special_token_type'] = task_token_type
+        if "buckets_info_path" not in task_kwargs:
+            task_kwargs['buckets_info_path'] = buckets_info_path
         task = AutoTask.get(task_name=task_name, **task_kwargs)
         tasks.append(task)
     logger.info(f"Created {len(tasks)} tasks.")
