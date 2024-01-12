@@ -686,7 +686,7 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
         logits_per_sample = ret_embeddings_norm @ collected_last_hidden_state.permute(0, 2, 1)
         logits_per_query = logits_per_sample.permute(0, 2, 1)
 
-        targets = torch.linspace(0, ret_embeddings.size(1), ret_embeddings.size(1), dtype=int)
+        targets = torch.linspace(0, ret_embeddings.size(1)-1, ret_embeddings.size(1), dtype=int)
         targets = targets.unsqueeze(0).repeat(ret_embeddings.size(0), 1).to(
             ret_embeddings.device)  # as size: [bs, n_queries]
 

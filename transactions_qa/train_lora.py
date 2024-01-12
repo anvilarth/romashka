@@ -165,7 +165,11 @@ def main():
 
     # Loading Transactions model & weights
     logger.info(f"Loading Transactions model...")
-    projections_maps = get_projections_maps(relative_folder=data_args.projections_mappings_path)
+    projections_maps = get_projections_maps(
+        num_embedding_projections_fn='./assets/num_embedding_projections.pkl',
+        cat_embedding_projections_fn='./assets/cat_embedding_projections.pkl',
+        meta_embedding_projections_fn='./assets/meta_embedding_projections.pkl',
+        relative_folder=data_args.projections_mappings_path)
     transactions_model_config = {
         "cat_features": cat_features_names,
         "cat_embedding_projections": projections_maps.get('cat_embedding_projections'),
@@ -175,7 +179,11 @@ def main():
         "meta_embedding_projections": projections_maps.get('meta_embedding_projections'),
         "encoder_type": model_args.transactions_model_encoder_type,
         "head_type": model_args.transactions_model_head_type,
-        "embedding_dropout": 0.1
+        "embedding_dropout": 0.1,
+        "shared_dim": 768,
+        "projection_type": "LINEAR",
+        "add_projection": False,
+        "add_l_norm": False
     }
     transactions_model = TransactionsModel(**transactions_model_config)
 
@@ -195,6 +203,13 @@ def main():
 
         logger.info(f"Renaming & loading transactions model...")
         transactions_model.load_state_dict(renamed_state_dict, strict=False)
+    elif model_args.transactions_model_name_or_path is not None:
+        try:
+            ckpt = torch.load(model_args.transactions_model_name_or_path, map_location='cpu')
+            transactions_model.load_state_dict(ckpt, strict=False)
+            logger.info(f"Loaded transactions model from checkpoint: `{model_args.transactions_model_name_or_path}`...")
+        except Exception as e:
+            logger.error(f"Error during transactions model checkpoint's loading: {e}")
 
     # Configure and load from HF hub LM model
     logger.info(f"Loading Language model: `{model_args.language_model_name_or_path}`...")
@@ -337,7 +352,7 @@ def main():
             "hidden_act": "gelu",
             "hidden_dropout_prob": 0.1,
             "initializer_range": 0.02,
-            "max_position_embeddings": 1024,
+            "max_position_embeddings": 4096,
             "position_embedding_type": "absolute",
             "connector_model_name_or_path": '/home/jovyan/abdullaeva/pretrained_weights/q-former-blip2-with-whisper-small-pretrained/state_dict.pt'
         }
@@ -374,7 +389,7 @@ def main():
             "hidden_act": "gelu",
             "hidden_dropout_prob": 0.1,
             "initializer_range": 0.02,
-            "max_position_embeddings": 1024,
+            "max_position_embeddings": 4096,
             "position_embedding_type": "absolute",
         }
 
@@ -566,7 +581,7 @@ def main():
 
     early_stopping_callback = EarlyStopping(
         monitor="val_loss",
-        patience=2,  #training_args.early_stopping_patience,
+        patience=3,  #training_args.early_stopping_patience,
         mode="min",
         strict=False,
         verbose=True
@@ -590,13 +605,10 @@ def main():
     if until_convergence:  # training_args.until_convergence:
         callbacks += [early_stopping_callback]
 
-    trainer = pl.Trainer(
+    trainer_kwargs = dict(
         fast_dev_run=training_args.fast_dev_run,
-        # training_args.until_convergence
         max_steps=-1 if until_convergence else training_args.max_steps,
         max_epochs=-1 if until_convergence else training_args.max_epochs,
-        gpus=len(available_gpus),
-        auto_select_gpus=True,
         strategy=DeepSpeedStrategy(
             stage=2,
             offload_optimizer=False,
@@ -611,6 +623,12 @@ def main():
         logger=wb_logger,  # [tb_logger, wb_logger],
         callbacks=callbacks
     )
+    if int(pl.__version__[0]) == 1:
+        trainer_kwargs['gpus'] = len(available_gpus)
+        trainer_kwargs['auto_select_gpus'] = True
+
+
+    trainer = pl.Trainer(**trainer_kwargs)
 
     trainer.fit(model=model, datamodule=datamodule)
 

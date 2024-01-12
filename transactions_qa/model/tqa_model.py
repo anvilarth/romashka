@@ -357,6 +357,7 @@ class TransactionQAModel(pl.LightningModule):
         # Sample a random single task
         task_idx = random.sample(list(range(len(self.tasks))), k=1)[0]
         task = self.tasks[task_idx]
+        self._logger.info(f"task: {task.task_name}")
 
         outputs, batch_answers = self.model_step(batch, task_idx=task_idx)
 
@@ -364,6 +365,8 @@ class TransactionQAModel(pl.LightningModule):
             return None
 
         loss = outputs['loss']
+        task_name = task.task_name
+        self._logger.info(f"loss = {loss} for task: {task_name}")
 
         # Calc metrics
         metrics_scores = {}
@@ -407,15 +410,6 @@ class TransactionQAModel(pl.LightningModule):
                 self._logger.info(f"#{answ_i}: {answ}")
 
         self.log_eval_steps_counter += 1
-
-        logging_dict = dict(list(logging_dict.items()) + list(metrics_scores.items()))
-        self.log_dict(
-            logging_dict,
-            batch_size=batch_answers.size(0),
-            sync_dist=True,
-            on_step=False, on_epoch=True,
-            prog_bar=True, logger=True
-        )
         return loss
 
     def predict_step(self,
