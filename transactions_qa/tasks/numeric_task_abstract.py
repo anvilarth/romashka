@@ -24,10 +24,6 @@ class NumericTaskAbstract(AbstractTask, ABC):
     # Identifies whether the feature value passes in discretized form or in real-valued
     is_real: Optional[bool] = False
 
-    # for binned feature representation
-    buckets: Optional[List[float]] = None
-    buckets_info_path: Optional[str] = "romashka/assets/dense_features_buckets.pkl"
-
     def __post_init__(self):
         super().__post_init__()
         self.target_feature_type = 'num_features'

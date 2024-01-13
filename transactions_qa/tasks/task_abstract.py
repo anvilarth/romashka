@@ -76,6 +76,10 @@ class AbstractTask(ABC):
     is_few_shot: Optional[bool] = False  # whether to provide few examples before question
     n_shot: Optional[int] = 1
 
+    # for binned feature representation
+    buckets: Optional[List[float]] = None
+    buckets_info_path: Optional[str] = "romashka/assets/dense_features_buckets.pkl"
+
     def __post_init__(self):
         if self.task_special_token is None:
             self.initialize_task_special_token()

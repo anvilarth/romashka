@@ -166,7 +166,7 @@ def main():
     # Loading Transactions model & weights
     logger.info(f"Loading Transactions model...")
     projections_maps = get_projections_maps(
-        num_embedding_projections_fn='./assets/num_embedding_projections.pkl',
+        num_embedding_projections_fn='./assets/num_embedding_projections_v2.pkl',
         cat_embedding_projections_fn='./assets/cat_embedding_projections.pkl',
         meta_embedding_projections_fn='./assets/meta_embedding_projections.pkl',
         relative_folder=data_args.projections_mappings_path)
@@ -358,8 +358,12 @@ def main():
             "initializer_range": 0.02,
             "max_position_embeddings": 4096,
             "position_embedding_type": "absolute",
-            "connector_model_name_or_path": '/home/jovyan/abdullaeva/pretrained_weights/q-former-blip2-with-whisper-small-pretrained/state_dict.pt'
+            "connector_model_name_or_path": '/home/jovyan/abdullaeva/transactionsQA/pretrained_weights/q-former-blip2-with-whisper-small-pretrained/state_dict.pt'
         }
+        if ("connector_model_name_or_path" in qformer_config) and \
+                not os.path.exists(qformer_config["connector_model_name_or_path"]):
+            raise FileExistsError(f"Initialization file doesn't exist: {qformer_config['connector_model_name_or_path']}")
+
         # if (model_args.connector_model_name_or_path is not None) \
         #         and ("bert" in model_args.connector_model_name_or_path):
         #     qformer_config['text_model_name'] = model_args.connector_model_name_or_path,  # bert-mini/small/base
@@ -476,7 +480,8 @@ def main():
             num_training_steps=training_args.max_steps,
             num_warmup_steps=training_args.warmup_steps,
             warmup_ratio=training_args.warmup_ratio),
-        "training_steps": training_args.max_steps
+        "training_steps": training_args.max_steps,
+        "save_checkpoints_dir": f"{training_args.save_checkpoints_dir}/{training_args.run_name}"
     }
 
     model = TransactionQAModel(model=model_,

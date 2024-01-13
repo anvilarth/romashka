@@ -46,6 +46,7 @@ class TransactionQAModel(pl.LightningModule):
                  return_logits: Optional[bool] = False,
                  multiple_choice_grade: Optional[bool] = False,
                  use_deepspeed: Optional[bool] = False,
+                 save_checkpoints_dir: Optional[str] = "",
                  **additional_kwargs
                  ):
         super().__init__()
@@ -80,6 +81,7 @@ class TransactionQAModel(pl.LightningModule):
         self._return_logits: bool = return_logits
 
         self.hparams['task_specific_tokens_map'] = self.task_specific_tokens_map
+        self.hparams['save_checkpoints_dir'] = save_checkpoints_dir
         self.save_hyperparameters(ignore=['tasks', '_logger', 'model'])
 
         self.log_eval_steps_counter = 0

@@ -300,7 +300,12 @@ def get_buckets_info(feature_name: str,
     print(f"Running script in {os.path.abspath(os.getcwd())} path.")
 
     default_path = "../assets/dense_features_buckets.pkl"
-    path = path if (path is not None) and os.path.exists(path) else default_path
+    if path is None:
+        path = default_path
+    elif not os.path.exists(path):
+        raise FileExistsError(
+            f"Buckets info path do not exists: {path}"
+        )
 
     # Load buckets for numeric features
     buckets = []
