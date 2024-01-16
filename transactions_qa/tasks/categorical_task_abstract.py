@@ -29,7 +29,10 @@ class CategoricalTaskAbstract(AbstractTask, ABC):
 
     def __post_init__(self):
         super().__post_init__()
-        self.target_feature_type = 'cat_features'
+        if self.target_feature_name != "label":
+            self.target_feature_type = 'cat_features'
+        else:
+            self.target_feature_type = "label"
 
     @classmethod
     def sample_random_negative(cls,

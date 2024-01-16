@@ -50,7 +50,14 @@ class EmbeddingLayer(nn.Module):
         seq_len = batch['cat_features'][0].shape[1]
 
         cat_features, num_features = batch['cat_features'], batch['num_features']
-        time_features, meta_features = batch.get('time'), batch['meta_features']
+        if "time" in batch:
+            time_features = batch.get('time')
+        else:
+            time_features = None
+        if "meta_features" in batch:
+            meta_features = batch.get('meta_features')
+        else:
+            meta_features = None
         embeddings = self.cat_embedding(cat_features)
 
         if self.time_embedding is not None:
@@ -61,7 +68,7 @@ class EmbeddingLayer(nn.Module):
             num_embeddings = self.num_embedding(num_features)
             embeddings = torch.cat([embeddings, num_embeddings], dim=-1)
 
-        if self.meta_embedding is not None:
+        if (self.meta_embedding is not None) and (meta_features is not None):
             meta_embeddings = self.meta_embedding(meta_features).unsqueeze(1)
             meta_embeddings = meta_embeddings.repeat(1, seq_len, 1)
             embeddings = torch.cat([embeddings, meta_embeddings], dim=-1)

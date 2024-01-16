@@ -55,6 +55,10 @@ class AbstractTask(ABC):
 
     task_special_token: Optional[str] = None
     task_specific_special_token: Optional[str] = "[UNKNOWN_TASK]"
+    attribute_specific_tokens: Optional[Dict[str, str]] = None
+    features: Optional[List[str]] = None
+    num_features_names: Optional[List[str]] = None
+    cat_features_names: Optional[List[str]] = None
     # if str -> enum.name
     # if int -> enum.value
     # if enum -> direct comparison
@@ -81,6 +85,8 @@ class AbstractTask(ABC):
     buckets_info_path: Optional[str] = "romashka/assets/dense_features_buckets.pkl"
 
     def __post_init__(self):
+        if self.attribute_specific_tokens is None:
+            self.attribute_specific_tokens = ATTRIBUTE_SPECIFIC_TOKENS
         if self.task_special_token is None:
             self.initialize_task_special_token()
 
@@ -90,7 +96,15 @@ class AbstractTask(ABC):
                                    self.transactions_embeddings_end_token]
             if self.task_special_token is not None:
                 self.special_tokens += [self.task_special_token]
-        if self.target_feature_name is not None:
+        # Init features names in case they are not defined in init
+        if self.features is None:
+            self.features = transaction_features
+        if self.num_features_names is None:
+            self.num_features_names = num_features_names
+        if self.cat_features_names is None:
+            self.cat_features_names = cat_features_names
+
+        if (self.target_feature_name is not None) and (self.target_feature_index is None):
             self.init_feature_index()
         # Init metrics
         self.metrics = nn.ModuleDict({"rouge": ROUGEScore()} if self.metrics is None else self.metrics)
@@ -144,13 +158,13 @@ class AbstractTask(ABC):
         """
         Initialize the feature index.
         """
-        if self.target_feature_name in num_features_names:
-            self.target_feature_index = num_features_names.index(self.target_feature_name) \
+        if self.target_feature_name in self.num_features_names:
+            self.target_feature_index = self.num_features_names.index(self.target_feature_name) \
                 if self.target_feature_index is None else self.target_feature_index
             self.target_feature_type = 'num_features'
 
-        elif self.target_feature_name in cat_features_names:
-            self.target_feature_index = cat_features_names.index(self.target_feature_name) \
+        elif self.target_feature_name in self.cat_features_names:
+            self.target_feature_index = self.cat_features_names.index(self.target_feature_name) \
                 if self.target_feature_index is None else self.target_feature_index
             self.target_feature_type = 'cat_features'
 
@@ -163,7 +177,7 @@ class AbstractTask(ABC):
             self.target_feature_index = 0  # as the combination of features
         else:
             raise AttributeError(f"Provided feature name not in available"
-                                 f"transactions feature names:\n{transaction_features}")
+                                 f"transactions feature names:\n{self.features}")
         logger.info(f"For feature with name: {self.target_feature_name} of type {self.target_feature_type}, "
                     f"set index = {self.target_feature_index}")
 
@@ -171,19 +185,19 @@ class AbstractTask(ABC):
         """
         Update the feature index.
         """
-        if self.target_feature_name in num_features_names:
-            self.target_feature_index = num_features_names.index(self.target_feature_name)
+        if self.target_feature_name in self.num_features_names:
+            self.target_feature_index = self.num_features_names.index(self.target_feature_name)
             self.target_feature_type = 'num_features'
 
-        elif self.target_feature_name in cat_features_names:
-            self.target_feature_index = cat_features_names.index(self.target_feature_name)
+        elif self.target_feature_name in self.cat_features_names:
+            self.target_feature_index = self.cat_features_names.index(self.target_feature_name)
             self.target_feature_type = 'cat_features'
         elif self.target_feature_name == "label":
             self.target_feature_type = "label"
             self.target_feature_index = 0  # as the only feature of default prediction
         else:
             raise AttributeError(f"Provided feature name not in available"
-                                 f"transactions feature names:\n{transaction_features}")
+                                 f"transactions feature names:\n{self.features}")
         logger.info(f"For feature with name: {self.target_feature_name} of type {self.target_feature_type}, "
                     f"set index = {self.target_feature_index}")
 
@@ -205,8 +219,9 @@ class AbstractTask(ABC):
         # Init special token based on selected scheme
         if self.task_special_token_type == TaskTokenType.TASK_SPECIFIC:
             self.task_special_token = self.task_specific_special_token
+
         elif self.task_special_token_type == TaskTokenType.ATTRIBUTE_SPECIFIC:
-            self.task_special_token = ATTRIBUTE_SPECIFIC_TOKENS.get(self.target_feature_name)
+            self.task_special_token = self.attribute_specific_tokens.get(self.target_feature_name)
         elif self.task_special_token_type == TaskTokenType.ANSWER_SPECIFIC:
             # Binary
             if ("binary" in self.task_name) or self.is_binary_task:
