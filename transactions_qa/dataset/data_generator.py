@@ -44,20 +44,14 @@ def batches_generator(list_of_paths: List[str],
             data = pickle.load(f)
         gc.enable()
 
-        if 'products' in data:
-            products = data['products']
-        else:
-            products = None
-        padded_sequences = data['padded_sequences']
+        padded_sequences, products = data['padded_sequences'], data['products']
         app_ids = data['app_id']
 
         if is_train:
             targets = data['targets']
 
-        for idx in range(len(padded_sequences)):
-            if products is not None:
-                product = products[idx]
-            bucket = padded_sequences[idx]
+        for idx in range(len(products)):
+            bucket, product = padded_sequences[idx], products[idx]
             app_id = app_ids[idx]
 
             if is_train:
@@ -71,9 +65,8 @@ def batches_generator(list_of_paths: List[str],
 
                 if is_train:
                     batch_targets = target[jdx: jdx + batch_size]
-                if products is not None:
-                    batch_products = product[jdx: jdx + batch_size]
 
+                batch_products = product[jdx: jdx + batch_size]
                 batch_app_ids = app_id[jdx: jdx + batch_size]
 
                 batch_mask = mask[jdx: jdx + batch_size]
@@ -90,10 +83,9 @@ def batches_generator(list_of_paths: List[str],
                     num_features=torch.FloatTensor(batch_sequences[:, num_features_indices]).transpose(0, 1),
                     cat_features=torch.LongTensor(batch_sequences[:, cat_features_indices]).transpose(0, 1),
                     mask=torch.BoolTensor(batch_mask),
+                    meta_features=torch.LongTensor(batch_products).unsqueeze(0),
                     app_id=torch.LongTensor(batch_app_ids)
                 )
-                if products is not None:
-                    ret['meta_features'] = torch.LongTensor(batch_products).unsqueeze(0)
                 if is_train:
                     ret['label'] = torch.LongTensor(batch_targets)
                 yield ret

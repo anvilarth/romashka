@@ -47,8 +47,8 @@ class NumericTaskAbstract(AbstractTask, ABC):
             buckets_ranges.append((round(bucket_min, 3), round(bucket_max, 3)))
             bucket_min = bucket_max
 
-        if feature_max > bucket_max:
-            buckets_ranges.append((round(bucket_max, 3), feature_max))
+        # if feature_max > bucket_max:
+        buckets_ranges.append((round(bucket_max, 3), feature_max))
         return buckets_ranges
 
     @staticmethod
@@ -70,8 +70,8 @@ class NumericTaskAbstract(AbstractTask, ABC):
             buckets_means.append((bucket_min + bucket_max) / 2)
             bucket_min = bucket_max
 
-        if feature_max > bucket_max:
-            buckets_means.append(feature_max)
+        # if feature_max > bucket_max:
+        buckets_means.append(feature_max)
         return buckets_means
 
     @staticmethod

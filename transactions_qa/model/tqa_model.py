@@ -359,7 +359,7 @@ class TransactionQAModel(pl.LightningModule):
         # Sample a random single task
         task_idx = random.sample(list(range(len(self.tasks))), k=1)[0]
         task = self.tasks[task_idx]
-        self._logger.info(f"task: {task.task_name}")
+        # self._logger.info(f"task: {task.task_name}")
 
         outputs, batch_answers = self.model_step(batch, task_idx=task_idx)
 
@@ -367,8 +367,8 @@ class TransactionQAModel(pl.LightningModule):
             return None
 
         loss = outputs['loss']
-        task_name = task.task_name
-        self._logger.info(f"loss = {loss} for task: {task_name}")
+        # task_name = task.task_name
+        # self._logger.info(f"loss = {loss} for task: {task_name}")
 
         # Calc metrics
         metrics_scores = {}

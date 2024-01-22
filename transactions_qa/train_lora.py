@@ -97,52 +97,55 @@ def main():
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
     # Detecting last checkpoint.
-    last_checkpoint = None
-    if (os.path.isdir(training_args.save_checkpoints_dir)
-            and training_args.do_train
-            and not training_args.overwrite_output_dir):
-        last_checkpoint = get_last_checkpoint(training_args.save_checkpoints_dir)
-        if last_checkpoint is None and len(os.listdir(training_args.save_checkpoints_dir)) > 0:
-            raise ValueError(
-                f"Output directory ({training_args.save_checkpoints_dir}) already exists and is not empty. "
-                "Use --overwrite_output_dir to overcome."
-            )
-        elif last_checkpoint is not None and training_args.resume_from_checkpoint is None:
-            logger.info(
-                f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
-                "the `--save_checkpoints_dir` or add `--overwrite_output_dir` to train from scratch."
-            )
-    elif not os.path.exists(training_args.save_checkpoints_dir):
-        os.makedirs(training_args.save_checkpoints_dir)
-    elif os.path.exists(training_args.save_checkpoints_dir) and training_args.overwrite_output_dir:
-        shutil.rmtree(training_args.save_checkpoints_dir)
-        os.makedirs(training_args.save_checkpoints_dir)
-    else:
-        logger.error(f"Output directory argument: ({training_args.save_checkpoints_dir}) is not a directory!")
-        raise AttributeError(f"Output directory argument: ({training_args.save_checkpoints_dir}) is not a directory!")
+    # last_checkpoint = None
+    # if (os.path.isdir(training_args.save_checkpoints_dir)
+    #         and training_args.do_train
+    #         and not training_args.overwrite_output_dir):
+    #     last_checkpoint = get_last_checkpoint(training_args.save_checkpoints_dir)
+    #     if last_checkpoint is None and len(os.listdir(training_args.save_checkpoints_dir)) > 0:
+    #         raise ValueError(
+    #             f"Output directory ({training_args.save_checkpoints_dir}) already exists and is not empty. "
+    #             "Use --overwrite_output_dir to overcome."
+    #         )
+    #     elif last_checkpoint is not None and training_args.resume_from_checkpoint is None:
+    #         logger.info(
+    #             f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
+    #             "the `--save_checkpoints_dir` or add `--overwrite_output_dir` to train from scratch."
+    #         )
+    # elif not os.path.exists(training_args.save_checkpoints_dir):
+    #     os.makedirs(training_args.save_checkpoints_dir)
+    # elif os.path.exists(training_args.save_checkpoints_dir) and training_args.overwrite_output_dir:
+    #     save_checkpoints_dir = os.path.abspath(training_args.save_checkpoints_dir)
+    #     shutil.rmtree(save_checkpoints_dir)
+    #     os.makedirs(save_checkpoints_dir)
+    # else:
+    #     logger.error(f"Output directory argument: ({training_args.save_checkpoints_dir}) is not a directory!")
+    #     raise AttributeError(f"Output directory argument: ({training_args.save_checkpoints_dir}) is not a directory!")
 
     # Get the datasets
     data_files = {}
     if data_args.train_folder is not None and training_args.do_train:
         dir_with_datasets = os.listdir(os.path.join(data_args.data_path, data_args.train_folder))
+        logger.info(f"Loading train data from: {data_args.train_folder}")
         dataset_files = sorted([os.path.join(data_args.data_path, data_args.train_folder, x)
                                 for x in dir_with_datasets])
         logger.info(f"Detected {len(dataset_files)} files for training.")
         data_files["train"] = dataset_files
     if data_args.validation_folder is not None and training_args.do_eval:
         dir_with_datasets = os.listdir(os.path.join(data_args.data_path, data_args.validation_folder))
+        logger.info(f"Loading validation data from: {data_args.validation_folder}")
         dataset_files = sorted([os.path.join(data_args.data_path, data_args.validation_folder, x)
                                 for x in dir_with_datasets])
         logger.info(f"Detected {len(dataset_files)} files for validation.")
         data_files["validation"] = dataset_files
 
     # Check weights existence by paths from args
-    if (model_args.transactions_model_name_or_path is None) \
-            or not os.path.exists(model_args.transactions_model_name_or_path):
-        logger.error(f"Transactions model weights path do not exists: {model_args.transactions_model_name_or_path}")
-        raise FileExistsError(
-            f"Transactions model weights path do not exists: {model_args.transactions_model_name_or_path}"
-        )
+    # if (model_args.transactions_model_name_or_path is None) \
+    #         or not os.path.exists(model_args.transactions_model_name_or_path):
+    #     logger.error(f"Transactions model weights path do not exists: {model_args.transactions_model_name_or_path}")
+    #     raise FileExistsError(
+    #         f"Transactions model weights path do not exists: {model_args.transactions_model_name_or_path}"
+    #     )
 
     # Configure device
     available_gpus = []
@@ -166,7 +169,7 @@ def main():
     # Loading Transactions model & weights
     logger.info(f"Loading Transactions model...")
     projections_maps = get_projections_maps(
-        num_embedding_projections_fn='./assets/num_embedding_projections_v2.pkl',
+        num_embedding_projections_fn='./assets/num_embedding_projections.pkl',
         cat_embedding_projections_fn='./assets/cat_embedding_projections.pkl',
         meta_embedding_projections_fn='./assets/meta_embedding_projections.pkl',
         relative_folder=data_args.projections_mappings_path)
@@ -188,28 +191,28 @@ def main():
     transactions_model = TransactionsModel(**transactions_model_config)
 
     # Load weights
-    if "whisper-tiny" in model_args.transactions_model_encoder_type:
-        ckpt = torch.load(model_args.transactions_model_name_or_path, map_location='cpu')
-        renamed_state_dict = OrderedDict()
-        for key, param in ckpt.items():
-            key_ = key
-            if key.startswith("head"):
-                key_ = ".".join(["head", key])
-            elif key.startswith("encoder"):
-                key_ = ".".join(["encoder_model", key])
-            elif key.startswith("mapping_embedding"):
-                key_ = ".".join(['connector', 'connector'] + key.split(".")[1:])
-            renamed_state_dict[key_] = param
+    # if "whisper-tiny" in model_args.transactions_model_encoder_type:
+    #     ckpt = torch.load(model_args.transactions_model_name_or_path, map_location='cpu')
+    #     renamed_state_dict = OrderedDict()
+    #     for key, param in ckpt.items():
+    #         key_ = key
+    #         if key.startswith("head"):
+    #             key_ = ".".join(["head", key])
+    #         elif key.startswith("encoder"):
+    #             key_ = ".".join(["encoder_model", key])
+    #         elif key.startswith("mapping_embedding"):
+    #             key_ = ".".join(['connector', 'connector'] + key.split(".")[1:])
+    #         renamed_state_dict[key_] = param
 
-        logger.info(f"Renaming & loading transactions model...")
-        transactions_model.load_state_dict(renamed_state_dict, strict=False)
-    elif model_args.transactions_model_name_or_path is not None:
-        try:
-            ckpt = torch.load(model_args.transactions_model_name_or_path, map_location='cpu')
-            transactions_model.load_state_dict(ckpt, strict=False)
-            logger.info(f"Loaded transactions model from checkpoint: `{model_args.transactions_model_name_or_path}`...")
-        except Exception as e:
-            logger.error(f"Error during transactions model checkpoint's loading: {e}")
+    #     logger.info(f"Renaming & loading transactions model...")
+    #     transactions_model.load_state_dict(renamed_state_dict, strict=False)
+    # elif model_args.transactions_model_name_or_path is not None:
+    #     try:
+    #         ckpt = torch.load(model_args.transactions_model_name_or_path, map_location='cpu')
+    #         transactions_model.load_state_dict(ckpt, strict=False)
+    #         logger.info(f"Loaded transactions model from checkpoint: `{model_args.transactions_model_name_or_path}`...")
+    #     except Exception as e:
+    #         logger.error(f"Error during transactions model checkpoint's loading: {e}")
 
     # Configure and load from HF hub LM model
     logger.info(f"Loading Language model: `{model_args.language_model_name_or_path}`...")
@@ -265,7 +268,7 @@ def main():
         tasks_kwargs = eval(tasks_kwargs)
     logger.info(f"Got task_names: {task_names} with task_kwargs: {tasks_kwargs}")
 
-    buckets_info_path = "romashka/assets/dense_features_buckets_v2.pkl"
+    buckets_info_path = "romashka/assets/dense_features_buckets.pkl"
     logger.info(f"Running with buckets file path: {buckets_info_path}")
 
     for task_i, task_name in enumerate(task_names):
@@ -356,7 +359,7 @@ def main():
             "hidden_act": "gelu",
             "hidden_dropout_prob": 0.1,
             "initializer_range": 0.02,
-            "max_position_embeddings": 4096,
+            "max_position_embeddings": 1024,
             "position_embedding_type": "absolute",
             "connector_model_name_or_path": '/home/jovyan/abdullaeva/transactionsQA/pretrained_weights/q-former-blip2-with-whisper-small-pretrained/state_dict.pt'
         }
@@ -397,7 +400,7 @@ def main():
             "hidden_act": "gelu",
             "hidden_dropout_prob": 0.1,
             "initializer_range": 0.02,
-            "max_position_embeddings": 4096,
+            "max_position_embeddings": 1024,
             "position_embedding_type": "absolute",
         }
 

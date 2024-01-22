@@ -82,7 +82,8 @@ class PredNumericAmountTaskBinary(NumericTaskAbstract):
         if self.buckets is None:
             # Load default buckets from assets folder
             self.buckets = get_buckets_info(self.target_feature_name,
-                                            self.buckets_info_path)
+                                            "romashka/assets/dense_features_buckets.pkl")
+        # self.buckets_info_path
         # Note: in this case are not str values!
         self.buckets_ranges = self._get_buckets_ranges(self.buckets,
                                                        self.feature_min,
@@ -348,7 +349,8 @@ class PredOverThresholdAmountTaskBinary(NumericTaskAbstract):
         if self.buckets is None:
             # Load default buckets from assets folder
             self.buckets = get_buckets_info(self.target_feature_name,
-                                            self.buckets_info_path)
+                                            "romashka/assets/dense_features_buckets.pkl")
+        # self.buckets_info_path
         # Note: in this case are not str values!
         self.buckets_ranges = self._get_buckets_ranges(self.buckets,
                                                        self.feature_min,
@@ -584,7 +586,8 @@ class PredUnderThresholdAmountTaskBinary(NumericTaskAbstract):
         if self.buckets is None:
             # Load default buckets from assets folder
             self.buckets = get_buckets_info(self.target_feature_name,
-                                            self.buckets_info_path)
+                                            "romashka/assets/dense_features_buckets.pkl")
+        # self.buckets_info_path
         # Note: in this case are not str values!
         self.buckets_ranges = self._get_buckets_ranges(self.buckets,
                                                        self.feature_min,
@@ -826,6 +829,7 @@ class PredNumericAmountTaskOpenEnded(NumericTaskAbstract):
             # Load default buckets from assets folder
             self.buckets = get_buckets_info(self.target_feature_name,
                                             self.buckets_info_path)
+        # self.buckets_info_path
         # Note: in this case are not str values!
         self.buckets_ranges = self._get_buckets_ranges(self.buckets,
                                                        self.feature_min,
@@ -1139,7 +1143,8 @@ class PredBinnedAmountTaskOpenEnded(NumericTaskAbstract):
         if self.buckets is None:
             # Load default buckets from assets folder
             self.buckets = get_buckets_info(self.target_feature_name,
-                                            self.buckets_info_path)
+                                            "romashka/assets/dense_features_buckets.pkl")
+        # self.buckets_info_path
         # Note: in this case are not str values!
         self.buckets_ranges = self._get_buckets_ranges(self.buckets,
                                                        self.feature_min,
