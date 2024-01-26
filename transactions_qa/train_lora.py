@@ -638,6 +638,9 @@ def main():
     if int(pl.__version__[0]) == 1:
         trainer_kwargs['gpus'] = len(available_gpus)
         trainer_kwargs['auto_select_gpus'] = True
+    else:
+        trainer_kwargs['accelerator'] = "gpu"
+        trainer_kwargs['devices'] = "auto"
 
 
     trainer = pl.Trainer(**trainer_kwargs)
