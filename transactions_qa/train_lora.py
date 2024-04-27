@@ -31,7 +31,7 @@ from pytorch_lightning.strategies import DeepSpeedStrategy
 import peft
 from peft import LoraConfig, get_peft_model, prepare_model_for_int8_training, TaskType
 
-sys.path.insert(1, '/home/jovyan/abdullaeva/transactionsQA')
+sys.path.insert(1, '/home/jovyan/shares/SR004.nfs2/abdullaeva/transactionsQA')
 # for MlSpace: /home/jovyan/abdullaeva/transactionsQA
 print(sys.path)
 
@@ -169,8 +169,8 @@ def main():
     # Loading Transactions model & weights
     logger.info(f"Loading Transactions model...")
     projections_maps = get_projections_maps(
-        num_embedding_projections_fn='./assets/num_embedding_projections.pkl',
-        cat_embedding_projections_fn='./assets/cat_embedding_projections.pkl',
+        num_embedding_projections_fn='./assets/num_embedding_projections_v1.pkl',
+        cat_embedding_projections_fn='./assets/cat_embedding_projections_v1.pkl',
         meta_embedding_projections_fn='./assets/meta_embedding_projections.pkl',
         relative_folder=data_args.projections_mappings_path)
     transactions_model_config = {
@@ -268,7 +268,7 @@ def main():
         tasks_kwargs = eval(tasks_kwargs)
     logger.info(f"Got task_names: {task_names} with task_kwargs: {tasks_kwargs}")
 
-    buckets_info_path = "romashka/assets/dense_features_buckets.pkl"
+    buckets_info_path = "romashka/assets/dense_features_buckets_v1.pkl"
     logger.info(f"Running with buckets file path: {buckets_info_path}")
 
     for task_i, task_name in enumerate(task_names):

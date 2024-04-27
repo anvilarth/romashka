@@ -52,6 +52,7 @@ class AbstractTask(ABC):
 
     seed: Optional[int] = 11
     verbose: Optional[bool] = False
+    device: Optional[Union[str, torch.device]] = 'cpu'
 
     task_special_token: Optional[str] = None
     task_specific_special_token: Optional[str] = "[UNKNOWN_TASK]"

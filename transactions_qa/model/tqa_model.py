@@ -373,7 +373,8 @@ class TransactionQAModel(pl.LightningModule):
         # Calc metrics
         metrics_scores = {}
         try:
-            metrics_scores = task.calculate_metrics(outputs, batch_answers, self.metrics[task.task_name])
+            metrics_scores = task.calculate_metrics(outputs, batch_answers,
+                                                    self.metrics[task.task_name].to(self.device))
             metrics_scores = {metric_name + "_" + task.task_name: score for metric_name, score in
                               metrics_scores.items()}
         except Exception as e:
