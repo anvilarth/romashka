@@ -83,6 +83,10 @@ class TransactionQADataset:
 
         output['mask'] = pad_sequence([d['mask'].transpose(0, -1) for d in batch], batch_first=True).squeeze(2)
         output['app_id'] = torch.cat([d['app_id'] for d in batch])
+    if 'real_num_features' in batch[0]:
+        output['real_num_features'] = pad_sequence([d['real_num_features'].transpose(0, -1) for d in batch],
+                                          # num_features x batch_size x seq_len
+                                          batch_first=True).squeeze(2).permute(-1, 0, 1)
 
         if 'label' in batch[0]:
             output['label'] = torch.cat([d['label'] for d in batch])

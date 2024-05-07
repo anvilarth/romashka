@@ -19,9 +19,9 @@ cat_features_indices = [transaction_features.index(x) for x in cat_features_name
 
 
 def batches_generator(list_of_paths: List[str],
-                      batch_size: Optional[int] = 1,
-                      min_seq_len: Optional[int] = None, max_seq_len: Optional[int] = None,
-                      is_train: Optional[bool] = True, verbose: Optional[bool] = False):
+                      batch_size: int = 1,
+                      min_seq_len: int = 50, max_seq_len: int = 750,
+                      is_train: bool = True, verbose: bool = True):
     """
     Infinite generator for time-based data reading and collation in padded batches.
     Args:
@@ -46,12 +46,18 @@ def batches_generator(list_of_paths: List[str],
 
         padded_sequences, products = data['padded_sequences'], data['products']
         app_ids = data['app_id']
+        padded_sequences_realval = None
+
+        if 'padded_sequences_realval' in data:
+            padded_sequences_realval = data['padded_sequences_realval']
 
         if is_train:
             targets = data['targets']
 
         for idx in range(len(products)):
             bucket, product = padded_sequences[idx], products[idx]
+            if padded_sequences_realval is not None:
+                real_valued_bucket = padded_sequences_realval[idx]
             app_id = app_ids[idx]
 
             if is_train:
@@ -62,6 +68,8 @@ def batches_generator(list_of_paths: List[str],
             for jdx in range(0, len(bucket), batch_size):
 
                 batch_sequences = bucket[jdx: jdx + batch_size]
+                if padded_sequences_realval is not None:
+                    batch_realvals = real_valued_bucket[jdx: jdx + batch_size]
 
                 if is_train:
                     batch_targets = target[jdx: jdx + batch_size]
@@ -86,6 +94,8 @@ def batches_generator(list_of_paths: List[str],
                     meta_features=torch.LongTensor(batch_products).unsqueeze(0),
                     app_id=torch.LongTensor(batch_app_ids)
                 )
+                if padded_sequences_realval is not None:
+                    ret['real_num_features'] = torch.FloatTensor(batch_realvals).transpose(0, 1)
                 if is_train:
                     ret['label'] = torch.LongTensor(batch_targets)
                 yield ret
