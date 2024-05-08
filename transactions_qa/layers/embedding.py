@@ -123,21 +123,21 @@ class NumericalEmbedding(nn.Module):
                 "n_features": len(self.numeric_features),
                 "d_embeddings": embedding_dims
             }
-            kwargs += self.embeddings_additional_kwargs
+            kwargs.update(self.embeddings_additional_kwargs)
             return LinearEmbeddings(**kwargs)
         elif self.embeddings_type == 'linear_relu':
             kwargs = {
                 "n_features": len(self.numeric_features),
                 "d_embeddings": embedding_dims
             }
-            kwargs += self.embeddings_additional_kwargs
+            kwargs.update(self.embeddings_additional_kwargs)
             return LinearReLUEmbeddings(**kwargs)
         elif self.embeddings_type == 'periodic':
             kwargs = {
                 "n_features": len(self.numeric_features),
                 "d_embeddings": embedding_dims
             }
-            kwargs += self.embeddings_additional_kwargs
+            kwargs.update(self.embeddings_additional_kwargs)
             return PeriodicEmbeddings(**kwargs)
         else:
             raise AttributeError(f"Currently this type of embeddings is not supported!")
@@ -173,6 +173,9 @@ class CatEmbeddingsCustom(nn.Module):
 
     def get_embedding_size(self):
         return self.output_size
+
+    def forward(self, cat_features):
+        return self.cat_embedding(cat_features)
 
     def _create_embedding_projection(self):
         cat_cardinalities = []
