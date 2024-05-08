@@ -139,14 +139,6 @@ def main():
         logger.info(f"Detected {len(dataset_files)} files for validation.")
         data_files["validation"] = dataset_files
 
-    # Check weights existence by paths from args
-    # if (model_args.transactions_model_name_or_path is None) \
-    #         or not os.path.exists(model_args.transactions_model_name_or_path):
-    #     logger.error(f"Transactions model weights path do not exists: {model_args.transactions_model_name_or_path}")
-    #     raise FileExistsError(
-    #         f"Transactions model weights path do not exists: {model_args.transactions_model_name_or_path}"
-    #     )
-
     # Configure device
     available_gpus = []
     if training_args.no_cuda:
@@ -361,7 +353,7 @@ def main():
             "initializer_range": 0.02,
             "max_position_embeddings": 1024,
             "position_embedding_type": "absolute",
-            "connector_model_name_or_path": '/home/jovyan/abdullaeva/transactionsQA/pretrained_weights/q-former-blip2-with-whisper-small-pretrained/state_dict.pt'
+            "connector_model_name_or_path": '/home/jovyan/shares/SR004.nfs2/abdullaeva/transactionsQA/pretrained_weights/q-former-blip2-with-whisper-small-pretrained/state_dict.pt'
         }
         if ("connector_model_name_or_path" in qformer_config) and \
                 not os.path.exists(qformer_config["connector_model_name_or_path"]):

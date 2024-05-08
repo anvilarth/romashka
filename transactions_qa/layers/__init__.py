@@ -9,6 +9,13 @@ from romashka.transactions_qa.layers.qformer_connector_hf import QFormerConnecto
 from romashka.transactions_qa.layers.instruct_qformer_connector_hf import InstructQFormerConnector
 from romashka.transactions_qa.layers.projection import ProjectionsType
 from romashka.transactions_qa.layers.layers import MixedPrecisionLayerNorm
+from romashka.transactions_qa.layers.num_embeddings import (LinearEmbeddings,
+                                                            LinearReLUEmbeddings,
+                                                            PeriodicEmbeddings,
+                                                            CategoricalEmbeddings,
+                                                            PiecewiseLinearEmbeddings,
+                                                            PiecewiseLinearEncoding,
+                                                            EMBEDDING_TYPES)
 
 
 __all__ = [
@@ -22,5 +29,12 @@ __all__ = [
     "QFormerConnector",
     "InstructQFormerConnector",
     "ProjectionsType",
-    "MixedPrecisionLayerNorm"
+    "MixedPrecisionLayerNorm",
+    "LinearEmbeddings",
+    "LinearReLUEmbeddings",
+    "CategoricalEmbeddings",
+    "PeriodicEmbeddings",
+    "PiecewiseLinearEmbeddings",
+    "PiecewiseLinearEncoding",
+    "EMBEDDING_TYPES"
 ]

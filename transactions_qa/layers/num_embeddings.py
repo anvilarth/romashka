@@ -710,3 +710,12 @@ class PiecewiseLinearEmbeddings(nn.Module):
         if self.activation is not None:
             x = self.activation(x)
         return x
+
+
+EMBEDDING_TYPES = {
+    "linear": LinearEmbeddings,
+    "linear_relu": LinearReLUEmbeddings,
+    "categorical": CategoricalEmbeddings,
+    "periodic": PeriodicEmbeddings,
+    "piecewise": PiecewiseLinearEmbeddings
+}
