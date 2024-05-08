@@ -170,6 +170,7 @@ def main():
         "cat_embedding_projections": projections_maps.get('cat_embedding_projections'),
         "num_features": num_features_names,
         "num_embedding_projections": projections_maps.get('num_embedding_projections'),
+        "num_embeddings_type": model_args.num_embeddings_type,
         "meta_features": meta_features_names,
         "meta_embedding_projections": projections_maps.get('meta_embedding_projections'),
         "encoder_type": model_args.transactions_model_encoder_type,
@@ -181,30 +182,6 @@ def main():
         "add_l_norm": False
     }
     transactions_model = TransactionsModel(**transactions_model_config)
-
-    # Load weights
-    # if "whisper-tiny" in model_args.transactions_model_encoder_type:
-    #     ckpt = torch.load(model_args.transactions_model_name_or_path, map_location='cpu')
-    #     renamed_state_dict = OrderedDict()
-    #     for key, param in ckpt.items():
-    #         key_ = key
-    #         if key.startswith("head"):
-    #             key_ = ".".join(["head", key])
-    #         elif key.startswith("encoder"):
-    #             key_ = ".".join(["encoder_model", key])
-    #         elif key.startswith("mapping_embedding"):
-    #             key_ = ".".join(['connector', 'connector'] + key.split(".")[1:])
-    #         renamed_state_dict[key_] = param
-
-    #     logger.info(f"Renaming & loading transactions model...")
-    #     transactions_model.load_state_dict(renamed_state_dict, strict=False)
-    # elif model_args.transactions_model_name_or_path is not None:
-    #     try:
-    #         ckpt = torch.load(model_args.transactions_model_name_or_path, map_location='cpu')
-    #         transactions_model.load_state_dict(ckpt, strict=False)
-    #         logger.info(f"Loaded transactions model from checkpoint: `{model_args.transactions_model_name_or_path}`...")
-    #     except Exception as e:
-    #         logger.error(f"Error during transactions model checkpoint's loading: {e}")
 
     # Configure and load from HF hub LM model
     logger.info(f"Loading Language model: `{model_args.language_model_name_or_path}`...")

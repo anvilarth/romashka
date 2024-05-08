@@ -1,31 +1,46 @@
 import torch
 import torch.nn as nn
+from typing import Optional, Dict, List, Tuple, Any
 
+from romashka.transactions_qa.layers import (EMBEDDING_TYPES,
+                                             LinearEmbeddings,
+                                             LinearReLUEmbeddings,
+                                             CategoricalEmbeddings,
+                                             PeriodicEmbeddings,
+                                             PiecewiseLinearEmbeddings)
 from romashka.transactions_qa.utils import get_mantissa_number, get_exponent_number
 
 
 class EmbeddingLayer(nn.Module):
     def __init__(self,
-                 cat_embedding_projections,
-                 cat_features,
-                 num_embedding_projections=None,
-                 num_features=None,
-                 meta_embedding_projections=None,
-                 meta_features=None,
-                 time_embedding=None,
-                 dropout=0.0,
+                 cat_embedding_projections: Dict[str, Tuple[int, int]],
+                 cat_features: List[str],
+                 cat_bias: Optional[bool] = True,
+                 num_embedding_projections: Optional[Dict[str, Tuple[int, int]]] = None,
+                 num_features: Optional[List[str]] = None,
+                 num_embeddings_type: Optional[str] = 'linear',
+                 num_embeddings_kwargs: Optional[Dict[str, Any]] = {},
+                 meta_embedding_projections: Optional[Dict[str, Tuple[int, int]]] = None,
+                 meta_features: Optional[List[str]] = None,
+                 time_embedding: Optional[bool] = None,
+                 dropout: Optional[float] = 0.0,
                  ):
 
         super().__init__()
-        self.cat_embedding = CatEmbedding(cat_embedding_projections, cat_features)
+        self.cat_embedding = CatEmbeddingsCustom(cat_embedding_projections, cat_features, bias=cat_bias)
         self.dropout = nn.Dropout(dropout)
 
         self.num_embedding = None
         self.meta_embedding = None
         self.time_embedding = None
 
+        self.num_embeddings_type = num_embeddings_type
+        self.num_embeddings_kwargs = num_embeddings_kwargs
         if num_embedding_projections is not None and num_features is not None:
-            self.num_embedding = NumericalEmbedding(num_embedding_projections, num_features)
+            self.num_embedding = NumericalEmbedding(num_embedding_projections,
+                                                    num_features,
+                                                    embeddings_type=num_embeddings_type,
+                                                    embeddings_kwargs=num_embeddings_kwargs)
 
         if meta_embedding_projections is not None and meta_features is not None:
             self.meta_embedding = CatEmbedding(meta_embedding_projections, meta_features)
@@ -78,23 +93,98 @@ class EmbeddingLayer(nn.Module):
 
 
 class NumericalEmbedding(nn.Module):
-    def __init__(self, embedding_projections, use_features):
+    def __init__(self, embedding_projections: Dict[str, Tuple[int, int]],
+                 numeric_features: List[str],
+                 embeddings_type: Optional[str] = 'linear',
+                 embeddings_kwargs: Optional[Dict[str, Any]] = {}):
         super().__init__()
-        self.num_embedding = nn.ModuleList([self._create_embedding_projection(embedding_projections[feature][1])
-                                            for feature in use_features])
-
-        self.output_size = sum([embedding_projections[feature][1] for feature in use_features])
+        self.embeddings_type = embeddings_type
+        self.embeddings_additional_kwargs = embeddings_kwargs
+        self.numeric_features = numeric_features
+        self.embedding_projections = embedding_projections  # as tuples (input_size, output_size)
+        self.num_embedding = self._create_embedding_projection()
+        self.output_size = sum([embedding_projections[feature][1] for feature in self.numeric_features])
 
     def forward(self, num_features):
-        num_embeddings = [embedding(num_features[i][..., None]) for i, embedding in enumerate(self.num_embedding)]
-        return torch.cat(num_embeddings, dim=-1)
+        return self.num_embedding(num_features)
 
     def get_embedding_size(self):
         return self.output_size
 
-    @classmethod
-    def _create_embedding_projection(cls, embed_size):
-        return nn.Linear(1, embed_size)
+    def _create_embedding_projection(self):
+        if not (self.embeddings_type in EMBEDDING_TYPES):
+            raise AttributeError(f"Unknown embedding type: {self.embeddings_type}!"
+                                 f"\nChoose one from the following: {list(EMBEDDING_TYPES.keys())}")
+        # TODO: make automatic creation from dict instead of if/else
+        embedding_dims = [self.embedding_projections[feature][1] for feature in self.numeric_features]
+
+        if self.embeddings_type == 'linear':
+            kwargs = {
+                "n_features": len(self.numeric_features),
+                "d_embeddings": embedding_dims
+            }
+            kwargs += self.embeddings_additional_kwargs
+            return LinearEmbeddings(**kwargs)
+        elif self.embeddings_type == 'linear_relu':
+            kwargs = {
+                "n_features": len(self.numeric_features),
+                "d_embeddings": embedding_dims
+            }
+            kwargs += self.embeddings_additional_kwargs
+            return LinearReLUEmbeddings(**kwargs)
+        elif self.embeddings_type == 'periodic':
+            kwargs = {
+                "n_features": len(self.numeric_features),
+                "d_embeddings": embedding_dims
+            }
+            kwargs += self.embeddings_additional_kwargs
+            return PeriodicEmbeddings(**kwargs)
+        else:
+            raise AttributeError(f"Currently this type of embeddings is not supported!")
+
+
+class CatEmbeddingsCustom(nn.Module):
+    """
+    Embeddings for categorical features.
+    """
+
+    def __init__(self,
+                 embedding_projections: Dict[str, Tuple[int, int]],
+                 cat_features: List[str],
+                 bias: Optional[bool] = True,
+                 add_missing: Optional[bool] = True
+                 ) -> None:
+        """
+        Args:
+            cardinalities: the number of distinct values for each feature.
+            d_embeddings: the embedding sizes for each feature.
+            bias: if `True`, for each feature, a trainable vector is added to the
+                embedding regardless of a feature value. For each feature, a separate
+                non-shared bias vector is allocated.
+                In the paper, FT-Transformer uses `bias=True`.
+        """
+        super().__init__()
+        self.add_missing = add_missing
+        self.bias = bias
+        self.cat_features = cat_features
+        self.embedding_projections = embedding_projections
+        self.cat_embedding = self._create_embedding_projection()
+        self.output_size = sum([embedding_projections[feature][1] for feature in cat_features])
+
+    def get_embedding_size(self):
+        return self.output_size
+
+    def _create_embedding_projection(self):
+        cat_cardinalities = []
+        cat_embedding_dims = []
+        for i, cat_feature_name in enumerate(self.cat_features):
+            cat_cardinalities.append(self.embedding_projections[cat_feature_name][0])
+            cat_embedding_dims.append(self.embedding_projections[cat_feature_name][1])
+
+        return CategoricalEmbeddings(cat_cardinalities,
+                                     d_embeddings=cat_embedding_dims,
+                                     add_missing=self.add_missing,
+                                     bias=self.bias)
 
 
 class CatEmbedding(nn.Module):
@@ -182,6 +272,7 @@ class PiecewiseLinearEmbedding(nn.Module):
 
         return self.layer(original_matrix)
 
+
 class NumEmbedding(nn.Module):
     def __init__(self, embedding_dim, buckets) -> None:
         super().__init__()
@@ -202,11 +293,14 @@ class NumEmbedding(nn.Module):
 def eq_fn(x):
     return x
 
+
 def cos_fn(freq, x):
     return torch.cos(x * freq)
 
+
 def sin_fn(freq, x):
     return torch.sin(x * freq)
+
 
 class PositionalEncoder(nn.Module):
 

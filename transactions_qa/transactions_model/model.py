@@ -1,7 +1,7 @@
 import sys
 import torch
 import torch.nn as nn
-from typing import Optional
+from typing import Optional, List, Tuple, Dict, Any
 
 from romashka.transactions_qa.layers.embedding import EmbeddingLayer
 from romashka.transactions_qa.transactions_model.head import TransactionHead
@@ -9,6 +9,7 @@ from romashka.transactions_qa.transactions_model.encoder import TransactionEncod
 from romashka.transactions_qa.transactions_model.connectors import TransactionConnector
 
 from romashka.logging_handler import get_logger
+
 
 class WrapVisionModel(nn.Module):
     def __init__(self, process, encoder):
@@ -23,13 +24,16 @@ class WrapVisionModel(nn.Module):
 
 class TransactionsModel(nn.Module):
     def __init__(self,
-                 cat_embedding_projections,
-                 cat_features,
-                 num_embedding_projections=None,
-                 num_features=None,
-                 meta_embedding_projections=None,
-                 meta_features=None,
-                 time_embedding=None,
+                 cat_embedding_projections: Dict[str, Tuple[int, int]],
+                 cat_features: List[str],
+                 cat_bias: Optional[bool] = True,
+                 num_embedding_projections: Optional[Dict[str, Tuple[int, int]]] = None,
+                 num_features: Optional[List[str]] = None,
+                 num_embeddings_type: Optional[str] = 'linear',
+                 num_embeddings_kwargs: Optional[Dict[str, Any]] = {},
+                 meta_embedding_projections: Optional[Dict[str, Tuple[int, int]]] = None,
+                 meta_features: Optional[List[str]] = None,
+                 time_embedding: Optional[bool] = None,
                  head_type: Optional[str] = 'linear',
                  encoder_type: Optional[str] = 'gpt2/base',
                  num_layers: Optional[int] = 1,
@@ -47,13 +51,16 @@ class TransactionsModel(nn.Module):
             name=self.__class__.__name__
         )
 
-        self.embedding = EmbeddingLayer(cat_embedding_projections,
-                                        cat_features,
-                                        num_embedding_projections,
-                                        num_features,
-                                        meta_embedding_projections,
-                                        meta_features,
-                                        time_embedding,
+        self.embedding = EmbeddingLayer(cat_embedding_projections=cat_embedding_projections,
+                                        cat_features=cat_features,
+                                        cat_bias=cat_bias,
+                                        num_embedding_projections=num_embedding_projections,
+                                        num_features=num_features,
+                                        num_embeddings_type=num_embeddings_type,
+                                        num_embeddings_kwargs=num_embeddings_kwargs,
+                                        meta_embedding_projections=meta_embedding_projections,
+                                        meta_features=meta_features,
+                                        time_embedding=time_embedding,
                                         dropout=embedding_dropout)
         inp_size = self.embedding.get_embedding_size()
 
@@ -82,7 +89,7 @@ class TransactionsModel(nn.Module):
         embedding = self.connector(embedding, attention_mask=mask)
         return embedding
 
-    def get_embs(self, batch, embeds=None):
+    def get_embeddings(self, batch, embeds=None):
         mask = batch['mask']
         batch_size = mask.shape[0]
         if embeds is None:
@@ -93,7 +100,7 @@ class TransactionsModel(nn.Module):
         return x, mask
 
     def forward(self, batch=None, embeds=None):
-        x, mask = self.get_embs(batch, embeds)
+        x, mask = self.get_embeddings(batch, embeds)
         logit = self.head(x, mask)
         return logit
 

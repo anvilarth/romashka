@@ -35,6 +35,16 @@ class ModelArguments:
         },
     )
 
+    numeric_embeddings_type: Optional[str] = field(
+        default="linear",
+        metadata={
+            "help": (
+                "The type for a numeric embeddings."
+            )
+        },
+    )
+
+
     transactions_model_name_or_path: Optional[str] = field(
         default=None,
         metadata={

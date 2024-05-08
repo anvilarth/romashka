@@ -5,10 +5,14 @@ import random
 import numpy as np
 from typing import List, Optional
 
-transaction_features = ['currency', 'operation_kind', 'card_type', 'operation_type',
-                        'operation_type_group', 'ecommerce_flag', 'payment_system',
-                        'income_flag', 'mcc', 'country', 'city', 'mcc_category',
-                        'day_of_week', 'hour', 'weekofyear', 'amnt', 'days_before', 'hour_diff']
+transaction_features = ['currency', 'country', 'city', 'payment_system',  # geographic
+                        'operation_kind', 'card_type', 'operation_type', 'operation_type_group',  # card/op. related
+                        'ecommerce_flag', 'income_flag',  # flags
+                        'mcc', 'mcc_category',  # MCC related
+                        'day_of_week', 'hour', 'weekofyear',  # time-related
+                        'amnt', 'days_before', 'hour_diff',  # numeric
+                        # 'amnt_realval',	'days_before_realval', 'hour_diff_realval'
+                        ]
 
 num_features_names = ['amnt', 'days_before', 'hour_diff']
 cat_features_names = [x for x in transaction_features if x not in num_features_names]
@@ -21,7 +25,7 @@ cat_features_indices = [transaction_features.index(x) for x in cat_features_name
 def batches_generator(list_of_paths: List[str],
                       batch_size: int = 1,
                       min_seq_len: int = 50, max_seq_len: int = 750,
-                      is_train: bool = True, verbose: bool = True):
+                      is_train: bool = True, verbose: bool = False):
     """
     Infinite generator for time-based data reading and collation in padded batches.
     Args:
@@ -158,7 +162,7 @@ def batches_balanced_generator(list_of_paths: List[str],
                     for target_name, cnt in target_to_counts.items():
                         bucket_balance_max = cnt if cnt > bucket_balance_max else bucket_balance_max
 
-                bucket_balance_max = bucket_balance_max * 0.5   # as hot-fix to not to oversample tooo much
+                bucket_balance_max = bucket_balance_max * 0.5  # as hot-fix to not to oversample tooo much
 
                 # Collect samples per target class
                 samples_by_targets = dict()

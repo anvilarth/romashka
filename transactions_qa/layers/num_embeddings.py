@@ -27,84 +27,70 @@ class LinearEmbeddings(nn.Module):
 
     **Shape**
 
-    - Input: `(*, n_features)`
+    - Input: `(n_features, *)`
     - Output: `(*, n_features, d_embedding)`
-
-    **Examples**
-
-    >>> batch_size = 2
-    >>> n_cont_features = 3
-    >>> x = torch.randn(batch_size, n_cont_features)
-    >>> d_embedding = 4
-    >>> m = LinearEmbeddings(n_cont_features, d_embedding)
-    >>> m(x).shape
-    torch.Size([2, 3, 4])
     """
 
-    def __init__(self, n_features: int, d_embedding: int) -> None:
+    def __init__(self, n_features: int, d_embeddings: List[int]) -> None:
         """
         Args:
             n_features: the number of continous features.
-            d_embedding: the embedding size.
+            d_embeddings: the embedding size for each feature.
         """
+        self.n_features = n_features
+        self.d_embeddings = d_embeddings
         if n_features <= 0:
             raise ValueError(f'n_features must be positive, however: {n_features=}')
-        if d_embedding <= 0:
-            raise ValueError(f'd_embedding must be positive, however: {d_embedding=}')
+        if any(x <= 0 for x in d_embeddings):
+            i, value = next((i, x) for i, x in enumerate(d_embeddings) if x <= 0)
+            raise ValueError(
+                'd_embeddings must contain only positive values,'
+                f' however: d_embeddings[{i}]={value}'
+            )
 
         super().__init__()
-        self.weight = Parameter(torch.empty(n_features, d_embedding))
-        self.bias = Parameter(torch.empty(n_features, d_embedding))
+        self.weight  = [torch.nn.parameter.Parameter(torch.empty(1, d_embedding))
+                        for d_embedding in d_embeddings]
+        self.bias  = [torch.nn.parameter.Parameter(torch.empty(1, d_embedding))
+                                  for d_embedding in d_embeddings]
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
-        d_rqsrt = self.weight.shape[1] ** -0.5
-        nn.init.uniform_(self.weight, -d_rqsrt, d_rqsrt)
-        nn.init.uniform_(self.bias, -d_rqsrt, d_rqsrt)
+        d_rqsrt = torch.max(torch.LongTensor(self.d_embeddings)) ** -0.5
+        _ = [nn.init.uniform_(w, -d_rqsrt, d_rqsrt) for w in self.weight]
+        _ = [nn.init.uniform_(b, -d_rqsrt, d_rqsrt) for b in self.bias]
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         if x.ndim < 2:
             raise ValueError(
                 f'The input must have at least two dimensions, however: {x.ndim=}'
             )
-
-        x = x[..., None] * self.weight
-        x = x + self.bias[None]
-        return x
+        x = [x[i][..., None] * self.weight[i] for i in range(len(self.weight))]
+        x = [x[i] + self.bias[i][None] for i in range(len(self.bias))]
+        return torch.cat(x, dim=-1)
 
 
 class CategoricalEmbeddings(nn.Module):
-    """Embeddings for categorical features.
-
-    **Examples**
-
-    >>> cardinalities = [3, 10]
-    >>> x = torch.tensor([
-    ...     [0, 5],
-    ...     [1, 7],
-    ...     [0, 2],
-    ...     [2, 4]
-    ... ])
-    >>> x.shape  # (batch_size, n_cat_features)
-    torch.Size([4, 2])
-    >>> m = CategoricalEmbeddings(cardinalities, d_embedding=5)
-    >>> m(x).shape  # (batch_size, n_cat_features, d_embedding)
-    torch.Size([4, 2, 5])
+    """
+    Embeddings for categorical features.
     """
 
     def __init__(
-        self, cardinalities: List[int], d_embedding: int, bias: bool = True
+            self, cardinalities: List[int], d_embeddings: List[int],
+            bias: Optional[bool] = True,
+            add_missing: Optional[bool] = True
     ) -> None:
         """
         Args:
             cardinalities: the number of distinct values for each feature.
-            d_embedding: the embedding size.
+            d_embeddings: the embedding sizes for each feature.
             bias: if `True`, for each feature, a trainable vector is added to the
                 embedding regardless of a feature value. For each feature, a separate
                 non-shared bias vector is allocated.
                 In the paper, FT-Transformer uses `bias=True`.
         """
         super().__init__()
+        self.add_missing = add_missing
         if not cardinalities:
             raise ValueError('cardinalities must not be empty')
         if any(x <= 0 for x in cardinalities):
@@ -113,43 +99,57 @@ class CategoricalEmbeddings(nn.Module):
                 'cardinalities must contain only positive values,'
                 f' however: cardinalities[{i}]={value}'
             )
-        if d_embedding <= 0:
-            raise ValueError(f'd_embedding must be positive, however: {d_embedding=}')
-
+        if any(x <= 0 for x in d_embeddings):
+            i, value = next((i, x) for i, x in enumerate(d_embeddings) if x <= 0)
+            raise ValueError(
+                'd_embeddings must contain only positive values,'
+                f' however: d_embeddings[{i}]={value}'
+            )
+        add_missing = 1 if self.add_missing else 0
         self.embeddings = nn.ModuleList(
-            [nn.Embedding(x, d_embedding) for x in cardinalities]
+            [nn.Embedding(cardin + add_missing, embedding_dim=d_embedding, padding_idx=0) for cardin, d_embedding
+             in zip(cardinalities, d_embeddings)]
         )
-        self.bias = (
-            Parameter(torch.empty(len(cardinalities), d_embedding)) if bias else None
-        )
+        # self.bias = (
+        #     torch.nn.parameter.Parameter(torch.empty(len(cardinalities), d_embedding)) if bias else None
+        # )
+        if bias:
+            self.bias = [torch.nn.parameter.Parameter(torch.empty(1, d_embedding))
+                         for d_embedding in d_embeddings]
+        else:
+            self.bias = None
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
         d_rsqrt = self.embeddings[0].embedding_dim ** -0.5
         for m in self.embeddings:
-            nn.init.uniform_(m.weight, -d_rsqrt, d_rsqrt)
+            _ = [torch.nn.init.uniform_(emb.weight, -d_rsqrt, d_rsqrt) for emb in self.embeddings]
         if self.bias is not None:
-            nn.init.uniform_(self.bias, -d_rsqrt, d_rsqrt)
+            _ = [torch.nn.init.uniform_(b, -d_rsqrt, d_rsqrt) for b in self.bias]
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Do the forward pass."""
         if x.ndim < 2:
             raise ValueError(
                 f'The input must have at least two dimensions, however: {x.ndim=}'
             )
         n_features = len(self.embeddings)
-        if x.shape[-1] != n_features:
+        if x.shape[0] != n_features:
             raise ValueError(
-                'The last input dimension (the number of categorical features) must be'
+                'The first input dimension (the number of categorical features) must be'
                 ' equal to the number of cardinalities passed to the constructor.'
-                f' However: {x.shape[-1]=}, len(cardinalities)={n_features}'
+                f' However: {x.shape[0]=}, len(cardinalities)={n_features}'
             )
 
-        x = torch.stack(
-            [self.embeddings[i](x[..., i]) for i in range(n_features)], dim=-2
-        )
+        # x = torch.stack(
+        #     [self.embeddings[i](x[..., i]) for i in range(n_features)], dim=-2
+        # )
+        x = [self.embeddings[i](x[i, ...]) for i in range(n_features)]
+
         if self.bias is not None:
-            x = x + self.bias
+            # x = x + self.bias
+            x = [x[i] + self.bias[i] for i in range(n_features)]
+        x = torch.cat(x, dim=-1)
         return x
 
 
@@ -160,26 +160,15 @@ class LinearReLUEmbeddings(nn.Sequential):
 
     - Input: `(*, n_features)`
     - Output: `(*, n_features, d_embedding)`
-
-    **Examples**
-
-    >>> batch_size = 2
-    >>> n_cont_features = 3
-    >>> x = torch.randn(batch_size, n_cont_features)
-    >>>
-    >>> # By default, d_embedding=32.
-    >>> m = LinearReLUEmbeddings(n_cont_features)
-    >>> m(x).shape
-    torch.Size([2, 3, 32])
     """
 
-    def __init__(self, n_features: int, d_embedding: int = 32) -> None:
+    def __init__(self, n_features: int, d_embeddings: List[int]) -> None:
         super().__init__(
             OrderedDict(
                 [
                     (
                         'linear',
-                        LinearEmbeddings(n_features, d_embedding),
+                        LinearEmbeddings(n_features, d_embeddings),
                     ),
                     ('activation', nn.ReLU()),
                 ]
@@ -199,7 +188,7 @@ class _Periodic(nn.Module):
 
         super().__init__()
         self._sigma = sigma
-        self.weight = Parameter(torch.empty(n_features, k))
+        self.weight = torch.nn.parameter.Parameter(torch.empty(n_features, k))
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -209,14 +198,14 @@ class _Periodic(nn.Module):
         bound = self._sigma * 3
         nn.init.trunc_normal_(self.weight, 0.0, self._sigma, a=-bound, b=bound)
 
-    def forward(self, x: Tensor) -> Tensor:
-        if x.ndim < 2:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if x.ndim < 3:
             raise ValueError(
-                f'The input must have at least two dimensions, however: {x.ndim=}'
+                f'The input must have at least three dimensions, however: {x.ndim=}'
             )
 
-        x = 2 * math.pi * self.weight * x[..., None]
-        x = torch.cat([torch.cos(x), torch.sin(x)], -1)
+        x = 2 * math.pi * self.weight * x.permute(1, 2, 0)[..., None]
+        x = torch.cat([torch.cos(x), torch.sin(x)], -1).permute(2, 0, 1, 3)
         return x
 
 
@@ -225,23 +214,32 @@ class _Periodic(nn.Module):
 class _NLinear(nn.Module):
     """N *separate* linear layers for N feature embeddings."""
 
-    def __init__(self, n: int, in_features: int, out_features: int) -> None:
+    def __init__(self, n: int, in_features: List[int], out_features: List[int]) -> None:
         super().__init__()
-        self.weight = Parameter(torch.empty(n, in_features, out_features))
-        self.bias = Parameter(torch.empty(n, out_features))
+        self.n_features = n
+        self.in_features = in_features
+        self.out_features = out_features
+        self.weight = [torch.nn.parameter.Parameter(torch.empty(in_features[i], out_features[i]))
+                       for i in range(n)]
+        self.bias = [torch.nn.parameter.Parameter(torch.empty(1, out_features[i]))
+                       for i in range(n)]
         self.reset_parameters()
 
     def reset_parameters(self):
-        d_in_rsqrt = self.weight.shape[-2] ** -0.5
-        nn.init.uniform_(self.weight, -d_in_rsqrt, d_in_rsqrt)
-        nn.init.uniform_(self.bias, -d_in_rsqrt, d_in_rsqrt)
+        d_in_rsqrt = torch.max(torch.LongTensor(self.out_features)) ** -0.5
+        _ = [nn.init.uniform_(self.weight[i], -d_in_rsqrt, d_in_rsqrt)
+             for i in range(self.n_features)]
+        _ = [nn.init.uniform_(self.bias[i], -d_in_rsqrt, d_in_rsqrt)
+             for i in range(self.n_features)]
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         assert x.ndim == 3
-        assert x.shape[-(self.weight.ndim - 1) :] == self.weight.shape[:-1]
-        x = (x[..., None, :] @ self.weight).squeeze(-2)
-        x = x + self.bias
-        return x
+        # assert x.shape[-(self.weight.ndim - 1) :] == self.weight.shape[:-1]
+        # x = (x[..., None, :] @ self.weight).squeeze(-2)
+        # x = x + self.bias
+        x = [x[i][..., None] * self.weight[i] for i in range(self.n_features)]
+        x = [x[i] + self.bias[i][None] for i in range(self.n_features)]
+        return torch.cat(x, dim=-1)
 
 
 class PeriodicEmbeddings(nn.Module):
@@ -250,44 +248,23 @@ class PeriodicEmbeddings(nn.Module):
     **Shape**
 
     - Input: `(*, n_features)`
-    - Output: `(*, n_features, d_embedding)`
-
-    **Examples**
-
-    >>> batch_size = 2
-    >>> n_cont_features = 3
-    >>> x = torch.randn(batch_size, n_cont_features)
-    >>>
-    >>> # PLR embeddings (by default, d_embedding=24).
-    >>> m = PeriodicEmbeddings(n_cont_features, lite=False)
-    >>> m(x).shape
-    torch.Size([2, 3, 24])
-    >>>
-    >>> # PLR(lite) embeddings.
-    >>> m = PeriodicEmbeddings(n_cont_features, lite=True)
-    >>> m(x).shape
-    torch.Size([2, 3, 24])
-    >>>
-    >>> # PL embeddings.
-    >>> m = PeriodicEmbeddings(n_cont_features, d_embedding=8, activation=False, lite=False)
-    >>> m(x).shape
-    torch.Size([2, 3, 8])
-    """  # noqa: E501
+    - Output: `(n_features, *, d_embedding)`
+    """
 
     def __init__(
         self,
         n_features: int,
-        d_embedding: int = 24,
+        d_embeddings: List[int],
         *,
         n_frequencies: int = 48,
         frequency_init_scale: float = 0.01,
         activation: bool = True,
-        lite: bool,
+        lite: bool = True,
     ) -> None:
         """
         Args:
             n_features: the number of features.
-            d_embedding: the embedding size.
+            d_embeddings: the embedding size for each feature.
             n_frequencies: the number of frequencies for each feature.
                 (denoted as "k" in Section 3.3 in the paper).
             frequency_init_scale: the initialization scale for the first linear layer
@@ -301,26 +278,33 @@ class PeriodicEmbeddings(nn.Module):
         super().__init__()
         self.periodic = _Periodic(n_features, n_frequencies, frequency_init_scale)
         self.linear: Union[nn.Linear, _NLinear]
+        self.n_features = n_features
+        self.lite = lite
         if lite:
             # NOTE[DIFF]
             # The PLR(lite) variation was not covered in this paper about embeddings,
             # but it was used in the paper about the TabR model.
             if not activation:
                 raise ValueError('lite=True is allowed only when activation=True')
-            self.linear = nn.Linear(2 * n_frequencies, d_embedding)
+            self.linear = torch.nn.ModuleList([nn.Linear(2 * n_frequencies, d_embeddings[i])
+                                               for i in range(n_features)])
         else:
-            self.linear = _NLinear(n_features, 2 * n_frequencies, d_embedding)
+            self.linear = _NLinear(n_features, 2 * n_frequencies, d_embeddings)
         self.activation = nn.ReLU() if activation else None
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Do the forward pass."""
         if x.ndim < 2:
             raise ValueError(
                 f'The input must have at least two dimensions, however: {x.ndim=}'
             )
-
         x = self.periodic(x)
-        x = self.linear(x)
+        if self.lite:
+            x = torch.cat(
+                [self.linear[i](x[i]) for i in range(self.n_features)],
+                dim=-1)
+        else:
+            x = self.linear(x)
         if self.activation is not None:
             x = self.activation(x)
         return x
