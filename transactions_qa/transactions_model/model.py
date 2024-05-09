@@ -89,7 +89,7 @@ class TransactionsModel(nn.Module):
         embedding = self.connector(embedding, attention_mask=mask)
         return embedding
 
-    def get_embeddings(self, batch, embeds=None):
+    def get_embs(self, batch, embeds=None):
         mask = batch['mask']
         batch_size = mask.shape[0]
         if embeds is None:
@@ -100,7 +100,7 @@ class TransactionsModel(nn.Module):
         return x, mask
 
     def forward(self, batch=None, embeds=None):
-        x, mask = self.get_embeddings(batch, embeds)
+        x, mask = self.get_embs(batch, embeds)
         logit = self.head(x, mask)
         return logit
 

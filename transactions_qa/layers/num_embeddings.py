@@ -1,6 +1,5 @@
 """On Embeddings for Numerical Features in Tabular Deep Learning."""
 
-
 import math
 import warnings
 from collections import OrderedDict
@@ -49,10 +48,10 @@ class LinearEmbeddings(nn.Module):
             )
 
         super().__init__()
-        self.weight  = [torch.nn.parameter.Parameter(torch.empty(1, d_embedding))
-                        for d_embedding in d_embeddings]
-        self.bias  = [torch.nn.parameter.Parameter(torch.empty(1, d_embedding))
-                                  for d_embedding in d_embeddings]
+        self.weight = torch.nn.ParameterList([torch.nn.parameter.Parameter(torch.empty(1, d_embedding))
+                       for d_embedding in d_embeddings])
+        self.bias = torch.nn.ParameterList([torch.nn.parameter.Parameter(torch.empty(1, d_embedding))
+                     for d_embedding in d_embeddings])
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
@@ -114,8 +113,9 @@ class CategoricalEmbeddings(nn.Module):
         #     torch.nn.parameter.Parameter(torch.empty(len(cardinalities), d_embedding)) if bias else None
         # )
         if bias:
-            self.bias = [torch.nn.parameter.Parameter(torch.empty(1, d_embedding))
-                         for d_embedding in d_embeddings]
+            self.bias = torch.nn.ParameterList([
+                torch.nn.parameter.Parameter(torch.empty(1, d_embedding)) for d_embedding in d_embeddings]
+            )
         else:
             self.bias = None
         self.reset_parameters()
@@ -219,10 +219,10 @@ class _NLinear(nn.Module):
         self.n_features = n
         self.in_features = in_features
         self.out_features = out_features
-        self.weight = [torch.nn.parameter.Parameter(torch.empty(in_features[i], out_features[i]))
-                       for i in range(n)]
-        self.bias = [torch.nn.parameter.Parameter(torch.empty(1, out_features[i]))
-                       for i in range(n)]
+        self.weight = torch.nn.ParameterList([torch.nn.parameter.Parameter(torch.empty(in_features[i], out_features[i]))
+                       for i in range(n)])
+        self.bias = torch.nn.ParameterList([torch.nn.parameter.Parameter(torch.empty(1, out_features[i]))
+                     for i in range(n)])
         self.reset_parameters()
 
     def reset_parameters(self):
@@ -252,14 +252,14 @@ class PeriodicEmbeddings(nn.Module):
     """
 
     def __init__(
-        self,
-        n_features: int,
-        d_embeddings: List[int],
-        *,
-        n_frequencies: int = 48,
-        frequency_init_scale: float = 0.01,
-        activation: bool = True,
-        lite: bool = True,
+            self,
+            n_features: int,
+            d_embeddings: List[int],
+            *,
+            n_frequencies: int = 48,
+            frequency_init_scale: float = 0.01,
+            activation: bool = True,
+            lite: bool = True,
     ) -> None:
         """
         Args:
@@ -349,13 +349,13 @@ def _check_bins(bins: List[Tensor]) -> None:
 
 
 def compute_bins(
-    X: torch.Tensor,
-    n_bins: int = 48,
-    *,
-    tree_kwargs: Optional[Dict[str, Any]] = None,
-    y: Optional[Tensor] = None,
-    regression: Optional[bool] = None,
-    verbose: bool = False,
+        X: torch.Tensor,
+        n_bins: int = 48,
+        *,
+        tree_kwargs: Optional[Dict[str, Any]] = None,
+        y: Optional[Tensor] = None,
+        regression: Optional[bool] = None,
+        verbose: bool = False,
 ) -> List[Tensor]:
     """Compute bin edges for `PiecewiseLinearEmbeddings`.
 
@@ -612,9 +612,9 @@ class _PiecewiseLinearEncodingImpl(nn.Module):
                                 *(
                                     []
                                     if n_bins == 2
-                                    else [x[..., i, 1 : count - 1].clamp(0.0, 1.0)]
+                                    else [x[..., i, 1: count - 1].clamp(0.0, 1.0)]
                                 ),
-                                x[..., i, count - 1 : count].clamp_min(0.0),
+                                x[..., i, count - 1: count].clamp_min(0.0),
                                 x[..., i, count:],
                             ],
                             dim=-1,
@@ -662,7 +662,7 @@ class PiecewiseLinearEmbeddings(nn.Module):
     """
 
     def __init__(
-        self, bins: List[Tensor], d_embedding: int, *, activation: bool
+            self, bins: List[Tensor], d_embedding: int, *, activation: bool
     ) -> None:
         """
         Args:

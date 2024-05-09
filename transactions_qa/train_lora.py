@@ -170,7 +170,7 @@ def main():
         "cat_embedding_projections": projections_maps.get('cat_embedding_projections'),
         "num_features": num_features_names,
         "num_embedding_projections": projections_maps.get('num_embedding_projections'),
-        "num_embeddings_type": model_args.num_embeddings_type,
+        "num_embeddings_type": model_args.numeric_embeddings_type,
         "meta_features": meta_features_names,
         "meta_embedding_projections": projections_maps.get('meta_embedding_projections'),
         "encoder_type": model_args.transactions_model_encoder_type,
@@ -237,7 +237,9 @@ def main():
         tasks_kwargs = eval(tasks_kwargs)
     logger.info(f"Got task_names: {task_names} with task_kwargs: {tasks_kwargs}")
 
-    buckets_info_path = "romashka/assets/dense_features_buckets_v1.pkl"
+    buckets_info_path = 'data/feature_proc_assets/num_features_bins_v1_quantiles.pkl'
+    # buckets_v1: 'romashka/assets/dense_features_buckets_v1.pkl'
+    # numeric_quantiles_v1: 'data/feature_proc_assets/num_features_bins_v1_quantiles.pkl'
     logger.info(f"Running with buckets file path: {buckets_info_path}")
 
     for task_i, task_name in enumerate(task_names):
