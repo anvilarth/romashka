@@ -11,14 +11,17 @@ transaction_features = ['currency', 'country', 'city', 'payment_system',  # geog
                         'mcc', 'mcc_category',  # MCC related
                         'day_of_week', 'hour', 'weekofyear',  # time-related
                         'amnt', 'days_before', 'hour_diff',  # numeric
-                        # 'amnt_realval',	'days_before_realval', 'hour_diff_realval'
+                        'amnt_realval',	'days_before_realval', 'hour_diff_realval'  # numeric real valued
                         ]
 
 num_features_names = ['amnt', 'days_before', 'hour_diff']
-cat_features_names = [x for x in transaction_features if x not in num_features_names]
+real_num_features_names = ['amnt_realval', 'days_before_realval', 'hour_diff_realval']
+cat_features_names = [x for x in transaction_features if (x not in num_features_names)
+                      and (x not in real_num_features_names)]
 meta_features_names = ['product']
 
 num_features_indices = [transaction_features.index(x) for x in num_features_names]
+real_num_features_indices = [transaction_features.index(x) for x in real_num_features_names]
 cat_features_indices = [transaction_features.index(x) for x in cat_features_names]
 
 

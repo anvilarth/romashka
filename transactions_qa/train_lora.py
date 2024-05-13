@@ -42,6 +42,7 @@ from romashka.transactions_qa.dataset.data_generator import (
     transaction_features,
     cat_features_names,
     num_features_names,
+    real_num_features_names,
     meta_features_names)
 
 from romashka.transactions_qa.dataset.dataloader import (TransactionQADataset, TransactionQADataModule)
@@ -161,14 +162,14 @@ def main():
     # Loading Transactions model & weights
     logger.info(f"Loading Transactions model...")
     projections_maps = get_projections_maps(
-        num_embedding_projections_fn='./assets/num_embedding_projections_v1.pkl',
+        num_embedding_projections_fn='./assets/num_embedding_projections_v1-1.pkl',
         cat_embedding_projections_fn='./assets/cat_embedding_projections_v1.pkl',
         meta_embedding_projections_fn='./assets/meta_embedding_projections.pkl',
         relative_folder=data_args.projections_mappings_path)
     transactions_model_config = {
         "cat_features": cat_features_names,
         "cat_embedding_projections": projections_maps.get('cat_embedding_projections'),
-        "num_features": num_features_names,
+        "num_features": real_num_features_names if data_args.use_real_num_features else num_features_names,
         "num_embedding_projections": projections_maps.get('num_embedding_projections'),
         "num_embeddings_type": model_args.numeric_embeddings_type,
         "meta_features": meta_features_names,

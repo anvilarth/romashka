@@ -62,7 +62,8 @@ from romashka.transactions_qa.tasks.predictive_amnt_tasks import (PredNumericAmo
                                                                   PredOverThresholdAmountTaskBinary,
                                                                   PredUnderThresholdAmountTaskBinary,
                                                                   PredBinnedAmountTaskOpenEnded,
-                                                                  PredNumericAmountTaskOpenEnded)
+                                                                  PredNumericAmountTaskOpenEnded,
+                                                                  PredRealNumericAmountTaskOpenEnded)
 from romashka.transactions_qa.tasks.predictive_mcc_tasks import (PredMCCCodeTaskBinary,
                                                                  PredMCCCodeTaskOpenEnded)
 from romashka.transactions_qa.tasks.predictive_mcc_category_tasks import (PredMCCCategoryTaskBinary,
@@ -175,6 +176,7 @@ AUTO_TASKS = [
         ("pred_under_threshold_amount_binary", PredUnderThresholdAmountTaskBinary),
         ("pred_numeric_amount_open-ended", PredNumericAmountTaskOpenEnded),
         ("pred_binned_amount_open-ended", PredBinnedAmountTaskOpenEnded),
+        ("pred_real_numeric_amount_open-ended", PredRealNumericAmountTaskOpenEnded),
         # MCC code
         ("pred_mcc_code_binary", PredMCCCodeTaskBinary),
         ("pred_mcc_code_open-ended", PredMCCCodeTaskOpenEnded),

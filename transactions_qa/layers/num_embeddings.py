@@ -48,6 +48,9 @@ class LinearEmbeddings(nn.Module):
             )
 
         super().__init__()
+        # self.embeddings = nn.ModuleList([
+        #     nn.Linear(1, d_embedding) for d_embedding in d_embeddings
+        # ])
         self.weight = torch.nn.ParameterList([torch.nn.parameter.Parameter(torch.empty(1, d_embedding))
                        for d_embedding in d_embeddings])
         self.bias = torch.nn.ParameterList([torch.nn.parameter.Parameter(torch.empty(1, d_embedding))
@@ -55,6 +58,7 @@ class LinearEmbeddings(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self) -> None:
+        # _ = [torch.nn.init.xavier_uniform_(emb.weight) for emb in self.embeddings]
         d_rqsrt = torch.max(torch.LongTensor(self.d_embeddings)) ** -0.5
         _ = [nn.init.uniform_(w, -d_rqsrt, d_rqsrt) for w in self.weight]
         _ = [nn.init.uniform_(b, -d_rqsrt, d_rqsrt) for b in self.bias]
@@ -66,6 +70,7 @@ class LinearEmbeddings(nn.Module):
             )
         x = [x[i][..., None] * self.weight[i] for i in range(len(self.weight))]
         x = [x[i] + self.bias[i][None] for i in range(len(self.bias))]
+        # x = [embedding(x[i][..., None]) for i, embedding in enumerate(self.embeddings)]
         return torch.cat(x, dim=-1)
 
 

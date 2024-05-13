@@ -18,6 +18,7 @@ class EmbeddingLayer(nn.Module):
                  cat_bias: Optional[bool] = True,
                  num_embedding_projections: Optional[Dict[str, Tuple[int, int]]] = None,
                  num_features: Optional[List[str]] = None,
+                 use_real_num_features: Optional[bool] = False,
                  num_embeddings_type: Optional[str] = 'linear',
                  num_embeddings_kwargs: Optional[Dict[str, Any]] = {},
                  meta_embedding_projections: Optional[Dict[str, Tuple[int, int]]] = None,
@@ -33,6 +34,12 @@ class EmbeddingLayer(nn.Module):
         self.num_embedding = None
         self.meta_embedding = None
         self.time_embedding = None
+
+        self.use_real_num_features = use_real_num_features
+        # if self.use_real_num_features and ((num_embeddings_type == 'linear')
+        #                                    or (num_embeddings_type == 'linear_relu')):
+        #     raise AttributeError(f"Using real-valued numeric features is impossible with 'linear'/'linear_relu' "
+        #                          f"embeddings type!")
 
         self.num_embeddings_type = num_embeddings_type
         self.num_embeddings_kwargs = num_embeddings_kwargs
@@ -65,14 +72,22 @@ class EmbeddingLayer(nn.Module):
         seq_len = batch['cat_features'][0].shape[1]
 
         cat_features, num_features = batch['cat_features'], batch['num_features']
+
         if "time" in batch:
             time_features = batch.get('time')
         else:
             time_features = None
+
+        if "real_num_features" in batch:
+            real_num_features = batch.get('real_num_features')
+        else:
+            real_num_features = None
+
         if "meta_features" in batch:
             meta_features = batch.get('meta_features')
         else:
             meta_features = None
+
         embeddings = self.cat_embedding(cat_features)
 
         if self.time_embedding is not None:
@@ -80,7 +95,8 @@ class EmbeddingLayer(nn.Module):
             embeddings = torch.cat([embeddings, time_embeddings], dim=-1)
 
         if self.num_embedding is not None:
-            num_embeddings = self.num_embedding(num_features)
+            num_embeddings = self.num_embedding(real_num_features) if self.use_real_num_features \
+                else self.num_embedding(num_features)
             embeddings = torch.cat([embeddings, num_embeddings], dim=-1)
 
         if (self.meta_embedding is not None) and (meta_features is not None):

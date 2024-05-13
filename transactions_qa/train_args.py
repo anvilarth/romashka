@@ -247,6 +247,13 @@ class DataTrainingArguments:
             )
         },
     )
+    use_real_num_features: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to use real-valued numeric features or not."
+        },
+    )
+
     num_beams: Optional[int] = field(
         default=None,
         metadata={

@@ -27,7 +27,8 @@ from romashka.transactions_qa.tasks.task_token_updater import (TaskTokenType,
                                                                TASK_SPECIFIC_TOKENS)
 from romashka.transactions_qa.dataset.data_generator import (transaction_features,
                                                              num_features_names,
-                                                             cat_features_names)
+                                                             cat_features_names,
+                                                             real_num_features_names)
 
 
 @dataclass
@@ -59,6 +60,7 @@ class AbstractTask(ABC):
     attribute_specific_tokens: Optional[Dict[str, str]] = None
     features: Optional[List[str]] = None
     num_features_names: Optional[List[str]] = None
+    real_num_features_names: Optional[List[str]] = None
     cat_features_names: Optional[List[str]] = None
     # if str -> enum.name
     # if int -> enum.value
@@ -104,6 +106,8 @@ class AbstractTask(ABC):
             self.num_features_names = num_features_names
         if self.cat_features_names is None:
             self.cat_features_names = cat_features_names
+        if self.real_num_features_names is None:
+            self.real_num_features_names = real_num_features_names
 
         if (self.target_feature_name is not None) and (self.target_feature_index is None):
             self.init_feature_index()
@@ -164,6 +168,11 @@ class AbstractTask(ABC):
                 if self.target_feature_index is None else self.target_feature_index
             self.target_feature_type = 'num_features'
 
+        elif self.target_feature_name in self.real_num_features_names:
+            self.target_feature_index = self.real_num_features_names.index(self.target_feature_name) \
+                if self.target_feature_index is None else self.target_feature_index
+            self.target_feature_type = 'real_num_features'
+
         elif self.target_feature_name in self.cat_features_names:
             self.target_feature_index = self.cat_features_names.index(self.target_feature_name) \
                 if self.target_feature_index is None else self.target_feature_index
@@ -189,6 +198,10 @@ class AbstractTask(ABC):
         if self.target_feature_name in self.num_features_names:
             self.target_feature_index = self.num_features_names.index(self.target_feature_name)
             self.target_feature_type = 'num_features'
+
+        elif self.target_feature_name in self.real_num_features_names:
+            self.target_feature_index = self.real_num_features_names.index(self.target_feature_name)
+            self.target_feature_type = 'real_num_features'
 
         elif self.target_feature_name in self.cat_features_names:
             self.target_feature_index = self.cat_features_names.index(self.target_feature_name)
@@ -228,7 +241,8 @@ class AbstractTask(ABC):
             if ("binary" in self.task_name) or self.is_binary_task:
                 self.task_special_token = ANSWER_SPECIFIC_TOKENS.get("binary")
             # Numeric: in name and by feature name type
-            elif ("numeric" in self.task_name) and (self.target_feature_name in num_features_names):
+            elif ("numeric" in self.task_name) and ((self.target_feature_name in num_features_names)
+                                                    or (self.target_feature_name in real_num_features_names)):
                 self.task_special_token = ANSWER_SPECIFIC_TOKENS.get("numeric")
             # Textual
             elif self.is_text_task:
@@ -346,6 +360,7 @@ class AbstractTask(ABC):
         """
         # Mask all features for selected transaction in selected transactions history
         batch['num_features'][:, batch_item_i, trns_i] = masking_value
+        batch['real_num_features'][:, batch_item_i, trns_i] = masking_value
         batch['cat_features'][:, batch_item_i, trns_i] = masking_value
         batch['mask'][batch_item_i, trns_i] = 0
 
