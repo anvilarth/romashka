@@ -216,8 +216,8 @@ class _Periodic(nn.Module):
 
 # _NLinear is a simplified copy of delu.nn.NLinear:
 # https://yura52.github.io/delu/stable/api/generated/delu.nn.NLinear.html
-class _NLinear(nn.Module):
-    """N *separate* linear layers for N feature embeddings."""
+class _NLinearMultiLayer(nn.Module):
+    """N *separate* linear layers for N feature embeddings with different embeddings sizes."""
 
     def __init__(self, n: int, in_features: List[int], out_features: List[int]) -> None:
         super().__init__()
@@ -245,6 +245,30 @@ class _NLinear(nn.Module):
         x = [x[i][..., None] * self.weight[i] for i in range(self.n_features)]
         x = [x[i] + self.bias[i][None] for i in range(self.n_features)]
         return torch.cat(x, dim=-1)
+
+
+# _NLinear is a simplified copy of delu.nn.NLinear:
+# https://yura52.github.io/delu/stable/api/generated/delu.nn.NLinear.html
+class _NLinear(nn.Module):
+    """N *separate* linear layers for N feature embeddings with same embedding size."""
+
+    def __init__(self, n: int, in_features: int, out_features: int) -> None:
+        super().__init__()
+        self.weight = torch.nn.parameter.Parameter(torch.empty(n, in_features, out_features))
+        self.bias = torch.nn.parameter.Parameter(torch.empty(n, out_features))
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        d_in_rsqrt = self.weight.shape[-2] ** -0.5
+        nn.init.uniform_(self.weight, -d_in_rsqrt, d_in_rsqrt)
+        nn.init.uniform_(self.bias, -d_in_rsqrt, d_in_rsqrt)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # assert x.ndim == 3
+        # assert x.shape[-(self.weight.ndim - 1) :] == self.weight.shape[:-1]
+        x = (x[..., None, :] @ self.weight).squeeze(-2)
+        x = x + self.bias
+        return x
 
 
 class PeriodicEmbeddings(nn.Module):
@@ -282,7 +306,7 @@ class PeriodicEmbeddings(nn.Module):
         """
         super().__init__()
         self.periodic = _Periodic(n_features, n_frequencies, frequency_init_scale)
-        self.linear: Union[nn.Linear, _NLinear]
+        self.linear: Union[nn.Linear, _NLinearMultiLayer]
         self.n_features = n_features
         self.lite = lite
         if lite:
@@ -294,7 +318,7 @@ class PeriodicEmbeddings(nn.Module):
             self.linear = torch.nn.ModuleList([nn.Linear(2 * n_frequencies, d_embeddings[i])
                                                for i in range(n_features)])
         else:
-            self.linear = _NLinear(n_features, 2 * n_frequencies, d_embeddings)
+            self.linear = _NLinearMultiLayer(n_features, 2 * n_frequencies, d_embeddings)
         self.activation = nn.ReLU() if activation else None
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -315,11 +339,11 @@ class PeriodicEmbeddings(nn.Module):
         return x
 
 
-def _check_bins(bins: List[Tensor]) -> None:
-    if not bins:
+def _check_bins(bins: List[torch.Tensor]) -> None:
+    if bins is None:
         raise ValueError('The list of bins must not be empty')
     for i, feature_bins in enumerate(bins):
-        if not isinstance(feature_bins, Tensor):
+        if not isinstance(feature_bins, torch.Tensor):
             raise ValueError(
                 'bins must be a list of PyTorch tensors. '
                 f'However, for {i=}: {type(bins[i])=}'
@@ -358,10 +382,10 @@ def compute_bins(
         n_bins: int = 48,
         *,
         tree_kwargs: Optional[Dict[str, Any]] = None,
-        y: Optional[Tensor] = None,
+        y: Optional[torch.Tensor] = None,
         regression: Optional[bool] = None,
         verbose: bool = False,
-) -> List[Tensor]:
+) -> List[torch.Tensor]:
     """Compute bin edges for `PiecewiseLinearEmbeddings`.
 
     **Usage**
@@ -400,7 +424,7 @@ def compute_bins(
         - the maximum possible number of bin edges is ``n_bins + 1``.
         - the minumum possible number of bin edges is ``1``.
     """
-    if not isinstance(X, Tensor):
+    if not isinstance(X, torch.Tensor):
         raise ValueError(f'X must be a PyTorch tensor, however: {type(X)=}')
     if X.ndim != 2:
         raise ValueError(f'X must have exactly two dimensions, however: {X.ndim=}')
@@ -452,6 +476,10 @@ def compute_bins(
         _check_bins(bins)
         return bins
     else:
+        try:
+            import sklearn.tree as sklearn_tree
+        except ImportError:
+            sklearn_tree = None
         if sklearn_tree is None:
             raise RuntimeError(
                 'The scikit-learn package is missing.'
@@ -536,11 +564,11 @@ class _PiecewiseLinearEncodingImpl(nn.Module):
 
     # If all features have the same number of bins, then there are no infinite values.
 
-    edges: Tensor
-    width: Tensor
-    mask: Tensor
+    edges: torch.Tensor
+    width: torch.Tensor
+    mask: torch.Tensor
 
-    def __init__(self, bins: List[Tensor]) -> None:
+    def __init__(self, bins: List[torch.Tensor]) -> None:
         _check_bins(bins)
 
         super().__init__()
@@ -579,7 +607,7 @@ class _PiecewiseLinearEncodingImpl(nn.Module):
         self._bin_counts = tuple(len(x) - 1 for x in bins)
         self._same_bin_count = all(x == self._bin_counts[0] for x in self._bin_counts)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         if x.ndim < 2:
             raise ValueError(
                 f'The input must have at least two dimensions, however: {x.ndim=}'
@@ -642,7 +670,7 @@ class PiecewiseLinearEncoding(nn.Module):
       ``total_n_bins = sum(len(b) - 1 for b in bins)``.
     """
 
-    def __init__(self, bins: List[Tensor]) -> None:
+    def __init__(self, bins: List[torch.Tensor]) -> None:
         """
         Args:
             bins: the bins computed by `compute_bins`.
@@ -652,7 +680,7 @@ class PiecewiseLinearEncoding(nn.Module):
         super().__init__()
         self.impl = _PiecewiseLinearEncodingImpl(bins)
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.impl(x)
         return x.flatten(-2) if self.impl._same_bin_count else x[:, self.impl.mask]
 
@@ -662,12 +690,12 @@ class PiecewiseLinearEmbeddings(nn.Module):
 
     **Shape**
 
-    - Input: ``(*, n_features)``
-    - Output: ``(*, n_features, d_embedding)``
+    - Input: ``(n_features, bs, seq_lens)``
+    - Output: ``(bs, seq_lens, d_embedding)``
     """
 
     def __init__(
-            self, bins: List[Tensor], d_embedding: int, *, activation: bool
+            self, bins: List[torch.Tensor], d_embedding: int, *, activation: bool
     ) -> None:
         """
         Args:
@@ -688,7 +716,11 @@ class PiecewiseLinearEmbeddings(nn.Module):
         self.linear = _NLinear(len(bins), max(self.impl._bin_counts), d_embedding)
         self.activation = nn.ReLU() if activation else None
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # as-is input size: [n_features, bs, seq_len]
+        # needed input size: [*, bs, n_features]
+        x = x.permute(2, 1, 0)
+
         x = self.impl(x)
         if not self.impl._same_bin_count:
             # Replace infinite values with zeros.
@@ -698,7 +730,7 @@ class PiecewiseLinearEmbeddings(nn.Module):
         x = self.linear(x)
         if self.activation is not None:
             x = self.activation(x)
-        return x
+        return x.permute(1, 0, 2, 3).flatten(2, 3)
 
 
 EMBEDDING_TYPES = {

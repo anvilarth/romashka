@@ -21,6 +21,7 @@ transformers==4.30.1
 wandb==0.15.4
 fsspec==2023.9.2
 sentencepiece
+deepspeed
 
 ##### deprecated:
 # datasets==2.11.0

@@ -63,7 +63,7 @@ from romashka.transactions_qa.layers.connector import (CONNECTOR_TYPES,
 from romashka.transactions_qa.train_utils import get_warmup_steps
 
 from romashka.transactions_qa.tasks import AutoTask
-from romashka.transactions_qa.utils import (get_last_checkpoint, get_projections_maps)
+from romashka.transactions_qa.utils import (get_last_checkpoint, get_projections_maps, get_buckets_info)
 
 
 def main():
@@ -166,12 +166,34 @@ def main():
         cat_embedding_projections_fn='./assets/cat_embedding_projections_v1.pkl',
         meta_embedding_projections_fn='./assets/meta_embedding_projections.pkl',
         relative_folder=data_args.projections_mappings_path)
+
+    # Load default buckets from assets folder
+
+    # Load default buckets from assets folder
+    # buckets_v1: '../romashka/assets/dense_features_buckets_v1.pkl'
+    # numeric_quantiles_v1: '../data/feature_proc_assets/num_features_bins_v1_quantiles.pkl'
+    amnt_buckets = get_buckets_info("amnt", '../data/feature_proc_assets/num_features_bins_v1_quantiles.pkl')
+    print(f"\nAmount buckets loaded ({len(amnt_buckets)}):\n{amnt_buckets}")
+
+    hdiff_buckets = get_buckets_info("hour_diff", '../data/feature_proc_assets/num_features_bins_v1_quantiles.pkl')
+    print(f"\nHour diff buckets loaded ({len(hdiff_buckets)}):\n{hdiff_buckets}")
+
+    daysbefore_buckets = get_buckets_info("days_before",
+                                          '../data/feature_proc_assets/num_features_bins_v1_quantiles.pkl')
+    print(f"\nDays before buckets loaded ({len(daysbefore_buckets)}):\n{daysbefore_buckets}")
+
+    amnt_buckets_ = torch.Tensor(amnt_buckets)
+    hdiff_buckets_ = torch.Tensor(hdiff_buckets)
+    daysbefore_buckets_ = torch.Tensor(daysbefore_buckets)
+    bins = [amnt_buckets_, hdiff_buckets_, daysbefore_buckets_]
+
     transactions_model_config = {
         "cat_features": cat_features_names,
         "cat_embedding_projections": projections_maps.get('cat_embedding_projections'),
         "num_features": real_num_features_names if data_args.use_real_num_features else num_features_names,
         "num_embedding_projections": projections_maps.get('num_embedding_projections'),
         "num_embeddings_type": model_args.numeric_embeddings_type,
+        "numeric_bins": bins,
         "meta_features": meta_features_names,
         "meta_embedding_projections": projections_maps.get('meta_embedding_projections'),
         "encoder_type": model_args.transactions_model_encoder_type,

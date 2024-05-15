@@ -20,6 +20,7 @@ class EmbeddingLayer(nn.Module):
                  num_features: Optional[List[str]] = None,
                  use_real_num_features: Optional[bool] = False,
                  num_embeddings_type: Optional[str] = 'linear',
+                 numeric_bins: Optional[Dict[str, Any]] = None,
                  num_embeddings_kwargs: Optional[Dict[str, Any]] = {},
                  meta_embedding_projections: Optional[Dict[str, Tuple[int, int]]] = None,
                  meta_features: Optional[List[str]] = None,
@@ -36,17 +37,15 @@ class EmbeddingLayer(nn.Module):
         self.time_embedding = None
 
         self.use_real_num_features = use_real_num_features
-        # if self.use_real_num_features and ((num_embeddings_type == 'linear')
-        #                                    or (num_embeddings_type == 'linear_relu')):
-        #     raise AttributeError(f"Using real-valued numeric features is impossible with 'linear'/'linear_relu' "
-        #                          f"embeddings type!")
 
         self.num_embeddings_type = num_embeddings_type
+        self.numeric_bins = numeric_bins
         self.num_embeddings_kwargs = num_embeddings_kwargs
         if num_embedding_projections is not None and num_features is not None:
             self.num_embedding = NumericalEmbedding(num_embedding_projections,
                                                     num_features,
                                                     embeddings_type=num_embeddings_type,
+                                                    numeric_bins=self.numeric_bins,
                                                     embeddings_kwargs=num_embeddings_kwargs)
 
         if meta_embedding_projections is not None and meta_features is not None:
@@ -112,14 +111,22 @@ class NumericalEmbedding(nn.Module):
     def __init__(self, embedding_projections: Dict[str, Tuple[int, int]],
                  numeric_features: List[str],
                  embeddings_type: Optional[str] = 'linear',
+                 numeric_bins: Optional[Dict[str, Any]] = None,
                  embeddings_kwargs: Optional[Dict[str, Any]] = {}):
         super().__init__()
         self.embeddings_type = embeddings_type
         self.embeddings_additional_kwargs = embeddings_kwargs
         self.numeric_features = numeric_features
+        self.numeric_bins = numeric_bins
         self.embedding_projections = embedding_projections  # as tuples (input_size, output_size)
         self.num_embedding = self._create_embedding_projection()
-        self.output_size = sum([embedding_projections[feature][1] for feature in self.numeric_features])
+
+        if self.embeddings_type == 'periodic':
+            # Has a single and constant embedding size
+            self.output_size = max([self.embedding_projections[feature][1]
+                                    for feature in self.numeric_features]) * len(self.numeric_features)
+        else:
+            self.output_size = sum([embedding_projections[feature][1] for feature in self.numeric_features])
 
     def forward(self, num_features):
         return self.num_embedding(num_features)
@@ -155,6 +162,16 @@ class NumericalEmbedding(nn.Module):
             }
             kwargs.update(self.embeddings_additional_kwargs)
             return PeriodicEmbeddings(**kwargs)
+        elif self.embeddings_type == 'piecewise':
+            if self.numeric_bins is None:
+                raise AttributeError(f"Numeric features bins are required for Piecewise embeddings creation!")
+            kwargs = {
+                "bins": self.numeric_bins,
+                "d_embeddings": max(embedding_dims),  # take max size embedding for all features
+                "activation": True
+            }
+            kwargs.update(self.embeddings_additional_kwargs)
+            return PiecewiseLinearEmbeddings(**kwargs)
         else:
             raise AttributeError(f"Currently this type of embeddings is not supported!")
 

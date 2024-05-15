@@ -30,6 +30,7 @@ class TransactionsModel(nn.Module):
                  num_embedding_projections: Optional[Dict[str, Tuple[int, int]]] = None,
                  num_features: Optional[List[str]] = None,
                  num_embeddings_type: Optional[str] = 'linear',
+                 numeric_bins: Optional[Dict[str, Any]] = None,
                  num_embeddings_kwargs: Optional[Dict[str, Any]] = {},
                  meta_embedding_projections: Optional[Dict[str, Tuple[int, int]]] = None,
                  meta_features: Optional[List[str]] = None,
@@ -56,6 +57,7 @@ class TransactionsModel(nn.Module):
                                         cat_bias=cat_bias,
                                         num_embedding_projections=num_embedding_projections,
                                         num_features=num_features,
+                                        numeric_bins=numeric_bins,
                                         num_embeddings_type=num_embeddings_type,
                                         num_embeddings_kwargs=num_embeddings_kwargs,
                                         meta_embedding_projections=meta_embedding_projections,
@@ -72,6 +74,7 @@ class TransactionsModel(nn.Module):
 
         self.output_size = self.encoder_model.get_output_size()
         self.connector_type = self.encoder_model.get_connector_type()
+        self.numeric_bins = numeric_bins
 
         self.cls_token = nn.Parameter(torch.randn(1, 1, self.output_size))
         self.connector = TransactionConnector(inp_size, self.output_size, self.connector_type)

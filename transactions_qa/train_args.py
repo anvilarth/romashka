@@ -248,7 +248,7 @@ class DataTrainingArguments:
         },
     )
     use_real_num_features: bool = field(
-        default=False,
+        default=True,
         metadata={
             "help": "Whether to use real-valued numeric features or not."
         },
