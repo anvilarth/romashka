@@ -121,7 +121,7 @@ class NumericalEmbedding(nn.Module):
         self.embedding_projections = embedding_projections  # as tuples (input_size, output_size)
         self.num_embedding = self._create_embedding_projection()
 
-        if self.embeddings_type == 'periodic':
+        if self.embeddings_type == 'piecewise':
             # Has a single and constant embedding size
             self.output_size = max([self.embedding_projections[feature][1]
                                     for feature in self.numeric_features]) * len(self.numeric_features)
@@ -167,7 +167,7 @@ class NumericalEmbedding(nn.Module):
                 raise AttributeError(f"Numeric features bins are required for Piecewise embeddings creation!")
             kwargs = {
                 "bins": self.numeric_bins,
-                "d_embeddings": max(embedding_dims),  # take max size embedding for all features
+                "d_embedding": max(embedding_dims),  # take max size embedding for all features
                 "activation": True
             }
             kwargs.update(self.embeddings_additional_kwargs)

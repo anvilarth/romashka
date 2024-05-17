@@ -254,6 +254,13 @@ class DataTrainingArguments:
         },
     )
 
+    balance_dataset: bool = field(
+        default=False,
+        metadata={
+            "help": "Whether to oversample/undersample dataset based on target value distribution."
+        },
+    )
+
     num_beams: Optional[int] = field(
         default=None,
         metadata={

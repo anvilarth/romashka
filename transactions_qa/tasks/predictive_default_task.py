@@ -1,5 +1,6 @@
 import torch
 import random
+import traceback
 import numpy as np
 
 # DTO
@@ -9,6 +10,8 @@ from typing import (Dict, Tuple, List,
 
 from torchmetrics import AUROC
 from torchmetrics.classification import BinaryAccuracy, BinaryF1Score
+
+from romashka.transactions_qa.tasks.task_abstract import logger
 from romashka.transactions_qa.tasks.categorical_task_abstract import CategoricalTaskAbstract
 from romashka.transactions_qa.model.generation_utils import isin
 
@@ -275,21 +278,37 @@ class PredDefaultTaskBinary(CategoricalTaskAbstract):
         metrics = {}
         try:
             targets, preds = self.process_outputs(outputs, answers)
-
-            if 'auc' in task_metrics:
-                task_metrics['auc'](preds, targets)
-                metrics['auc'] = task_metrics['auc']
-
-            if 'accuracy' in task_metrics:
-                task_metrics['accuracy'](preds, targets)
-                metrics['accuracy'] = task_metrics['accuracy']
-
-            if 'f1' in task_metrics:
-                task_metrics['f1'](preds, targets)
-                metrics['f1'] = task_metrics['f1']
-
         except Exception as e:
-            print(f"Error during metrics calculation: {e}")
+            logger.error(f"Error during processing outputs in metrics calculation: {e}")
+            logger.error(traceback.print_exc())
+            return metrics
+
+        try:
+            if 'auc' in task_metrics:
+                device = task_metrics['auc'].device
+                task_metrics['auc'](preds.to(device), targets.to(device))
+                metrics['auc'] = task_metrics['auc']
+        except Exception as e:
+            print(f"Error during ROC AUC metric calculation: {e}")
+            logger.error(traceback.print_exc())
+
+        try:
+            if 'accuracy' in task_metrics:
+                device = task_metrics['accuracy'].device
+                task_metrics['accuracy'](preds.to(device), targets.to(device))
+                metrics['accuracy'] = task_metrics['accuracy']
+        except Exception as e:
+            print(f"Error during Accuracy metric calculation: {e}")
+            logger.error(traceback.print_exc())
+
+        try:
+            if 'f1' in task_metrics:
+                device = task_metrics['f1'].device
+                task_metrics['f1'](preds.to(device), targets.to(device))
+                metrics['f1'] = task_metrics['f1']
+        except Exception as e:
+            print(f"Error during F1 metric calculation: {e}")
+            logger.error(traceback.print_exc())
 
         return metrics
 

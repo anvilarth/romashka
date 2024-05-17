@@ -144,11 +144,18 @@ def batches_balanced_generator(list_of_paths: List[str],
         padded_sequences, products = data['padded_sequences'], data['products']
         app_ids = data['app_id']
 
+        if 'padded_sequences_realval' in data:
+            padded_sequences_realval = data['padded_sequences_realval']
+        else:
+            padded_sequences_realval = None
+
         if is_train and ("targets" in data.keys()):
             targets = data['targets']
 
         for idx in range(len(products)):
             bucket, product = padded_sequences[idx], products[idx]
+            if padded_sequences_realval is not None:
+                real_valued_bucket = padded_sequences_realval[idx]
             app_id = app_ids[idx]
 
             # Max target count per bucket
@@ -171,13 +178,18 @@ def batches_balanced_generator(list_of_paths: List[str],
                 samples_by_targets = dict()
                 for target_name in unique:
                     inds = np.where(target == target_name)
-                    samples_by_targets[target_name] = [inds[0], bucket[inds], product[inds]]
+                    samples_ = [inds[0], bucket[inds]]
+                    if padded_sequences_realval is not None:
+                        samples_ += [real_valued_bucket]
+                    samples_ += [product[inds]]
+                    samples_by_targets[target_name] = samples_
 
                 # Oversample the classes with fewer elements than the max
                 for target_name in unique:
 
                     target_inds = []
                     target_buckets = []
+                    target_real_valued_buckets = []
                     target_products = []
 
                     while target_to_counts[target_name] < bucket_balance_max:
@@ -186,7 +198,11 @@ def batches_balanced_generator(list_of_paths: List[str],
 
                         target_inds.append(samples_by_targets[target_name][0][addit_index])
                         target_buckets.append(samples_by_targets[target_name][1][addit_index])
-                        target_products.append(samples_by_targets[target_name][2][addit_index])
+                        if padded_sequences_realval is not None:
+                            target_real_valued_buckets.append(samples_by_targets[target_name][2][addit_index])
+                            target_products.append(samples_by_targets[target_name][3][addit_index])
+                        else:
+                            target_products.append(samples_by_targets[target_name][2][addit_index])
                         target_to_counts[target_name] += 1
 
                     if len(target_inds) > 0:
@@ -194,18 +210,30 @@ def batches_balanced_generator(list_of_paths: List[str],
                                                                              np.asarray(target_inds)])
                         samples_by_targets[target_name][1] = np.concatenate([samples_by_targets[target_name][1],
                                                                              np.asarray(target_buckets)])
-                        samples_by_targets[target_name][2] = np.concatenate([samples_by_targets[target_name][2],
-                                                                             np.asarray(target_products)])
+                        if padded_sequences_realval is not None:
+                            samples_by_targets[target_name][2] = np.concatenate([samples_by_targets[target_name][2],
+                                                                                 np.asarray(target_real_valued_buckets)])
+                            samples_by_targets[target_name][3] = np.concatenate([samples_by_targets[target_name][3],
+                                                                                 np.asarray(target_products)])
+                        else:
+                            samples_by_targets[target_name][2] = np.concatenate([samples_by_targets[target_name][2],
+                                                                                 np.asarray(target_products)])
 
                 # Concatenate back into bucket
                 bucket = np.concatenate([target_samples[1] for _, target_samples in samples_by_targets.items()])
-                product = np.concatenate([target_samples[2] for _, target_samples in samples_by_targets.items()])
+                if padded_sequences_realval is not None:
+                    real_values_bucket = np.concatenate([target_samples[2] for _, target_samples in samples_by_targets.items()])
+                    product = np.concatenate([target_samples[3] for _, target_samples in samples_by_targets.items()])
+                else:
+                    product = np.concatenate([target_samples[2] for _, target_samples in samples_by_targets.items()])
                 target = np.concatenate([np.full((len(target_samples[0])), target_name)
                                          for target_name, target_samples in samples_by_targets.items()])
 
                 # Shuffle
                 shuffled_indexes = np.random.permutation(len(target))
                 bucket = bucket[shuffled_indexes]
+                if padded_sequences_realval is not None:
+                    real_values_bucket = real_values_bucket[shuffled_indexes]
                 product = product[shuffled_indexes]
                 target = target[shuffled_indexes]
 
@@ -216,6 +244,8 @@ def batches_balanced_generator(list_of_paths: List[str],
             for jdx in range(0, len(bucket), batch_size):
 
                 batch_sequences = bucket[jdx: jdx + batch_size]
+                if padded_sequences_realval is not None:
+                    batch_sequences_realval = real_values_bucket[jdx: jdx + batch_size]
 
                 if is_train:
                     batch_targets = target[jdx: jdx + batch_size]
@@ -240,6 +270,8 @@ def batches_balanced_generator(list_of_paths: List[str],
                     meta_features=torch.LongTensor(batch_products).unsqueeze(0),
                     app_id=torch.LongTensor(batch_app_ids)
                 )
+                if padded_sequences_realval is not None:
+                    ret['real_num_features'] = torch.FloatTensor(batch_sequences_realval).transpose(0, 1)
                 if is_train:
                     ret['label'] = torch.LongTensor(batch_targets)
                 yield ret

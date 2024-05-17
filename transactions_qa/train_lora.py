@@ -172,14 +172,14 @@ def main():
     # Load default buckets from assets folder
     # buckets_v1: '../romashka/assets/dense_features_buckets_v1.pkl'
     # numeric_quantiles_v1: '../data/feature_proc_assets/num_features_bins_v1_quantiles.pkl'
-    amnt_buckets = get_buckets_info("amnt", '../data/feature_proc_assets/num_features_bins_v1_quantiles.pkl')
+    amnt_buckets = get_buckets_info("amnt", './data/feature_proc_assets/num_features_bins_v1_quantiles.pkl')
     print(f"\nAmount buckets loaded ({len(amnt_buckets)}):\n{amnt_buckets}")
 
-    hdiff_buckets = get_buckets_info("hour_diff", '../data/feature_proc_assets/num_features_bins_v1_quantiles.pkl')
+    hdiff_buckets = get_buckets_info("hour_diff", './data/feature_proc_assets/num_features_bins_v1_quantiles.pkl')
     print(f"\nHour diff buckets loaded ({len(hdiff_buckets)}):\n{hdiff_buckets}")
 
     daysbefore_buckets = get_buckets_info("days_before",
-                                          '../data/feature_proc_assets/num_features_bins_v1_quantiles.pkl')
+                                          './data/feature_proc_assets/num_features_bins_v1_quantiles.pkl')
     print(f"\nDays before buckets loaded ({len(daysbefore_buckets)}):\n{daysbefore_buckets}")
 
     amnt_buckets_ = torch.Tensor(amnt_buckets)
@@ -524,6 +524,7 @@ def main():
             'max_seq_len': data_args.max_trx_seq_len,
             'seed': training_args.seed,
             'generator_batch_size': 1,
+            "to_balance": True if data_args.balance_dataset else False,
             'buffer_size': data_args.shuffle_buffer_size,
             'batch_size': training_args.per_device_train_batch_size,
             'num_workers': data_args.preprocessing_num_workers
@@ -613,6 +614,7 @@ def main():
 
     trainer_kwargs = dict(
         fast_dev_run=training_args.fast_dev_run,
+        # num_sanity_val_steps=2,
         max_steps=-1 if until_convergence else training_args.max_steps,
         max_epochs=-1 if until_convergence else training_args.max_epochs,
         strategy=DeepSpeedStrategy(
