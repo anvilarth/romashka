@@ -41,6 +41,7 @@ class TransactionQADataset:
     def create_generator(self, dataset):
         if self.to_balance:
             self.logger.info(f"Running with balanced generator...")
+            print(f"Running with balanced generator...")
             return batches_balanced_generator(
                 dataset,
                 batch_size=self.generator_batch_size,
@@ -48,6 +49,7 @@ class TransactionQADataset:
                 is_train=self.is_train
             )
         self.logger.info(f"Running with sequential generator...")
+        print(f"Running with sequential generator...")
         return batches_generator(dataset,
                                  batch_size=self.generator_batch_size,
                                  min_seq_len=self.min_seq_len, max_seq_len=self.max_seq_len,

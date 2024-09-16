@@ -242,19 +242,20 @@ class PredDefaultTaskBinary(CategoricalTaskAbstract):
             probabilities_over_vocab = torch.nn.functional.softmax(outputs['logits'], dim=2)
 
             # answer structure: [..., answer_token, ..., </s>]
-            targets_tokens = answers[isin(answers, torch.LongTensor(list(self.answers2tokens.values())))]
+            targets_tokens = answers[isin(answers, torch.LongTensor(list(self.answers2tokens.values())).to(answers.device))]
             targets = (targets_tokens == self.answers2tokens['positive']).long()
 
-            answer_tokens_indexes = torch.nonzero(isin(outputs['logits'].argmax(2),
-                                                       torch.LongTensor(list(self.answers2tokens.values()))),
-                                                  as_tuple=True)
+            # answer_tokens_indexes = torch.nonzero(isin(outputs['logits'].argmax(2),
+                                                  #      torch.LongTensor(list(self.answers2tokens.values())).to(outputs['logits'].device)),
+                                                  # as_tuple=True)
 
             preds_probs, preds = torch.max(probabilities_over_vocab, -1)
-            positive_probs = probabilities_over_vocab[answer_tokens_indexes][:, self.answers2tokens['positive']]
-            negative_probs = probabilities_over_vocab[answer_tokens_indexes][:, self.answers2tokens['negative']]
+            positive_probs = probabilities_over_vocab[:, 0][:, self.answers2tokens['positive']]
+            negative_probs = probabilities_over_vocab[:, 0][:, self.answers2tokens['negative']]
             pos_neg_probs = torch.cat([positive_probs.unsqueeze(-1), negative_probs.unsqueeze(-1)], 1)
             predictions = torch.sigmoid(pos_neg_probs[:, 0] - pos_neg_probs[:, 1])
-
+        logger.info("targets", targets)
+        logger.info("predictions", predictions)
         return targets, predictions
 
     def calculate_metrics(self, outputs: Any, answers: torch.Tensor,
