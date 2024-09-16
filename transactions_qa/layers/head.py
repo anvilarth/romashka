@@ -16,7 +16,8 @@ class L2NormEncoder(nn.Module):
 
 
 class Head(torch.nn.Module):
-    r"""Head for the sequence encoder
+    r"""
+    Head for the sequence encoder
 
     Parameters
     ----------

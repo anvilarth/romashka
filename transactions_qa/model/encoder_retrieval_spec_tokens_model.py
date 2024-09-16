@@ -15,6 +15,8 @@ from romashka.transactions_qa.model.encoder_model import EncoderSimpleModel
 from romashka.transactions_qa.tasks.task_abstract import AbstractTask
 from romashka.transactions_qa.tasks.task_token_updater import collect_task_specific_tokens
 from romashka.transactions_qa.losses.infonce_loss import InfoNCE
+
+from romashka.transactions_qa.layers.head import Head
 from romashka.transactions_qa.layers.initialization import (init_embeddings_with_tensor,
                                                             init_parameter_with_tensor)
 
@@ -29,6 +31,7 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
                  connector: Optional[nn.Module] = None,
                  connector_input_size: Optional[int] = None,
                  connector_output_size: Optional[int] = None,
+                 add_task_heads: Optional[bool] = False,
                  do_freeze_tm: Optional[bool] = True,
                  do_freeze_lm: Optional[bool] = False,
                  do_freeze_lm_embeddings: Optional[bool] = False,
@@ -51,6 +54,8 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
         self.min_ret_tokens = min_ret_tokens
         self.max_ret_tokens = max_ret_tokens
         self._ret_tokens_template = "[RET_%s]"
+
+        self.add_task_heads = add_task_heads
 
         self.tasks = tasks if tasks is not None else []
         self._n_retrieval_layers = n_retrieval_layers
@@ -116,6 +121,9 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
 
         # Create retrieval tokens: RET_0 ... RET_N in tokenizers vocabulary and mappings token <-> id
         self._create_retrieval_parameters()
+
+        # Create task-specific heads
+        self._create_task_heads()
 
         # Create trainable task-specific tokens
         self._create_trainable_task_special_tokens()
@@ -287,6 +295,23 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
                 raise ValueError(
                     f'Embedding of layer {layer_idx} was requested but model only'
                     f' has {self.language_model.config.num_hidden_layers} layers.')
+
+    def _create_task_heads(self):
+        """
+        Create task-specific classification/regression heads.
+        """
+        self.heads = nn.ModuleList([])
+
+        for task in self.tasks:
+            task_type = task.target_feature_type
+            if task_type in ['cat_features', 'label']:
+                self.heads.append(
+                    Head(input_size=task.num_classes + 1, objective='classification').to(self.params_precision)
+                )
+            else:
+                self.heads.append(
+                    Head(input_size=64, objective='regression').to(self.params_precision)
+                )
 
     def _create_losses(self):
         # Use CE for general QA text loss
