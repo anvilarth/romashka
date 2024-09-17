@@ -15,7 +15,7 @@ from romashka.transactions_qa.model.encoder_model import EncoderSimpleModel
 from romashka.transactions_qa.tasks.task_abstract import AbstractTask
 from romashka.transactions_qa.tasks.task_token_updater import collect_task_specific_tokens
 from romashka.transactions_qa.losses.infonce_loss import InfoNCE
-
+from romashka.transactions_qa.losses.focal_loss import FocalLoss
 from romashka.transactions_qa.layers.head import Head
 from romashka.transactions_qa.layers.initialization import (init_embeddings_with_tensor,
                                                             init_parameter_with_tensor)
@@ -319,8 +319,12 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
 
         # Use CE for RET tokens generation loss
         self.ret_CE_loss_fn = torch.nn.CrossEntropyLoss(reduction='none', ignore_index=-100)
+
         # Use contrastive loss for embeddings comparison
         self.ret_NCE_loss_fn = InfoNCE()
+
+        if self.add_task_heads:
+            self.cls_loss = FocalLoss()
 
     def has_start_token(self, input_tokens_ids: Union[List[int], torch.Tensor]) -> bool:
         """

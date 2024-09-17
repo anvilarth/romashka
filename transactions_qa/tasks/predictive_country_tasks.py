@@ -161,6 +161,7 @@ class PredCountryTaskOpenEnded(CategoricalTaskAbstract):
             question_start_tokens_mask=question_start_tokens_mask,
             question_end_tokens=question_target_encoded_batch['input_ids'],
             question_end_attention_mask=question_target_encoded_batch['attention_mask'],
+            targets=target_batch,
             target_tokens=target_encoded_batch['input_ids'],
             target_attention_mask=target_encoded_batch['attention_mask'],
             answer_tokens=batch_answer_encoded,  # template + targets
