@@ -16,11 +16,12 @@ from romashka.transactions_qa.tasks.task_abstract import AbstractTask
 from romashka.transactions_qa.tasks.task_token_updater import collect_task_specific_tokens
 from romashka.transactions_qa.losses.infonce_loss import InfoNCE
 from romashka.transactions_qa.losses.focal_loss import FocalLoss
-from romashka.transactions_qa.layers.head import Head
+from romashka.transactions_qa.layers.head import Head, LLMClassificationHead
 from romashka.transactions_qa.layers.initialization import (init_embeddings_with_tensor,
                                                             init_parameter_with_tensor)
 
 from romashka.transactions_qa.model.generation_utils import USE_HF_GENERATE
+
 
 class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
     def __init__(self,
@@ -42,6 +43,7 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
                  embeddings_dropout_p: Optional[float] = 0.1,
                  retrieval_loss_scale: Optional[float] = 1.0,
                  text_loss_scale: Optional[float] = 1.0,
+                 task_loss_scale: Optional[float] = 1.0,
                  add_temporal_embeddings: Optional[bool] = False,
                  transactions_embeddings_start_token: Optional[str] = r"[trx]",
                  transactions_embeddings_end_token: Optional[str] = r"[/trx]",
@@ -63,6 +65,7 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
 
         self._retrieval_loss_scale = retrieval_loss_scale
         self._text_loss_scale = text_loss_scale
+        self._task_loss_scale = task_loss_scale
 
         self._add_temporal_embeddings = add_temporal_embeddings
 
@@ -296,22 +299,39 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
                     f'Embedding of layer {layer_idx} was requested but model only'
                     f' has {self.language_model.config.num_hidden_layers} layers.')
 
-    def _create_task_heads(self):
+    def _create_task_heads_seq(self):
         """
         Create task-specific classification/regression heads.
         """
-        self.heads = nn.ModuleList([])
+        self.heads = nn.ModuleDict()
 
         for task in self.tasks:
             task_type = task.target_feature_type
             if task_type in ['cat_features', 'label']:
-                self.heads.append(
-                    Head(input_size=task.num_classes + 1, objective='classification').to(self.params_precision)
-                )
+                self.heads[task.task_name] = Head(input_size=self.language_model.config.d_mode,
+                                                  num_classes=task.num_classes + 1,
+                                                  objective='classification').to(self.params_precision)
+
             else:
-                self.heads.append(
-                    Head(input_size=64, objective='regression').to(self.params_precision)
-                )
+                self.heads[task.task_name] = Head(input_size=self.language_model.config.d_mode,
+                                                  objective='regression').to(self.params_precision)
+
+    def _create_task_heads_llm(self):
+        """
+        Create task-specific classification/regression heads.
+        """
+        self.heads = nn.ModuleDict()
+
+        for task in self.tasks:
+            task_type = task.target_feature_type
+            if task_type in ['cat_features', 'label']:
+                self.heads[task.task_name] = LLMClassificationHead(d_model=self.language_model.config.d_model,
+                                                                   num_labels=task.num_classes + 1).to(
+                    self.params_precision)
+
+            else:
+                self.heads[task.task_name] = LLMClassificationHead(d_model=self.language_model.config.d_model,
+                                                                   num_labels=1).to(self.params_precision)
 
     def _create_losses(self):
         # Use CE for general QA text loss
@@ -324,6 +344,7 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
         self.ret_NCE_loss_fn = InfoNCE()
 
         if self.add_task_heads:
+            self.regr_loss = nn.MSELoss()
             self.cls_loss = FocalLoss()
 
     def has_start_token(self, input_tokens_ids: Union[List[int], torch.Tensor]) -> bool:
@@ -417,7 +438,7 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
             transactions_embeddings = self.connector(transactions_embeddings,
                                                      mask=transactions_embeddings_mask)
         elif self.inspect_forward_signature("input_text_ids", self.connector) and \
-             self.inspect_forward_signature("input_text_attention_mask", self.connector):
+                self.inspect_forward_signature("input_text_attention_mask", self.connector):
             # using Instruct QFormer model
             transactions_embeddings = self.connector(
                 embeds=transactions_embeddings,
@@ -481,7 +502,8 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
         if question_start_embeddings_batch.size(0) != batch['answer_tokens'].size(0):
             encoder_input = torch.cat([question_start_embeddings_batch,
                                        transactions_embeddings,
-                                       question_end_embeddings_batch], dim=1).repeat(batch['answer_tokens'].size(0), 1, 1)
+                                       question_end_embeddings_batch], dim=1).repeat(batch['answer_tokens'].size(0), 1,
+                                                                                     1)
         else:
             encoder_input = torch.cat([question_start_embeddings_batch,
                                        transactions_embeddings,
@@ -566,20 +588,47 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
             self._logger.error(traceback.format_exc())
             ret_loss_outputs = {'loss': torch.Tensor([0.0]).to(lm_outputs.loss.device)}
 
+        # 8) Calculate task-specific loss, if needed
+        task_loss = None
+        if self.add_task_heads:
+            decoder_last_hidden_states = lm_outputs['decoder_hidden_states'][-1]
+            batch_size, _, hidden_size = decoder_last_hidden_states.shape
+
+            eos_mask = batch_answers.eq(self.language_model.config.eos_token_id)
+            sentence_representation = decoder_last_hidden_states[eos_mask, :].view(batch_size,
+                                                                                   -1, hidden_size)[:, -1, :]
+            task_head = self.heads.get(batch['task_name'])
+            if task_head is not None:
+                task_logits = task_head(sentence_representation)
+                if batch['target_feature_type'] in ['cat_features', 'label']:
+                    # Classification
+                    task_labels = torch.LongTensor(list(map(int, batch['targets'])))
+                    task_loss = self.cls_loss(task_logits.view(-1, list(task_head.modules())[-1].out_features),
+                                              task_labels.view(-1))
+                else:
+                    # Regression
+                    task_labels = torch.FloatTensor(list(map(float, batch['targets'])))
+                    task_loss = self.regr_loss(task_logits.squeeze(),
+                                               task_labels.squeeze())
+
         # Re-scale losses
         total_loss = lm_outputs.loss * self._text_loss_scale + \
                      ret_loss_outputs.get('loss') * self._retrieval_loss_scale
 
+        if task_loss is not None:
+            total_loss += self._task_loss_scale + task_loss
+
         # join two output dicts
         outputs = dict()
         outputs["logits"] = lm_outputs.logits.contiguous().float()
-
+        outputs["task_loss"] = self._task_loss_scale + task_loss
         outputs["text_loss"] = lm_outputs.loss * self._text_loss_scale
         ret_loss = ret_loss_outputs.pop('loss')
         outputs["retrieval_loss"] = ret_loss * self._retrieval_loss_scale
 
         outputs["unscaled_text_loss"] = lm_outputs.loss
         outputs["unscaled_retrieval_loss"] = ret_loss
+        outputs["task_retrieval_loss"] = task_loss
 
         if output_attentions:
             outputs["attentions"] = lm_outputs.attentions
@@ -715,7 +764,7 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
         logits_per_sample = ret_embeddings_norm @ collected_last_hidden_state.permute(0, 2, 1)
         logits_per_query = logits_per_sample.permute(0, 2, 1)
 
-        targets = torch.linspace(0, ret_embeddings.size(1)-1, ret_embeddings.size(1), dtype=int)
+        targets = torch.linspace(0, ret_embeddings.size(1) - 1, ret_embeddings.size(1), dtype=int)
         targets = targets.unsqueeze(0).repeat(ret_embeddings.size(0), 1).to(
             ret_embeddings.device)  # as size: [bs, n_queries]
 
@@ -870,7 +919,7 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
         # Checks whether a connector requires mask argument
         if self.inspect_forward_signature("mask", self.connector):
             transactions_history_embeddings = self.connector(transactions_history_embeddings,
-                                                     mask=transactions_embeddings_mask)
+                                                             mask=transactions_embeddings_mask)
         elif self.inspect_forward_signature("input_text_ids", self.connector) and \
                 self.inspect_forward_signature("input_text_attention_mask", self.connector):
             # using Instruct QFormer model

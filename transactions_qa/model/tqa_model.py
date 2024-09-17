@@ -225,6 +225,8 @@ class TransactionQAModel(pl.LightningModule):
             qa_batch = task.process_input_multichoice(batch)
         else:
             qa_batch = task.process_input_batch(batch)
+        qa_batch['task_name'] = task.task_name
+        qa_batch['target_feature_type'] = task.target_feature_type
 
         if len(qa_batch) == 0:
             return None, None

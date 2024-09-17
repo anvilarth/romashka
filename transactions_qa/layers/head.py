@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 import torch
 from torch import nn as nn
@@ -98,3 +98,25 @@ class Head(torch.nn.Module):
 
     def forward(self, x):
         return self.model(x)
+
+
+
+class LLMClassificationHead(nn.Module):
+    """
+    Head for sentence-level classification tasks.
+    """
+
+    def __init__(self, d_model: int, num_labels: int,
+                 classifier_dropout: Optional[float] = 0.0):
+        super().__init__()
+        self.dense = nn.Linear(d_model, d_model)
+        self.dropout = nn.Dropout(p=classifier_dropout)
+        self.out_proj = nn.Linear(d_model, num_labels)
+
+    def forward(self, hidden_states: torch.Tensor) -> torch.Tensor:
+        hidden_states = self.dropout(hidden_states)
+        hidden_states = self.dense(hidden_states)
+        hidden_states = torch.tanh(hidden_states)
+        hidden_states = self.dropout(hidden_states)
+        hidden_states = self.out_proj(hidden_states)
+        return hidden_states
