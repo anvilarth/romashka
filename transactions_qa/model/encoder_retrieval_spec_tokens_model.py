@@ -602,12 +602,12 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
                 task_logits = task_head(sentence_representation)
                 if batch['target_feature_type'] in ['cat_features', 'label']:
                     # Classification
-                    task_labels = torch.LongTensor(list(map(int, batch['targets'])))
+                    task_labels = torch.LongTensor(list(map(int, batch['targets']))).to(task_logits.device)
                     task_loss = self.cls_loss(task_logits.view(-1, list(task_head.modules())[-1].out_features),
                                               task_labels.view(-1))
                 else:
                     # Regression
-                    task_labels = torch.FloatTensor(list(map(float, batch['targets'])))
+                    task_labels = torch.FloatTensor(list(map(float, batch['targets']))).to(task_logits.device)
                     task_loss = self.regr_loss(task_logits.squeeze(),
                                                task_labels.squeeze())
 
@@ -621,6 +621,9 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
         # join two output dicts
         outputs = dict()
         outputs["logits"] = lm_outputs.logits.contiguous().float()
+        if self.add_task_heads:
+            outputs["task_logits"] = task_logits
+            outputs['task_labels'] = task_labels
         outputs["task_loss"] = self._task_loss_scale + task_loss
         outputs["text_loss"] = lm_outputs.loss * self._text_loss_scale
         ret_loss = ret_loss_outputs.pop('loss')

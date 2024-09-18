@@ -28,6 +28,7 @@ class PredDefaultTaskBinary(CategoricalTaskAbstract):
     def __post_init__(self):
         self.task_name = "pred_default_binary"
         self.target_feature_name = 'label'  # [0, 1] range of values
+        self.num_classes = 1
 
         self.task_special_token = None
         self.task_specific_special_token = "[pred_DEFAULT_binary]"
@@ -238,8 +239,13 @@ class PredDefaultTaskBinary(CategoricalTaskAbstract):
             targets = torch.Tensor([target2index_mapping.get(answer, 0) for answer in batch_answers_decoded])
             predictions = torch.Tensor([target2index_mapping.get(pred, 0) for pred in predictions_decoded])
 
+        elif "task_logits" in outputs:
+            task_logits = torch.nn.functional.softmax(outputs['task_logits'].cpu())  # [batch_size, num_classes]
+            # predictions_indexes = task_logits.argmax(-1)
+            # predictions_probs = task_logits.max(-1)
+            predictions = task_logits[:, 1]  # as prob of positive labels , i.e. [0, 1] output classes as 2 neurons
+            targets = outputs['task_labels'].cpu()
         else:
-
             # Get predictions as probabilities of binary answer
             probabilities_over_vocab = torch.nn.functional.softmax(outputs['logits'], dim=2)
 
@@ -256,8 +262,7 @@ class PredDefaultTaskBinary(CategoricalTaskAbstract):
             negative_probs = probabilities_over_vocab[:, 0][:, self.answers2tokens['negative']]
             pos_neg_probs = torch.cat([positive_probs.unsqueeze(-1), negative_probs.unsqueeze(-1)], 1)
             predictions = torch.sigmoid(pos_neg_probs[:, 0] - pos_neg_probs[:, 1])
-        logger.info("targets", targets)
-        logger.info("predictions", predictions)
+
         return targets, predictions
 
     def calculate_metrics(self, outputs: Any, answers: torch.Tensor,
