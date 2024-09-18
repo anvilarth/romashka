@@ -119,7 +119,8 @@ class PredDefaultTaskBinary(CategoricalTaskAbstract):
 
         # Create question targets as concatenation of "question end + target (true/random) + ?"
         # and targets as string targets representation, for binary task: Yes/No options
-        question_target_batch, target_batch = self.generate_target(batch, question_end=question_end)
+        question_target_batch, target_batch, target_feature_value_batch = self.generate_target(batch,
+                                                                                               question_end=question_end)
 
         # Encode
         # question_start  -> '[task_special_token] + start str [trx]'
@@ -176,7 +177,7 @@ class PredDefaultTaskBinary(CategoricalTaskAbstract):
             question_start_tokens_mask=question_start_tokens_mask,
             question_end_tokens=question_target_encoded_batch['input_ids'],
             question_end_attention_mask=question_target_encoded_batch['attention_mask'],
-            targets=target_batch,
+            targets=target_feature_value_batch,
             target_tokens=target_encoded_batch['input_ids'],
             target_attention_mask=target_encoded_batch['attention_mask'],
             answer_tokens=batch_answer_encoded,  # template + targets
@@ -214,7 +215,7 @@ class PredDefaultTaskBinary(CategoricalTaskAbstract):
         question_end = kwargs.get("question_end", "%s")
         question_target_batch = [question_end for _ in range(batch_size)]  # as strings
 
-        return question_target_batch, target_batch
+        return question_target_batch, target_batch, target_feature_value_batch
 
     def process_outputs(self, outputs: Any, answers: torch.Tensor, as_strings: Optional[bool] = False) -> Any:
         """

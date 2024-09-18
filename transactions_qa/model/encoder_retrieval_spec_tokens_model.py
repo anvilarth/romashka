@@ -126,7 +126,7 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
         self._create_retrieval_parameters()
 
         # Create task-specific heads
-        self._create_task_heads()
+        self._create_task_heads_llm()
 
         # Create trainable task-specific tokens
         self._create_trainable_task_special_tokens()
@@ -597,7 +597,7 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
             eos_mask = batch_answers.eq(self.language_model.config.eos_token_id)
             sentence_representation = decoder_last_hidden_states[eos_mask, :].view(batch_size,
                                                                                    -1, hidden_size)[:, -1, :]
-            task_head = self.heads.get(batch['task_name'])
+            task_head = self.heads[batch['task_name']]
             if task_head is not None:
                 task_logits = task_head(sentence_representation)
                 if batch['target_feature_type'] in ['cat_features', 'label']:

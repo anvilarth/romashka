@@ -97,32 +97,6 @@ def main():
     os.environ["WANDB_API_KEY"] = cfg['wandb_key']
     os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-    # Detecting last checkpoint.
-    # last_checkpoint = None
-    # if (os.path.isdir(training_args.save_checkpoints_dir)
-    #         and training_args.do_train
-    #         and not training_args.overwrite_output_dir):
-    #     last_checkpoint = get_last_checkpoint(training_args.save_checkpoints_dir)
-    #     if last_checkpoint is None and len(os.listdir(training_args.save_checkpoints_dir)) > 0:
-    #         raise ValueError(
-    #             f"Output directory ({training_args.save_checkpoints_dir}) already exists and is not empty. "
-    #             "Use --overwrite_output_dir to overcome."
-    #         )
-    #     elif last_checkpoint is not None and training_args.resume_from_checkpoint is None:
-    #         logger.info(
-    #             f"Checkpoint detected, resuming training at {last_checkpoint}. To avoid this behavior, change "
-    #             "the `--save_checkpoints_dir` or add `--overwrite_output_dir` to train from scratch."
-    #         )
-    # elif not os.path.exists(training_args.save_checkpoints_dir):
-    #     os.makedirs(training_args.save_checkpoints_dir)
-    # elif os.path.exists(training_args.save_checkpoints_dir) and training_args.overwrite_output_dir:
-    #     save_checkpoints_dir = os.path.abspath(training_args.save_checkpoints_dir)
-    #     shutil.rmtree(save_checkpoints_dir)
-    #     os.makedirs(save_checkpoints_dir)
-    # else:
-    #     logger.error(f"Output directory argument: ({training_args.save_checkpoints_dir}) is not a directory!")
-    #     raise AttributeError(f"Output directory argument: ({training_args.save_checkpoints_dir}) is not a directory!")
-
     # Get the datasets
     data_files = {}
     if data_args.train_folder is not None and training_args.do_train:
@@ -239,9 +213,7 @@ def main():
         "pretrained_model_name_or_path": model_args.language_model_name_or_path,
         "config": config
     }
-    # if training_args.do_8bit:
-    #     model_loading_kwargs['load_in_8bit'] = training_args.do_8bit
-    #     model_loading_kwargs['device_map'] = "auto"
+
     if model_args.language_model_type == "encoder-decoder":
         lm_model = AutoModelForSeq2SeqLM.from_pretrained(**model_loading_kwargs)  #.half()
     else:
@@ -361,13 +333,6 @@ def main():
                 not os.path.exists(qformer_config["connector_model_name_or_path"]):
             raise FileExistsError(f"Initialization file doesn't exist: {qformer_config['connector_model_name_or_path']}")
 
-        # if (model_args.connector_model_name_or_path is not None) \
-        #         and ("bert" in model_args.connector_model_name_or_path):
-        #     qformer_config['text_model_name'] = model_args.connector_model_name_or_path,  # bert-mini/small/base
-        # elif (model_args.connector_model_name_or_path is not None) \
-        #         and ("blip2" in model_args.connector_model_name_or_path):  # init from BLIP2-FLAN-T5 QFormer model
-        #     qformer_config['connector_model_name_or_path'] = model_args.connector_model_name_or_path,  # bert-mini/small/base
-
         connector_args = {
             'config': qformer_config,
             'from_hf': True,
@@ -416,6 +381,7 @@ def main():
     # Create general LLM model
     if model_args.language_model_type == "encoder-decoder":
         lm_model_config = {
+            "add_task_heads": model_args.add_task_heads,
             "do_freeze_tm": training_args.do_freeze_transactions_model,
             "do_freeze_lm": training_args.do_freeze_language_model,
             "do_freeze_connector": training_args.do_freeze_connector,
@@ -425,6 +391,7 @@ def main():
             "n_retrieval_layers": [-1],
             "retrieval_loss_scale": training_args.retrieval_loss_scale,
             "text_loss_scale": training_args.text_loss_scale,
+            "task_loss_scale": training_args.task_loss_scale,
             "embeddings_dropout_p": 0.1,
             "add_temporal_embeddings": model_args.add_temporal_embeddings,
             "transactions_embeddings_start_token": r"[trx]",
@@ -465,7 +432,7 @@ def main():
             **lm_model_config
         )
 
-    # Create general Tranactions QA model
+    # Create general Transactions QA model
     transactionsQA_model_config = {
         "learning_rate": training_args.learning_rate,
         "scheduler_type": training_args.lr_scheduler_type,

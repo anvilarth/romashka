@@ -143,6 +143,13 @@ class ModelArguments:
         metadata={"help": "A maximum number of retrieval tokens."},
     )
 
+    add_task_heads: Optional[bool] = field(
+        default=True,
+        metadata={
+            "help": "Whether to create trainable task specific heads or not."
+        },
+    )
+
     add_temporal_embeddings: Optional[bool] = field(
         default=False,
         metadata={"help": "Whether to create trainable temporal positional embeddings "
@@ -467,8 +474,14 @@ class TrainingArguments:
     )
 
     retrieval_loss_scale: Optional[float] = field(
-        default=1.0,
+        default=0.0,
         metadata={"help": "A scaling factor for retrieval from embeddings loss (usually kind of Contrastive loss)."},
+    )
+
+    task_loss_scale: Optional[float] = field(
+        default=1.0,
+        metadata={"help": "A scaling factor for task specific loss (usually kind of "
+                          "BCE/Focal/MSE losses - up to the task type)."},
     )
 
     gradient_clip_val: float = field(
