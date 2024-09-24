@@ -118,10 +118,12 @@ class PredDefaultTaskBinary(CategoricalTaskAbstract):
         device = batch['mask'].device
         batch_size = batch['mask'].shape[0]
 
+        as_train_or_val = kwargs.get('is_train_or_val', False)
         # Create question targets as concatenation of "question end + target (true/random) + ?"
         # and targets as string targets representation, for binary task: Yes/No options
         question_target_batch, target_batch, target_feature_value_batch = self.generate_target(batch,
-                                                                                               question_end=question_end)
+                                                                                               question_end=question_end,
+                                                                                               as_train_or_val=as_train_or_val)
 
         # Encode
         # question_start  -> '[task_special_token] + start str [trx]'
@@ -218,7 +220,9 @@ class PredDefaultTaskBinary(CategoricalTaskAbstract):
 
         return question_target_batch, target_batch, target_feature_value_batch
 
-    def process_outputs(self, outputs: Any, answers: torch.Tensor, as_strings: Optional[bool] = False) -> Any:
+    def process_outputs(self, outputs: Any,
+                        answers: torch.Tensor = None,
+                        as_strings: Optional[bool] = False) -> Any:
         """
         Processing target text and output text to get the predictions
         """
@@ -249,13 +253,16 @@ class PredDefaultTaskBinary(CategoricalTaskAbstract):
             # Get predictions as probabilities of binary answer
             probabilities_over_vocab = torch.nn.functional.softmax(outputs['logits'], dim=2)
 
-            # answer structure: [..., answer_token, ..., </s>]
-            targets_tokens = answers[isin(answers, torch.LongTensor(list(self.answers2tokens.values())).to(answers.device))]
-            targets = (targets_tokens == self.answers2tokens['positive']).long()
+            if answers is not None:
+                # answer structure: [..., answer_token, ..., </s>]
+                targets_tokens = answers[isin(answers, torch.LongTensor(list(self.answers2tokens.values())).to(answers.device))]
+                targets = (targets_tokens == self.answers2tokens['positive']).long()
 
-            # answer_tokens_indexes = torch.nonzero(isin(outputs['logits'].argmax(2),
-                                                  #      torch.LongTensor(list(self.answers2tokens.values())).to(outputs['logits'].device)),
-                                                  # as_tuple=True)
+                # answer_tokens_indexes = torch.nonzero(isin(outputs['logits'].argmax(2),
+                                                      #      torch.LongTensor(list(self.answers2tokens.values())).to(outputs['logits'].device)),
+                                                      # as_tuple=True)
+            else:
+                targets = None
 
             preds_probs, preds = torch.max(probabilities_over_vocab, -1)
             positive_probs = probabilities_over_vocab[:, 0][:, self.answers2tokens['positive']]
@@ -265,7 +272,8 @@ class PredDefaultTaskBinary(CategoricalTaskAbstract):
 
         return targets, predictions
 
-    def calculate_metrics(self, outputs: Any, answers: torch.Tensor,
+    def calculate_metrics(self, outputs: Any,
+                          answers: torch.Tensor,
                           task_metrics: Union[torch.nn.ModuleDict, Dict[str, Any]],
                           **kwargs) -> dict:
         """

@@ -557,10 +557,14 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
                                              self.tokenizer.pad_token_id)
         # 5) Labels
         # Create answers + masks for LM's decoder inputs
-        batch_answers = batch['answer_tokens']
-        # was: torch.cat([qa_batch['answer_template_tokens'], qa_batch['target_tokens']], dim=1)
-        batch_answers_mask = batch['answer_mask']
-        # torch.cat([qa_batch['answer_mask'], qa_batch['target_attention_mask']], dim=1)
+        if is_train and ('answer_tokens' in batch):
+            batch_answers = batch['answer_tokens']
+            # was: torch.cat([qa_batch['answer_template_tokens'], qa_batch['target_tokens']], dim=1)
+            batch_answers_mask = batch['answer_mask']
+            # torch.cat([qa_batch['answer_mask'], qa_batch['target_attention_mask']], dim=1)
+        else:
+            batch_answers = None
+            batch_answers_mask = None
 
         # Pass through LM
         # self._device_type = self.language_model.device.type  # 'cuda' or 'cpu'
@@ -576,75 +580,81 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
         # Create answers + masks for LM's decoder inputs
         lm_outputs['answer_tokens'] = batch_answers
 
-        # 7) Calculate retrival loss
-        try:
-            ret_loss_outputs = self._compute_retrieval_loss_fromage(lm_outputs,
-                                                                    ret_start_i=transactions_start_i,
-                                                                    ret_end_i=transactions_end_i,
-                                                                    ret_embeddings=transactions_embeddings,
-                                                                    output_hidden_states=True)
-        except Exception as e:
-            self._logger.error(f"Contrastive loss error: {e}")
-            self._logger.error(traceback.format_exc())
-            ret_loss_outputs = {'loss': torch.Tensor([0.0]).to(lm_outputs.loss.device)}
+        if is_train and (batch_answers is not None):
+            # 7) Calculate retrival loss
+            try:
+                ret_loss_outputs = self._compute_retrieval_loss_fromage(lm_outputs,
+                                                                        ret_start_i=transactions_start_i,
+                                                                        ret_end_i=transactions_end_i,
+                                                                        ret_embeddings=transactions_embeddings,
+                                                                        output_hidden_states=True)
+            except Exception as e:
+                self._logger.error(f"Contrastive loss error: {e}")
+                self._logger.error(traceback.format_exc())
+                ret_loss_outputs = {'loss': torch.Tensor([0.0]).to(lm_outputs.loss.device)}
 
-        # 8) Calculate task-specific loss, if needed
-        task_loss = None
-        if self.add_task_heads:
-            decoder_last_hidden_states = lm_outputs['decoder_hidden_states'][-1]
-            batch_size, _, hidden_size = decoder_last_hidden_states.shape
+            # 8) Calculate task-specific loss, if needed
+            task_loss = None
+            if self.add_task_heads:
+                decoder_last_hidden_states = lm_outputs['decoder_hidden_states'][-1]
+                batch_size, _, hidden_size = decoder_last_hidden_states.shape
 
-            eos_mask = batch_answers.eq(self.language_model.config.eos_token_id)
-            sentence_representation = decoder_last_hidden_states[eos_mask, :].view(batch_size,
-                                                                                   -1, hidden_size)[:, -1, :]
-            task_head = self.heads[batch['task_name']]
-            if task_head is not None:
-                task_logits = task_head(sentence_representation)
-                if batch['target_feature_type'] in ['cat_features', 'label']:
-                    # Classification
-                    task_labels = torch.LongTensor(list(map(int, batch['targets']))).to(task_logits.device)
-                    task_loss = self.cls_loss(task_logits.view(-1, list(task_head.modules())[-1].out_features),
-                                              task_labels.view(-1))
-                else:
-                    # Regression
-                    task_labels = torch.FloatTensor(list(map(float, batch['targets']))).to(task_logits.device)
-                    task_loss = self.regr_loss(task_logits.squeeze(),
-                                               task_labels.squeeze())
+                eos_mask = batch_answers.eq(self.language_model.config.eos_token_id)
+                sentence_representation = decoder_last_hidden_states[eos_mask, :].view(batch_size,
+                                                                                       -1, hidden_size)[:, -1, :]
+                task_head = self.heads[batch['task_name']]
+                if task_head is not None:
+                    task_logits = task_head(sentence_representation)
+                    if is_train and ('targets' in batch):
+                        if batch['target_feature_type'] in ['cat_features', 'label']:
+                            # Classification
+                            task_labels = torch.LongTensor(list(map(int, batch['targets']))).to(task_logits.device)
+                            task_loss = self.cls_loss(task_logits.view(-1, list(task_head.modules())[-1].out_features),
+                                                      task_labels.view(-1))
+                        else:
+                            # Regression
+                            task_labels = torch.FloatTensor(list(map(float, batch['targets']))).to(task_logits.device)
+                            task_loss = self.regr_loss(task_logits.squeeze(),
+                                                       task_labels.squeeze())
 
-        # Re-scale losses
-        total_loss = lm_outputs.loss * self._text_loss_scale + \
-                     ret_loss_outputs.get('loss') * self._retrieval_loss_scale
+            if if is_train:
+                # Re-scale losses
+                total_loss = lm_outputs.loss * self._text_loss_scale + \
+                             ret_loss_outputs.get('loss') * self._retrieval_loss_scale
 
-        if task_loss is not None:
-            total_loss += self._task_loss_scale + task_loss
+                if task_loss is not None:
+                total_loss += self._task_loss_scale + task_loss
 
         # join two output dicts
         outputs = dict()
         outputs["logits"] = lm_outputs.logits.contiguous().float()
         if self.add_task_heads:
             outputs["task_logits"] = task_logits
-            outputs['task_labels'] = task_labels
-        outputs["task_loss"] = self._task_loss_scale + task_loss
-        outputs["text_loss"] = lm_outputs.loss * self._text_loss_scale
-        ret_loss = ret_loss_outputs.pop('loss')
-        outputs["retrieval_loss"] = ret_loss * self._retrieval_loss_scale
+            if is_train and (batch_answers is not None):
+                outputs['task_labels'] = task_labels
+        if is_train and (batch_answers is not None):
+            outputs["task_loss"] = self._task_loss_scale + task_loss
+            outputs["text_loss"] = lm_outputs.loss * self._text_loss_scale
+            ret_loss = ret_loss_outputs.pop('loss')
+            outputs["retrieval_loss"] = ret_loss * self._retrieval_loss_scale
 
-        outputs["unscaled_text_loss"] = lm_outputs.loss
-        outputs["unscaled_retrieval_loss"] = ret_loss
-        outputs["task_retrieval_loss"] = task_loss
+            outputs["unscaled_text_loss"] = lm_outputs.loss
+            outputs["unscaled_retrieval_loss"] = ret_loss
+            outputs["task_retrieval_loss"] = task_loss
+            outputs['loss'] = total_loss
+
+            for key, val in ret_loss_outputs.items():
+                outputs[key] = val
+
+            outputs['labels'] = batch_answers.contiguous().long()
+            outputs['question_encoded'] = torch.cat([question_start_tokens_batch,
+                                                     batch['question_end_tokens']], dim=1)
 
         if output_attentions:
             outputs["attentions"] = lm_outputs.attentions
         if output_hidden_states:
             outputs["hidden_states"] = lm_outputs.encoder_hidden_states
-        outputs['loss'] = total_loss
-        for key, val in ret_loss_outputs.items():
-            outputs[key] = val
 
-        if is_train:
-            outputs['labels'] = batch_answers.contiguous().long()
-            outputs['question_encoded'] = torch.cat([question_start_tokens_batch,
-                                                     batch['question_end_tokens']], dim=1)
         return outputs
 
     def _compute_retrieval_loss(self,

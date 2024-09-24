@@ -197,6 +197,7 @@ class TransactionQAModel(pl.LightningModule):
 
     def model_step(self, batch,
                    task_idx: Optional[int] = None,
+                   is_train_or_val: Optional[bool] = True,
                    generate: Optional[bool] = False,
                    multiple_choice_grade: Optional[bool] = False,
                    generation_options: Optional[Dict[str, Any]] = None,
@@ -222,9 +223,9 @@ class TransactionQAModel(pl.LightningModule):
             task_idx = 0
         task = self.tasks[task_idx]
         if multiple_choice_grade or self._multiple_choice_grade:
-            qa_batch = task.process_input_multichoice(batch)
+            qa_batch = task.process_input_multichoice(batch, is_train_or_val=is_train_or_val)
         else:
-            qa_batch = task.process_input_batch(batch)
+            qa_batch = task.process_input_batch(batch, is_train_or_val=is_train_or_val)
         qa_batch['task_name'] = task.task_name
         qa_batch['target_feature_type'] = task.target_feature_type
 
@@ -236,7 +237,7 @@ class TransactionQAModel(pl.LightningModule):
             generation_config = GenerationConfig(**generation_options)
             return self.model.generate(qa_batch, generation_config)
 
-        elif multiple_choice_grade:
+        elif multiple_choice_grade and is_train_or_val:
             # join two batches
             for key, val in batch.items():
                 qa_batch[key] = val
@@ -295,7 +296,9 @@ class TransactionQAModel(pl.LightningModule):
             # join two batches
             for key, val in batch.items():
                 qa_batch[key] = val
-            outputs = self.model(qa_batch, output_attentions=output_attentions)
+            outputs = self.model(qa_batch,
+                                 is_train=is_train_or_val,
+                                 output_attentions=output_attentions)
             batch_answers = qa_batch['answer_tokens'] if "answer_tokens" not in outputs else outputs['answer_tokens']
 
             return outputs, batch_answers
@@ -320,7 +323,9 @@ class TransactionQAModel(pl.LightningModule):
         task_name = self.tasks[task_idx].task_name
         self.train_task_batch_cnt[task_name] += 1
 
-        outputs, answer = self.model_step(batch, task_idx=task_idx)
+        outputs, answer = self.model_step(batch,
+                                          is_train_or_val=True,
+                                          task_idx=task_idx)
         if outputs is None:
             return None
 
@@ -363,7 +368,9 @@ class TransactionQAModel(pl.LightningModule):
         task = self.tasks[task_idx]
         # self._logger.info(f"task: {task.task_name}")
 
-        outputs, batch_answers = self.model_step(batch, task_idx=task_idx)
+        outputs, batch_answers = self.model_step(batch,
+                                                 is_train_or_val=True,
+                                                 task_idx=task_idx)
 
         if outputs is None:
             return None
@@ -556,51 +563,17 @@ class TransactionQAModel(pl.LightningModule):
                 keys are - metrics / predictions / answers / questions.
         """
         task = self.tasks[task_idx]
-        outputs, batch_answers = self.model_step(batch, task_idx=task_idx)
+        outputs, batch_answers = self.model_step(batch,
+                                                 is_train_or_val=False,
+                                                 task_idx=task_idx)
 
         if outputs is None:
             return dict()
 
-        # as list of strings
-        predictions_decoded = self.model.tokenizer.batch_decode(
-            outputs['logits'].argmax(2) if isinstance(outputs, dict) else outputs.logits.argmax(2),
-            skip_special_tokens=True)
-        batch_answers_decoded = self.model.tokenizer.batch_decode(batch_answers,
-                                                                  skip_special_tokens=True)
-        batch_questions_decoded = self.model.tokenizer.batch_decode(
-            outputs['question_encoded'].detach().cpu() if isinstance(outputs,
-                                                                     dict) else outputs.question_encoded.detach().cpu(),
-            skip_special_tokens=True)
+        outputs['batch_idx'] = batch_idx
+        outputs['logits'] = outputs['logits'].detach().cpu()
 
-        if verbose:
-            print("----- Prediction step -----")
-            for i, (pred, answer, question) in enumerate(
-                    zip(predictions_decoded, batch_answers_decoded, batch_questions_decoded)):
-                print(f"\t#{i} {question}:\n\tpredicted: {pred},\n\tanswer: {answer}")
-
-        pred_output = dict(
-            predictions=predictions_decoded,
-            answers=batch_answers_decoded,
-            questions=batch_questions_decoded,
-            batch_idx=batch_idx
-        )
-
-        # Calc metrics
-        if calculate_metrics:
-            metrics_scores = {}
-            for metric_name, metric in task.metrics.items():
-                try:
-                    metrics_scores[metric_name] = metric(predictions_decoded,
-                                                         batch_answers_decoded)
-                except Exception as e:
-                    self._logger.error(f"error occurred during task metric `{metric_name}` calculation:\n{e}")
-
-            pred_output['metrics'] = metrics_scores
-
-        if self._return_logits:
-            pred_output['logits'] = outputs['logits'].detach().cpu()
-
-        return pred_output
+        return outputs
 
     def _predict_with_generate_step_task(self, batch: Any, task_idx: int,
                                          calculate_metrics: Optional[bool] = False,
