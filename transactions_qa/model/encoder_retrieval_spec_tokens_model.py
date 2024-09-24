@@ -617,13 +617,13 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
                             task_loss = self.regr_loss(task_logits.squeeze(),
                                                        task_labels.squeeze())
 
-            if if is_train:
+            if is_train:
                 # Re-scale losses
                 total_loss = lm_outputs.loss * self._text_loss_scale + \
                              ret_loss_outputs.get('loss') * self._retrieval_loss_scale
 
                 if task_loss is not None:
-                total_loss += self._task_loss_scale + task_loss
+                    total_loss += self._task_loss_scale + task_loss
 
         # join two output dicts
         outputs = dict()
