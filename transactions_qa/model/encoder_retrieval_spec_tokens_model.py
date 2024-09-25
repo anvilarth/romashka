@@ -557,7 +557,7 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
                                              self.tokenizer.pad_token_id)
         # 5) Labels
         # Create answers + masks for LM's decoder inputs
-        if is_train and ('answer_tokens' in batch):
+        if ('answer_tokens' in batch):
             batch_answers = batch['answer_tokens']
             # was: torch.cat([qa_batch['answer_template_tokens'], qa_batch['target_tokens']], dim=1)
             batch_answers_mask = batch['answer_mask']
@@ -605,17 +605,17 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
                 task_head = self.heads[batch['task_name']]
                 if task_head is not None:
                     task_logits = task_head(sentence_representation)
-                    if is_train and ('targets' in batch):
-                        if batch['target_feature_type'] in ['cat_features', 'label']:
-                            # Classification
-                            task_labels = torch.LongTensor(list(map(int, batch['targets']))).to(task_logits.device)
-                            task_loss = self.cls_loss(task_logits.view(-1, list(task_head.modules())[-1].out_features),
-                                                      task_labels.view(-1))
-                        else:
-                            # Regression
-                            task_labels = torch.FloatTensor(list(map(float, batch['targets']))).to(task_logits.device)
-                            task_loss = self.regr_loss(task_logits.squeeze(),
-                                                       task_labels.squeeze())
+
+                    if batch['target_feature_type'] in ['cat_features', 'label']:
+                        # Classification
+                        task_labels = torch.LongTensor(list(map(int, batch['targets']))).to(task_logits.device)
+                        task_loss = self.cls_loss(task_logits.view(-1, list(task_head.modules())[-1].out_features),
+                                                  task_labels.view(-1))
+                    else:
+                        # Regression
+                        task_labels = torch.FloatTensor(list(map(float, batch['targets']))).to(task_logits.device)
+                        task_loss = self.regr_loss(task_logits.squeeze(),
+                                                   task_labels.squeeze())
 
             if is_train:
                 # Re-scale losses
@@ -625,6 +625,16 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
                 if task_loss is not None:
                     total_loss += self._task_loss_scale + task_loss
 
+        # 8) Calculate task-specific heads
+        if self.add_task_heads:
+            decoder_last_hidden_states = lm_outputs['decoder_hidden_states'][-1]
+            batch_size, _, hidden_size = decoder_last_hidden_states.shape
+
+            sentence_representation = decoder_last_hidden_states.view(batch_size, -1, hidden_size)[:, -1, :]
+            task_head = self.heads[batch['task_name']]
+            if task_head is not None:
+                task_logits = task_head(sentence_representation)
+
         # join two output dicts
         outputs = dict()
         outputs["logits"] = lm_outputs.logits.contiguous().float()
@@ -632,6 +642,8 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
             outputs["task_logits"] = task_logits
             if is_train and (batch_answers is not None):
                 outputs['task_labels'] = task_labels
+            else:
+                outputs['task_labels'] = batch['targets']
         if is_train and (batch_answers is not None):
             outputs["task_loss"] = self._task_loss_scale + task_loss
             outputs["text_loss"] = lm_outputs.loss * self._text_loss_scale
@@ -645,7 +657,7 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
 
             for key, val in ret_loss_outputs.items():
                 outputs[key] = val
-
+        if (batch_answers is not None):
             outputs['labels'] = batch_answers.contiguous().long()
             outputs['question_encoded'] = torch.cat([question_start_tokens_batch,
                                                      batch['question_end_tokens']], dim=1)
@@ -795,59 +807,17 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
         return loss_outputs
 
     def generate(self,
-                 questions: Union[str, List[str], torch.Tensor],
-                 transactions_batch: Dict[str, torch.Tensor],
-                 prefix_prompt: Optional[Union[str, torch.Tensor]] = "",
-                 answer_template: Optional[str] = "",
+                 batch: Dict[str, torch.Tensor],
                  max_new_tokens: Optional[int] = None,
                  min_new_tokens: Optional[int] = None,
                  top_p: Optional[float] = 1.0,
                  temperature: Optional[float] = 0.0,
-                 suggestions: Optional[int] = 1,
-                 diversity_penalty: Optional[float] = 0.0,
-                 filter_value: Optional[float] = -float('Inf'),
-                 allowed_token_ids: Optional[List[int]] = None,
-                 hidden_dims_indexes: Optional[List[int]] = None,
                  bad_words_ids: Optional[List[int]] = None,
                  stopping_criteria: Optional[Any] = None,
                  use_custom_generation: Optional[bool] = False,
                  seed: Optional[int] = 11):
         """
         Generates answers for questions.
-        Args:
-            questions: Union[str, List[str], torch.Tensor] - a question(-s) to answer. Can be passed as:
-                str: a single question in string representation;
-                List[str]: a list of questions in string representation;
-                torch.Tensor: a single tokenized question or multiple questions;
-            transactions_batch: Dict[str, torch.Tensor] - a batch for transactions model;
-            prefix_prompt: Union[str, torch.Tensor] - a prefix for transactions embeddings. Can be passed as:
-                str: a prefix in string representation;
-                torch.Tensor: a tokenized prefix;
-            answer_template: str - an answer template prefix to add to the question ending;
-            max_new_tokens: int - the maximum number of tokens to generate,
-                                    ignoring the number of tokens in the question;
-            min_new_tokens: int - the minimum number of tokens to generate,
-                                    ignoring the number of tokens in the question;
-            top_p: float - If set to float < 1, only the most probable tokens with probabilities
-                            that add up to top_p or higher are kept for generation;
-            temperature: float - The value used to module the next token probabilities;
-            suggestions: TBD
-            diversity_penalty: TBD
-            filter_value: float - a value to assign to tokens that should never be generated;
-            allowed_token_ids: List[int] - a list of token ids that must be generated;
-            hidden_dims_indexes: List[int] - a list of hidden layers' indexes from
-                                        which to take hidden states for embedding creation.
-                                        Default set to -1 - so only last layer's hidden states would be used;
-            stopping_criteria: a class instance / callable that can be used to change
-                                when to stop generation (other than EOS token).
-                                It should return a boolean flag when all batch samples are successfully finished;
-            seed: int - a seed for generation;
-
-        Returns:
-            A dict with keys:
-             - generated_texts - a list of generated text tokens sequences for each batch sample;
-             - output_embeddings - a list of embeddings for sequences, collected from selected hidden layers' states;
-             - output_logits - a list of logits generated for each batch sample on each step.
         """
         seed_everything(seed)
         self.eval()  # freeze all at once
@@ -856,150 +826,184 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
         if device.type != 'cpu':
             torch.cuda.empty_cache()
 
+        transaction_mask = batch['mask']
+        batch_size = transaction_mask.size(0)
+        device = transaction_mask.device
+
         # Transactions
-        transactions_history_embeddings, transactions_embeddings_mask = self.transaction_model.get_embs(
-            transactions_batch
+        transactions_embeddings, transactions_embeddings_mask = self.transaction_model.get_embs(
+            batch
         )
-        vocab_size = self.language_model.vocab_size
-        batch_size = transactions_history_embeddings.size(0)
 
-        # Fill empty parameters
-        hidden_dims_indexes = hidden_dims_indexes if hidden_dims_indexes is not None else [-1]
+        # 1.2) If created position embeddings, apply them first
+        if hasattr(self, "temp_position_embedding"):
+            batch_size, seq_len = transactions_embeddings.size()[:2]
+            position_ids = torch.arange(seq_len, dtype=torch.long, device=device)
+            position_ids = position_ids.unsqueeze(0).expand(batch_size, -1)
 
-        # Encode everything
-        # Starting prompts
-        # In case single question in string form
-        if isinstance(prefix_prompt, str):
-            prefix_prompt_tokens = self.tokenizer.encode(prefix_prompt,
-                                                         add_special_tokens=False,
-                                                         return_tensors='pt').long().to(device)
-        elif isinstance(prefix_prompt, torch.Tensor):
-            prefix_prompt_tokens = prefix_prompt.long().to(device)
-        else:
-            raise AttributeError(f"Unable to use prefix prompt in provided form: {type(prefix_prompt)}!")
+            transactions_position_embeddings = self.temp_position_embedding(position_ids)
+            transactions_embeddings = transactions_embeddings + transactions_position_embeddings
 
-        prefix_prompt_embeddings = self.language_model_tokens_embedding_func(prefix_prompt_tokens)
-
-        # if it already ends with [trx]
-        if self.has_start_token(prefix_prompt_tokens):
-            self.replace_start_token(prefix_prompt_tokens, prefix_prompt_embeddings)
-
-        # Replace task special tokens embeddings with trainable parameters
-        if self.has_task_tokens(prefix_prompt_tokens):
-            self.replace_task_tokens(prefix_prompt_tokens, prefix_prompt_embeddings)
-
-        prefix_prompt_embeddings_batch = prefix_prompt_embeddings.repeat(batch_size, 1, 1)
-        prefix_prompt_mask_batch = torch.full(prefix_prompt_embeddings_batch.size()[:2], 1).long().to(device)
-
-        # Question
-        # In case single question in string form
-        if isinstance(questions, str):
-            question_tokens = self.tokenizer.encode(questions,
-                                                    add_special_tokens=False,
-                                                    return_tensors='pt').long().to(device)
-            question_mask = torch.full(question_tokens.size(), 1).long().to(device)
-            question_embeddings = self.language_model_tokens_embedding_func(question_tokens)
-            question_embeddings_batch = question_embeddings.repeat(batch_size, 1, 1)
-
-        # In case questions in tokenized form of tensors
-        elif isinstance(questions, torch.Tensor):
-            question_tokens = questions
-            question_mask = torch.full(questions.size(), 1).long().to(device)
-            question_embeddings = self.language_model_tokens_embedding_func(questions)
-            if question_embeddings.size(0) != batch_size:
-                # If it was a single question
-                question_embeddings_batch = question_embeddings.repeat(batch_size, 1, 1)
-            else:
-                question_embeddings_batch = question_embeddings
-
-        # In case a list of string questions provided
-        elif isinstance(questions, list) and isinstance(questions[0], str):
-            question_tokens = self.tokenizer.encode(questions,
-                                                    padding=True,
-                                                    add_special_tokens=False,
-                                                    return_tensors='pt').long().to(device)
-            question_mask = torch.full(question_tokens.size(), 1).long().to(device)
-            question_embeddings = self.language_model_tokens_embedding_func(question_tokens)
-            question_embeddings_batch = question_embeddings
-        else:
-            raise AttributeError(f"Unable to use questions in provided form: {type(questions)}!")
-
-        # if it already starts with [/trx]
-        if self.has_end_token(question_tokens):
-            self.replace_end_token(question_tokens, question_embeddings)
-
-        # 2) Pass transaction embeddings to connector == linear mapping -> to LM inner dim
+        # 2) Next pass them to connector == linear mapping -> to LM inner dim
         # Checks whether a connector requires mask argument
         if self.inspect_forward_signature("mask", self.connector):
-            transactions_history_embeddings = self.connector(transactions_history_embeddings,
-                                                             mask=transactions_embeddings_mask)
+            transactions_embeddings = self.connector(transactions_embeddings,
+                                                     mask=transactions_embeddings_mask)
         elif self.inspect_forward_signature("input_text_ids", self.connector) and \
                 self.inspect_forward_signature("input_text_attention_mask", self.connector):
             # using Instruct QFormer model
-            transactions_history_embeddings = self.connector(
-                embeds=transactions_history_embeddings,
+            transactions_embeddings = self.connector(
+                embeds=transactions_embeddings,
                 # strip 2 tokens from the start of Q, as "[/trx]" + "."
-                input_text_ids=question_tokens[:, 2:],
-                input_text_attention_mask=question_mask[:, 2:]
+                input_text_ids=batch['question_end_tokens'][:, 2:],
+                input_text_attention_mask=batch['question_end_attention_mask'][:, 2:]
             )
-
         else:
-            transactions_history_embeddings = self.connector(transactions_history_embeddings)
+            transactions_embeddings = self.connector(transactions_embeddings)
 
-        transactions_seq_len = transactions_history_embeddings.size(1)
+        # 3) Questions: to embedding of LM
+        # torch.Size([1, len(question_start_tokens))
+        question_start_embeddings = self.language_model_tokens_embedding_func(
+            batch['question_start_tokens'])  # call for (embed_tokens): Embedding(vocab_size, model_hidden_dim)
+        question_start_attention_mask = batch['question_start_tokens_mask']
 
-        # Answer template --> embeddings
-        answer_template_tokens = self.tokenizer.encode(answer_template,
-                                                       add_special_tokens=False,
-                                                       return_tensors='pt').long().to(device)
-        # If empty template (to prevent errors in embeddings)
-        if not answer_template_tokens.size(1):
-            answer_template_tokens = self.whitespace_token_id.to(device)
+        # if it already ends with [trx]
+        if self.has_start_token(batch['question_start_tokens']):
+            self.replace_start_token(batch['question_start_tokens'], question_start_embeddings)
+        # otherwise append it to the end of starting sequence
+        else:
+            question_start_embeddings = torch.cat([question_start_embeddings,
+                                                   self.transactions_start_embedding[None, None]], dim=1)
+            # add one more sample to attentions also
+            question_start_attention_mask = torch.cat([
+                torch.ones((1,)).long().repeat(batch_size, 1).to(batch['question_start_tokens_mask'].device),
+                batch['question_start_tokens_mask']
+            ], dim=1)
 
-        answer_template_embeddings = self.language_model_tokens_embedding_func(answer_template_tokens)
-        answer_template_embeddings_batch = answer_template_embeddings.repeat(batch_size, 1, 1)
+        question_start_tokens_batch = batch['question_start_tokens'].repeat(batch_size, 1)
+        question_start_embeddings_batch = question_start_embeddings.repeat(batch_size, 1, 1)
 
-        # Concat all together
+        # Replace task special tokens embeddings with trainable parameters
+        if self.has_task_tokens(question_start_tokens_batch):
+            self.replace_task_tokens(question_start_tokens_batch, question_start_embeddings_batch)
+
+        # Question ends: to embedding of LM
+        # question_end_tokens: torch.Size([batch_size, len(max_question_end_tokens)])
+        question_end_embeddings_batch = self.language_model_tokens_embedding_func(
+            batch['question_end_tokens'])
+        question_end_attention_mask = batch['question_end_attention_mask']
+
+        # Fill injection ending tokens embeddings with trainable parameters
+        # if it already starts with [/trx]
+        if self.has_end_token(batch['question_end_tokens']):
+            self.replace_end_token(batch['question_end_tokens'], question_end_embeddings_batch)
+        # otherwise prepend it to the start of question sequence
+        else:
+            # todo: add trns ending token to the end before paddings!!!
+            question_end_embeddings_batch = torch.cat([
+                self.transactions_end_embedding[None, None].repeat(batch_size, 1, 1),
+                question_end_embeddings_batch], dim=1)
+            # add one more sample to attentions also
+            question_end_attention_mask = torch.cat([
+                batch['question_end_attention_mask'],
+                torch.ones((1,)).long().repeat(batch_size, 1).to(batch['question_end_attention_mask'].device)
+            ], dim=1)
+
+        # 4) Get general LM's encoder input as:
         # Q_start_tokens + TRNS_embeddings + Q_end_tokens
-        input_embedds = torch.cat([prefix_prompt_embeddings_batch,
-                                   transactions_history_embeddings,
-                                   question_embeddings_batch,
-                                   answer_template_embeddings_batch], dim=1).to(device)
-        input_mask = torch.cat([prefix_prompt_mask_batch,
-                                torch.full(transactions_history_embeddings.size()[:2], 1).long().to(device),
-                                question_mask,
-                                torch.full(answer_template_embeddings_batch.size()[:2], 1).long().to(device)
-                                ], dim=1).to(device)
-
-        if (self.language_model.config.architectures[0] in USE_HF_GENERATE) and not use_custom_generation:
-            return self._hf_generate(input_embedds=input_embedds,
-                                     input_mask=input_mask,
-                                     temperature=temperature,
-                                     min_new_tokens=min_new_tokens,
-                                     max_new_tokens=max_new_tokens,
-                                     top_p=top_p,
-                                     bad_words_ids=bad_words_ids,
-                                     hidden_dims_indexes=hidden_dims_indexes,
-                                     allowed_token_ids=allowed_token_ids,
-                                     stopping_criteria=stopping_criteria,
-                                     filter_value=filter_value,
-                                     seed=seed,
-                                     device=device)
+        if question_start_embeddings_batch.size(0) != batch['answer_tokens'].size(0):
+            encoder_input = torch.cat([question_start_embeddings_batch,
+                                       transactions_embeddings,
+                                       question_end_embeddings_batch], dim=1).repeat(batch['answer_tokens'].size(0), 1,
+                                                                                     1)
         else:
-            return self._custom_generate(input_embedds=input_embedds,
-                                         temperature=temperature,
-                                         min_new_tokens=min_new_tokens,
-                                         max_new_tokens=max_new_tokens,
-                                         top_p=top_p,
-                                         suggestions=suggestions,
-                                         bad_words_ids=bad_words_ids,
-                                         diversity_penalty=diversity_penalty,
-                                         hidden_dims_indexes=hidden_dims_indexes,
-                                         allowed_token_ids=allowed_token_ids,
-                                         stopping_criteria=stopping_criteria,
-                                         filter_value=filter_value,
-                                         seed=seed,
-                                         device=device)
+            encoder_input = torch.cat([question_start_embeddings_batch,
+                                       transactions_embeddings,
+                                       question_end_embeddings_batch], dim=1)
+        if ('encoder_input_mask' in batch) \
+                and (batch['encoder_input_mask'].size(1) == encoder_input.size(1)):
+            encoder_input_mask = batch['encoder_input_mask']
+
+        else:
+            # Check if transactions history embedding size was reduced, then we cannot mask it
+            if transactions_embeddings.size(1) == transactions_embeddings_mask.size(-1):
+                encoder_input_mask = torch.cat(
+                    [question_start_attention_mask,
+                     batch['mask'],
+                     question_end_attention_mask], dim=1
+                )
+            else:
+                if question_end_attention_mask.size(0) != question_start_attention_mask.size(0):
+                    question_end_attention_mask = question_end_attention_mask.repeat(
+                        question_start_attention_mask.size(0), 1)
+                    transactions_embeddings_mask = torch.ones(transactions_embeddings.size()[:2],
+                                                              dtype=batch['mask'].dtype,
+                                                              device=device).repeat(
+                        question_start_attention_mask.size(0), 1)
+                else:
+                    transactions_embeddings_mask = torch.ones(transactions_embeddings.size()[:2],
+                                                              dtype=batch['mask'].dtype,
+                                                              device=device)
+                encoder_input_mask = torch.cat(
+                    [question_start_attention_mask,
+                     transactions_embeddings_mask,
+                     question_end_attention_mask], dim=1
+                )
+
+        # First transactions token
+        transactions_start_i = question_start_embeddings_batch.size(1)
+        # Last transactions token
+        transactions_end_i = transactions_start_i + transactions_embeddings.size(1)
+
+        # Create transactions tokens ids + mask padding in transactions history
+        max_transactions_size = transactions_embeddings.size(1)
+        transactions_text_tokens = [self._ret_tokens_template % i for i in range(max_transactions_size)]
+
+        transactions_tokens = torch.Tensor([
+            self.tokenizer.convert_tokens_to_ids(self._ret_tokens_template % i)
+            for i in range(max_transactions_size)]).long().repeat(batch_size, 1).to(device)
+
+        # Check if transactions history embedding size was reduced, then we cannot mask it
+        if transactions_tokens.size(-1) == transactions_embeddings_mask.size(-1):
+            transactions_tokens.masked_fill_(transactions_embeddings_mask == 0,
+                                             self.tokenizer.pad_token_id)
+
+        lm_outputs = self._hf_generate(input_embedds=encoder_input,
+                                       input_mask=encoder_input_mask,
+                                       temperature=temperature,
+                                       min_new_tokens=min_new_tokens,
+                                       max_new_tokens=max_new_tokens,
+                                       top_p=top_p,
+                                       bad_words_ids=bad_words_ids,
+                                       return_dict_in_generate=True,
+                                       output_hidden_states=True)
+
+        # Calculate with heads
+        if self.add_task_heads:
+            tokens_hidd_repr = torch.cat([token_hidd_repr[-1]
+                                          for token_hidd_repr in lm_outputs['decoder_hidden_states']], 1)
+
+            batch_size, _, hidden_size = tokens_hidd_repr.shape
+            sentence_representation = tokens_hidd_repr.view(batch_size, -1, hidden_size)[:, -1, :]
+            task_head = self.heads[batch['task_name']]
+            task_logits = task_head(sentence_representation)
+
+            task_logits = torch.nn.functional.softmax(task_logits)  # [batch_size, num_classes]
+            predictions_indexes = task_logits.argmax(-1)  # class index prediction
+            predictions_pos_probs = task_logits[:, 1]  # for AUC as prob of positive class
+            predictions_probs = torch.gather(task_logits, 1, predictions_indexes.unsqueeze_(dim=1))
+
+        # join two output dicts
+        outputs = dict()
+        outputs["predictions_text_tokens"] = lm_outputs['sequences']
+        outputs["logits"] = tokens_hidd_repr
+        if self.add_task_heads:
+            outputs["task_logits"] = task_logits
+            outputs['task_labels'] = batch['targets']
+            outputs["predictions"] = predictions_indexes
+            outputs["predictions_pos_prob"] = predictions_pos_probs
+            outputs["predictions_probs"] = predictions_probs
+        return outputs
 
     def _hf_generate(self, input_embedds: torch.Tensor,
                      input_mask: torch.Tensor,
@@ -1009,44 +1013,11 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
                      temperature: Optional[float] = 0.0,
                      repetition_penalty: Optional[float] = 1.0,
                      length_penalty: Optional[float] = 1.0,
-                     filter_value: Optional[float] = -float('Inf'),
                      bad_words_ids: Optional[List[int]] = None,
-                     allowed_token_ids: Optional[List[int]] = None,
-                     hidden_dims_indexes: Optional[List[int]] = None,
-                     stopping_criteria: Optional[Any] = None,
-                     seed: Optional[int] = 11,
-                     device: Union[torch.device, str] = "cpu"):
+                     return_dict_in_generate: Optional[bool] = True,
+                     output_hidden_states: Optional[bool] = True):
         """
         Generate with HF utilities.
-        Args:
-            input_embedds: input embeddings for LLM;
-            input_mask: attention mask for input embeddings;
-            max_new_tokens: int - the maximum number of tokens to generate,
-                                    ignoring the number of tokens in the question;
-            min_new_tokens: int - the minimum number of tokens to generate,
-                                    ignoring the number of tokens in the question;
-            top_p: float - If set to float < 1, only the most probable tokens with probabilities
-                            that add up to top_p or higher are kept for generation;
-            temperature: float - The value used to module the next token probabilities;
-            repetition_penalty: float - a penalty for tokens sequences repetition;
-                                The parameter for repetition penalty. 1.0 means no penalty.
-            length_penalty: float -  Exponential penalty to the length that is used with beam-based generation.
-                It is applied as an exponent to the sequence length, which in turn is used to divide the score
-                of the sequence. Since the score is the log likelihood of the sequence (i.e. negative),
-                length_penalty > 0.0 promotes longer sequences, while length_penalty < 0.0 encourages shorter sequences.
-            filter_value: float - a value to assign to tokens that should never be generated;
-            allowed_token_ids: List[int] - a list of token ids that must be generated;
-            hidden_dims_indexes: List[int] - a list of hidden layers' indexes from
-                                        which to take hidden states for embedding creation.
-                                        Default set to -1 - so only last layer's hidden states would be used;
-            stopping_criteria: a class instance / callable that can be used to change
-                                when to stop generation (other than EOS token).
-                                It should return a boolean flag when all batch samples are successfully finished;
-            seed: int - a seed for generation;
-            device: a device to generate on.
-
-        Returns:
-            torch.Tensor - generated token ids.
         """
         generation_config = transformers.GenerationConfig(max_new_tokens=max_new_tokens,
                                                           min_new_tokens=min_new_tokens,
@@ -1060,14 +1031,15 @@ class EncoderRetrievalSpecTokensModel(EncoderSimpleModel):
                                                           eos_token_id=self.tokenizer.eos_token_id,
                                                           bos_token_id=self.tokenizer.bos_token_id)
         with torch.no_grad():  # no tracking history
-            generated_tokens_ids = self.language_model.generate(
+            generated = self.language_model.generate(
                 inputs_embeds=input_embedds,
-                # decoder_embeds=input_embedds,
                 attention_mask=input_mask,
                 generation_config=generation_config,
-                pad_token_id=self.tokenizer.pad_token_id
+                pad_token_id=self.tokenizer.pad_token_id,
+                return_dict_in_generate=return_dict_in_generate,
+                output_hidden_states=output_hidden_states
             )
-        return generated_tokens_ids
+        return generated
 
     def _custom_generate(self, input_embedds: torch.Tensor,
                          max_new_tokens: Optional[int] = None,

@@ -235,7 +235,8 @@ class TransactionQAModel(pl.LightningModule):
         # Pass through inner model
         if generate:
             generation_config = GenerationConfig(**generation_options)
-            return self.model.generate(qa_batch, generation_config)
+            outputs = self.model.generate(qa_batch, generation_config)
+            batch_answers = qa_batch['answer_tokens'] if "answer_tokens" not in outputs else outputs['answer_tokens']
 
         elif multiple_choice_grade and is_train_or_val:
             # join two batches
@@ -366,23 +367,24 @@ class TransactionQAModel(pl.LightningModule):
         # Sample a random single task
         task_idx = random.sample(list(range(len(self.tasks))), k=1)[0]
         task = self.tasks[task_idx]
-        # self._logger.info(f"task: {task.task_name}")
 
         outputs, batch_answers = self.model_step(batch,
                                                  is_train_or_val=True,
                                                  task_idx=task_idx)
+        gen_outputs = self.model_step(batch,
+                                      is_train_or_val=True,
+                                      task_idx=task_idx,
+                                      generate=True)
 
         if outputs is None:
             return None
 
-        loss = outputs['loss']
-        # task_name = task.task_name
-        # self._logger.info(f"loss = {loss} for task: {task_name}")
+        loss = outputs.get('loss')
 
         # Calc metrics
         metrics_scores = {}
         try:
-            metrics_scores = task.calculate_metrics(outputs, batch_answers,
+            metrics_scores = task.calculate_metrics(gen_outputs, batch_answers,
                                                     self.metrics[task.task_name].to(self.device))
             metrics_scores = {metric_name + "_" + task.task_name: score for metric_name, score in
                               metrics_scores.items()}
