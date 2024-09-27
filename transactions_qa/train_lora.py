@@ -60,7 +60,7 @@ from romashka.transactions_qa.layers.connector import (CONNECTOR_TYPES,
                                                        make_transformer_connector,
                                                        make_qformer_connector,
                                                        make_instruct_qformer_connector)
-from romashka.transactions_qa.train_utils import get_warmup_steps
+from romashka.transactions_qa.train_utils import get_warmup_steps, load_from_checkpoint
 
 from romashka.transactions_qa.tasks import AutoTask
 from romashka.transactions_qa.utils import (get_last_checkpoint, get_projections_maps, get_buckets_info)
@@ -378,6 +378,13 @@ def main():
     else:
         raise AttributeError(f"Unknown connector type: {model_args.connector_type}")
 
+    print(f"\n\nTrain with:")
+    print(f"add_task_heads = {training_args.add_task_heads}")
+    print(f"do_freeze_transactions_model = {training_args.do_freeze_transactions_model}")
+    print(f"do_freeze_language_model = {training_args.do_freeze_language_model}")
+    print(f"do_freeze_connector = {training_args.do_freeze_connector}")
+    print(f"do_freeze_lm_embeddings = {training_args.do_freeze_lm_embeddings}\n\n")
+
     # Create general LLM model
     if model_args.language_model_type == "encoder-decoder":
         lm_model_config = {
@@ -432,6 +439,7 @@ def main():
             **lm_model_config
         )
 
+
     # Create general Transactions QA model
     transactionsQA_model_config = {
         "learning_rate": training_args.learning_rate,
@@ -445,6 +453,7 @@ def main():
             num_warmup_steps=training_args.warmup_steps,
             warmup_ratio=training_args.warmup_ratio),
         "training_steps": training_args.max_steps,
+        "validation_steps_generate": 100,
         "save_checkpoints_dir": f"{training_args.save_checkpoints_dir}/{training_args.run_name}"
     }
 
@@ -482,6 +491,11 @@ def main():
     # add LoRA adaptor
     lm_model = get_peft_model(lm_model, lora_config)
     lm_model.print_trainable_parameters()
+
+    # Load from pre-trained checkpoint
+    if training_args.resume_from_checkpoint:
+        load_from_checkpoint(training_args.load_checkpoint_from_path,
+                             model_)
 
     # Datasets & Dataloader & Other utils
     if training_args.do_train and "train" in data_files:

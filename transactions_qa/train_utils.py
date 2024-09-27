@@ -1,7 +1,9 @@
 import os
 import math
+from pathlib import Path
 from copy import deepcopy
-from typing import Optional, Sequence, Any
+from collections import defaultdict, OrderedDict
+from typing import Optional, Sequence, Any, Union
 
 import torch
 import torch.nn as nn
@@ -109,3 +111,46 @@ class EMA(Callback):
     def on_load_checkpoint(self, trainer, pl_module, callback_state):
         self._ema_state_dict_ready = callback_state["ema_state_dict_ready"]
         self.ema_state_dict = callback_state["ema_state_dict"]
+
+
+def load_from_checkpoint(checkpoint_path: Union[str, Path],
+                         model: nn.Module):
+    """
+    Load ESQA model from checkpoint.
+    If checkpoint initially sharded after Zero training -
+    firstly collect it and provide a path to resulted checkpoint file.
+    """
+    print(f"Loading from checkpoint:\n{checkpoint_path}")
+    if not Path(checkpoint_path).exists():
+        raise FileNotFoundError(f"Checkpoint was not found by path: {checkpoint_path}")
+
+    ckpt = torch.load(checkpoint_path, map_location='cpu')
+
+    print(f"Checkpoint loaded with the following keys inside:")
+    print(ckpt.keys())
+    if 'epoch' in ckpt.keys():
+        print(f"Epoch: {ckpt['epoch']}, step: {ckpt['global_step']}")
+        print(f"HPs:\n{ckpt['hyper_parameters']}")
+
+    # Collect encoder only parameters
+    encoder_only_state_dict = OrderedDict()
+    for key in ckpt['state_dict'].keys():
+        if key.startswith("model"):
+            model_key = ".".join(key.split(".")[1:])
+            encoder_only_state_dict[model_key] = ckpt['state_dict'][key]
+            print(f"{model_key} with size: {ckpt['state_dict'][key].size()}")
+
+    # Check all parameter sizes matches
+    curr_model_state_dict = model.state_dict()
+    # encoder_only_state_dict
+    for param_name, param in encoder_only_state_dict.items():
+        curr_param = curr_model_state_dict.get(param_name, torch.empty([1, ]))
+        if param.size() != curr_param.size():
+            print(f"WARNING: Param with name {param_name} doesn't match size: {param.size()} vs. {curr_param.size()}!")
+
+    # Load state dict
+    out = model.load_state_dict(encoder_only_state_dict, strict=False)
+    print(f"Unexpected keys: {out.unexpected_keys}")
+    print(f"Missing keys: {out.missing_keys}")
+
+    print(f"Model successfully loaded from checkpoint.")

@@ -42,6 +42,7 @@ class TransactionQAModel(pl.LightningModule):
                  adam_epsilon: Optional[float] = 1e-8,
                  warmup_steps: Optional[int] = 100,
                  training_steps: Optional[int] = 10_000,
+                 validation_steps_generate: Optional[int] = 50,
                  verbose_for_debug: Optional[bool] = False,
                  return_logits: Optional[bool] = False,
                  multiple_choice_grade: Optional[bool] = False,
@@ -64,6 +65,7 @@ class TransactionQAModel(pl.LightningModule):
 
         self.warmup_steps: int = warmup_steps
         self.training_steps: int = training_steps
+        self.validation_steps_generate = validation_steps_generate
         self.base_learning_rate = learning_rate
         self.optimizer_type = optimizer_type
         self.scheduler_type = scheduler_type
@@ -200,7 +202,7 @@ class TransactionQAModel(pl.LightningModule):
                    is_train_or_val: Optional[bool] = True,
                    generate: Optional[bool] = False,
                    multiple_choice_grade: Optional[bool] = False,
-                   generation_options: Optional[Dict[str, Any]] = None,
+                   generation_options: Optional[Dict[str, Any]] = {},
                    output_attentions: Optional[bool] = False) -> Tuple[Any, torch.Tensor]:
         """
 
@@ -234,9 +236,12 @@ class TransactionQAModel(pl.LightningModule):
 
         # Pass through inner model
         if generate:
-            generation_config = GenerationConfig(**generation_options)
-            outputs = self.model.generate(qa_batch, generation_config)
+            # join two batches
+            for key, val in batch.items():
+                qa_batch[key] = val
+            outputs = self.model.generate(qa_batch, **generation_options)
             batch_answers = qa_batch['answer_tokens'] if "answer_tokens" not in outputs else outputs['answer_tokens']
+            return outputs, batch_answers
 
         elif multiple_choice_grade and is_train_or_val:
             # join two batches
@@ -371,25 +376,36 @@ class TransactionQAModel(pl.LightningModule):
         outputs, batch_answers = self.model_step(batch,
                                                  is_train_or_val=True,
                                                  task_idx=task_idx)
-        gen_outputs = self.model_step(batch,
-                                      is_train_or_val=True,
-                                      task_idx=task_idx,
-                                      generate=True)
+
+        if self.validation_steps_generate_counter < self.validation_steps_generate:
+            self._logger.info(f"--- Validation step #{self.validation_steps_generate_counter} ---")
+            gen_outputs, batch_answers = self.model_step(batch,
+                                                         is_train_or_val=True,
+                                                         task_idx=task_idx,
+                                                         generate=True)
+            labels = outputs['labels']
+            predictions_text_tokens = self.model.tokenizer.batch_decode(gen_outputs['predictions_text_tokens'],
+                                                                        skip_special_tokens=True)
+            self._logger.info(f"Targets vs Predictions:")
+            for lab_i, label in enumerate(labels):
+                label_dec = self.model.tokenizer.decode([l for l in label if l != -100])
+                self._logger.info(f"#{lab_i}: {label_dec} \t vs. \t {predictions_text_tokens}")
+            self.validation_steps_generate_counter += 1
+
+            # Calc metrics
+            metrics_scores = {}
+            try:
+                metrics_scores = task.calculate_metrics(gen_outputs, batch_answers,
+                                                        self.metrics[task.task_name].to(self.device))
+                metrics_scores = {metric_name + "_" + task.task_name: score for metric_name, score in
+                                  metrics_scores.items()}
+            except Exception as e:
+                self._logger.error(f"error occurred during task metric calculation:\n{e}")
 
         if outputs is None:
             return None
 
         loss = outputs.get('loss')
-
-        # Calc metrics
-        metrics_scores = {}
-        try:
-            metrics_scores = task.calculate_metrics(gen_outputs, batch_answers,
-                                                    self.metrics[task.task_name].to(self.device))
-            metrics_scores = {metric_name + "_" + task.task_name: score for metric_name, score in
-                              metrics_scores.items()}
-        except Exception as e:
-            self._logger.error(f"error occurred during task metric calculation:\n{e}")
 
         logging_dict = {
             'val_loss': loss,
@@ -410,20 +426,6 @@ class TransactionQAModel(pl.LightningModule):
             prog_bar=True, logger=True
         )
 
-        if self.log_eval_steps_counter < self.log_eval_max_steps:
-            self._logger.info(f"--- Validation step #{self.log_eval_steps_counter} ---")
-            labels = outputs['labels']
-            self._logger.info(f"Labels:")
-            for lab_i, label in enumerate(labels):
-                label_dec = self.model.tokenizer.decode([l for l in label if l != -100])
-                self._logger.info(f"#{lab_i}: {label_dec}")
-
-            self._logger.info(f"\nAnswer tokens:")
-            batch_answers_dec = self.model.tokenizer.batch_decode(batch_answers, skip_special_tokens=False)
-            for answ_i, answ in enumerate(batch_answers_dec):
-                self._logger.info(f"#{answ_i}: {answ}")
-
-        self.log_eval_steps_counter += 1
         return loss
 
     def predict_step(self,
@@ -512,11 +514,11 @@ class TransactionQAModel(pl.LightningModule):
         # Decode predicted
         predicted_label[predicted_label == -100] = self.model.tokenizer.pad_token_id
         predicted_label_decoded = self.model.tokenizer.decode(predicted_label,
-            skip_special_tokens=True)  # as a single string
+                                                              skip_special_tokens=True)  # as a single string
         # Decode true answer
         true_label[true_label == -100] = self.model.tokenizer.pad_token_id
         true_label_decoded = self.model.tokenizer.decode(true_label,
-            skip_special_tokens=True)  # as a single string
+                                                         skip_special_tokens=True)  # as a single string
         # Decode all variants
         batch_answers[batch_answers == -100] = self.model.tokenizer.pad_token_id
         all_answers_vars_decoded = self.model.tokenizer.batch_decode(batch_answers,
@@ -645,7 +647,7 @@ class TransactionQAModel(pl.LightningModule):
                                                                     skip_special_tokens=True)
         else:
             predictions_decoded = self.model.tokenizer.batch_decode(predictions,
-                                                                skip_special_tokens=True)
+                                                                    skip_special_tokens=True)
         batch_answers_decoded = self.model.tokenizer.batch_decode(batch_answers,
                                                                   skip_special_tokens=True) \
             if batch_answers is not None else None
@@ -682,8 +684,8 @@ class TransactionQAModel(pl.LightningModule):
 
     def on_validation_epoch_start(self) -> None:
         print(f"\n----------- Validation start ----------\n")
-
-        # Reset log counter
+        # Reset counter
+        self.validation_steps_generate_counter = 0
         self.log_eval_steps_counter = 0
 
     def on_validation_epoch_end(self) -> None:

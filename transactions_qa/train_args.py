@@ -569,6 +569,11 @@ class TrainingArguments:
     )
     resume_from_checkpoint: Optional[str] = field(
         default=None,
+        metadata={"help": "Whether to load from checkpoint or not."},
+    )
+
+    load_checkpoint_from_path: Optional[str] = field(
+        default="./checkpoints/checkpoint.pt",
         metadata={"help": "The path to a folder with a valid checkpoint for your model."},
     )
 
