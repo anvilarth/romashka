@@ -60,10 +60,11 @@ from romashka.transactions_qa.layers.connector import (CONNECTOR_TYPES,
                                                        make_transformer_connector,
                                                        make_qformer_connector,
                                                        make_instruct_qformer_connector)
-from romashka.transactions_qa.train_utils import get_warmup_steps, load_from_checkpoint
+from romashka.transactions_qa.train_utils import (get_warmup_steps, load_from_checkpoint,
+                                                  get_last_checkpoint)
 
 from romashka.transactions_qa.tasks import AutoTask
-from romashka.transactions_qa.utils import (get_last_checkpoint, get_projections_maps, get_buckets_info)
+from romashka.transactions_qa.utils import (get_projections_maps, get_buckets_info)
 
 
 def main():
@@ -379,11 +380,10 @@ def main():
         raise AttributeError(f"Unknown connector type: {model_args.connector_type}")
 
     print(f"\n\nTrain with:")
-    print(f"add_task_heads = {training_args.add_task_heads}")
+    print(f"add_task_heads = {model_args.add_task_heads}")
     print(f"do_freeze_transactions_model = {training_args.do_freeze_transactions_model}")
     print(f"do_freeze_language_model = {training_args.do_freeze_language_model}")
-    print(f"do_freeze_connector = {training_args.do_freeze_connector}")
-    print(f"do_freeze_lm_embeddings = {training_args.do_freeze_lm_embeddings}\n\n")
+    print(f"do_freeze_connector = {training_args.do_freeze_connector}\n\n")
 
     # Create general LLM model
     if model_args.language_model_type == "encoder-decoder":

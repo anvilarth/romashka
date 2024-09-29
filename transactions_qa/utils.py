@@ -11,9 +11,6 @@ from typing import Dict, Any, Optional, List, Union
 import torch
 import torch.nn as nn
 
-PREFIX_CHECKPOINT_DIR = "checkpoint"
-_re_checkpoint = re.compile(r"^" + PREFIX_CHECKPOINT_DIR)
-
 
 def seed_everything(seed):
     random.seed(seed)
@@ -233,21 +230,6 @@ def get_number_from_parts(mantissa: torch.Tensor, exponent: torch.Tensor) -> tor
     """
     base = torch.FloatTensor([10]).to(mantissa.device)
     return base.pow(exponent) * mantissa.squeeze()
-
-
-def get_last_checkpoint(folder):
-    content = os.listdir(folder)
-    checkpoints = [
-        path
-        for path in content
-        if (_re_checkpoint.search(path) is not None) and path.endswith("ckpt")
-    ]
-    if len(checkpoints) == 0:
-        return
-
-    checkpoints = [os.path.join(folder, fn) for fn in checkpoints]
-    checkpoints.sort(key=lambda x: os.path.getmtime(x))
-    return checkpoints[0]
 
 
 def get_projections_maps(num_embedding_projections_fn: str = './assets/num_embedding_projections.pkl',

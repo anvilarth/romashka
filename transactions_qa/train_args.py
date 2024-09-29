@@ -567,8 +567,8 @@ class TrainingArguments:
             "choices": ['INFO', "DEBUG", "WARNING", "CRITICAL"],
         },
     )
-    resume_from_checkpoint: Optional[str] = field(
-        default=None,
+    resume_from_checkpoint: Optional[bool] = field(
+        default=False,
         metadata={"help": "Whether to load from checkpoint or not."},
     )
 

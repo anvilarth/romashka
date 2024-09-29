@@ -27,10 +27,12 @@ from transformers import (AutoModelForSeq2SeqLM,
                           AutoTokenizer,
                           AutoConfig,
                           HfArgumentParser)
+from pytorch_lightning.strategies import DeepSpeedStrategy
+
 import peft
 from peft import LoraConfig, get_peft_model, prepare_model_for_int8_training, TaskType
 
-sys.path.insert(1, '/home/jovyan/abdullaeva/transactionsQA')
+sys.path.insert(1, '/home/jovyan/shares/SR004.nfs2/abdullaeva/transactionsQA')
 # for MlSpace: /home/jovyan/abdullaeva/transactionsQA
 print(sys.path)
 
@@ -41,6 +43,7 @@ from romashka.transactions_qa.dataset.data_generator import (
     transaction_features,
     cat_features_names,
     num_features_names,
+    real_num_features_names,
     meta_features_names)
 
 from romashka.transactions_qa.dataset.dataloader import (TransactionQADataset, TransactionQADataModule)
@@ -58,10 +61,11 @@ from romashka.transactions_qa.layers.connector import (CONNECTOR_TYPES,
                                                        make_transformer_connector,
                                                        make_qformer_connector,
                                                        make_instruct_qformer_connector)
-from romashka.transactions_qa.train_utils import get_warmup_steps
+from romashka.transactions_qa.train_utils import (get_warmup_steps, load_from_checkpoint,
+                                                  get_last_checkpoint)
 
 from romashka.transactions_qa.tasks import AutoTask
-from romashka.transactions_qa.utils import (get_last_checkpoint, get_projections_maps)
+from romashka.transactions_qa.utils import (get_projections_maps, get_buckets_info)
 
 
 def main():

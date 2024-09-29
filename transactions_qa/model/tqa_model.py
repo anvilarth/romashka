@@ -376,6 +376,7 @@ class TransactionQAModel(pl.LightningModule):
         outputs, batch_answers = self.model_step(batch,
                                                  is_train_or_val=True,
                                                  task_idx=task_idx)
+        metrics_scores = {}
 
         if self.validation_steps_generate_counter < self.validation_steps_generate:
             self._logger.info(f"--- Validation step #{self.validation_steps_generate_counter} ---")
@@ -389,11 +390,10 @@ class TransactionQAModel(pl.LightningModule):
             self._logger.info(f"Targets vs Predictions:")
             for lab_i, label in enumerate(labels):
                 label_dec = self.model.tokenizer.decode([l for l in label if l != -100])
-                self._logger.info(f"#{lab_i}: {label_dec} \t vs. \t {predictions_text_tokens}")
+                self._logger.info(f"#{lab_i}: {label_dec} \t vs. \t {predictions_text_tokens[lab_i]}")
             self.validation_steps_generate_counter += 1
 
             # Calc metrics
-            metrics_scores = {}
             try:
                 metrics_scores = task.calculate_metrics(gen_outputs, batch_answers,
                                                         self.metrics[task.task_name].to(self.device))

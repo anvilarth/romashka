@@ -1,4 +1,5 @@
 import os
+import re
 import math
 from pathlib import Path
 from copy import deepcopy
@@ -113,6 +114,17 @@ class EMA(Callback):
         self.ema_state_dict = callback_state["ema_state_dict"]
 
 
+def get_last_checkpoint(folder):
+    content = os.listdir(folder)
+    checkpoints = [path for path in content if path.endswith("ckpt")]
+    if len(checkpoints) == 0:
+        return
+
+    checkpoints = [os.path.join(folder, fn) for fn in checkpoints]
+    checkpoints.sort(key=lambda x: os.path.getmtime(x))
+    return checkpoints[0]
+
+
 def load_from_checkpoint(checkpoint_path: Union[str, Path],
                          model: nn.Module):
     """
@@ -124,7 +136,14 @@ def load_from_checkpoint(checkpoint_path: Union[str, Path],
     if not Path(checkpoint_path).exists():
         raise FileNotFoundError(f"Checkpoint was not found by path: {checkpoint_path}")
 
-    ckpt = torch.load(checkpoint_path, map_location='cpu')
+    if Path(checkpoint_path).is_dir():
+        last_checkpoint = get_last_checkpoint(str(checkpoint_path))
+        if last_checkpoint is None:
+            raise FileNotFoundError(f"Checkpoint `.ckpt` file was not found by path: {checkpoint_path}")
+    else:
+        last_checkpoint = checkpoint_path
+
+    ckpt = torch.load(last_checkpoint, map_location='cpu')
 
     print(f"Checkpoint loaded with the following keys inside:")
     print(ckpt.keys())
